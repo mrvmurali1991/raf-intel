@@ -4,9 +4,7 @@ import React, { useState, useMemo, useCallback, useEffect, useRef, useId } from 
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  registerContextShortcut,
-} from "@/lib/keyboard-shortcuts";
+import { registerContextShortcut } from "@/lib/keyboard-shortcuts";
 import DataQualityBanner from "@/components/DataQualityBanner";
 import WorkflowProgressBar from "@/components/WorkflowProgressBar";
 import WorkflowHandoffBanner from "@/components/WorkflowHandoffBanner";
@@ -47,9 +45,10 @@ import {
   Stethoscope,
   Clock,
   Sparkles,
+  SearchCheck,
 } from "lucide-react";
 import { downloadCSV } from "@/lib/csv-export";
-import { C, FONT_SYS, FONT_MONO, initialsColor, deriveInitials } from "@/lib/ui-utils";
+import { C, FONT_MONO, initialsColor, deriveInitials } from "@/lib/ui-utils";
 import { MA_PAYMENT_PER_RAF } from "@/lib/constants";
 import FeatureFlag from "@/components/FeatureFlag";
 import { HelpButton } from "@/components/HelpPanel";
@@ -61,15 +60,27 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
 // ── Dynamic import: defer SuspectDrawer expanded-row detail (~30 kB) ──
-// Only loaded when the user clicks a row to expand it.
 const SuspectDrawerDynamic = dynamic(
   () => import("./SuspectDrawer"),
   {
     ssr: false,
     loading: () => (
-      <div style={{ padding: "20px 22px", background: "rgba(248,250,252,0.8)", borderTop: "1px solid rgba(0,0,0,0.06)" }}>
-        <div style={{ height: 100, borderRadius: 10, background: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite" }} />
+      <div className="px-6 py-5 bg-muted/30 border-t border-border">
+        <div className="h-24 rounded-xl bg-muted animate-pulse" />
       </div>
     ),
   }
@@ -78,14 +89,6 @@ const SuspectDrawerDynamic = dynamic(
 /* ================================================================== */
 /*  Page-specific constants                                            */
 /* ================================================================== */
-
-/* Single-source-of-truth grid for header / filter / skeleton / rows */
-/* Patient | Condition + rationale | Evidence | Confidence | RAF | Revenue | Status | Actions */
-const SUSPECTS_GRID =
-  "minmax(220px, 1.6fr) minmax(280px, 2.4fr) 130px 150px 92px 100px 108px 96px";
-const SUSPECTS_GAP = 14;
-const SUSPECTS_PAD_X = 22;
-const ROW_MIN_HEIGHT = 84;
 
 const REVENUE_PER_RAF = MA_PAYMENT_PER_RAF;
 const PAGE_SIZE = 25;
@@ -112,11 +115,8 @@ const EVIDENCE_FILTERS: { value: EvidenceFilter; label: string }[] = [
   { value: "historical", label: "Historical" },
 ];
 
-// Confidence band labels: "Strong / Moderate / Weak signal" instead of ">85% / 65-85% / <65%"
-// Rationale: backend/app/services/nlp_suspect_extractor.py openly notes the scores are
-// relative ranking signals only — NOT calibrated probabilities. Using % labels implies
-// probabilistic meaning that the model does not support. Numeric score remains visible
-// via tooltip on the confidence bar in each row.
+// Confidence band labels use signal-strength words — NOT calibrated percentages.
+// The raw scores are relative ranking signals only (see nlp_suspect_extractor.py).
 const CONFIDENCE_OPTIONS: { value: ConfidenceBand; label: string; color: string }[] = [
   { value: "all", label: "Any", color: C.textSubtle },
   { value: "high", label: "Strong signal", color: C.low },
@@ -193,8 +193,6 @@ function rationaleText(s: DBSuspect): string {
 }
 
 function getCoefficient(s: DBSuspect): number {
-  // Prefer explicit hcc_coefficient if backend returns it; fall back to a
-  // conservative average estimate so the UI never shows zero.
   const coef = (s as unknown as { hcc_coefficient?: number }).hcc_coefficient;
   if (typeof coef === "number" && coef > 0) return coef;
   return 0.25;
@@ -219,45 +217,65 @@ function statusPill(status: string | undefined): { bg: string; fg: string; borde
 }
 
 /* ================================================================== */
-/*  Skeleton row — matches SUSPECTS_GRID exactly                       */
+/*  Skeleton rows for loading state                                    */
 /* ================================================================== */
 
-function SkeletonRow({ index }: { index: number }) {
+function SkeletonRows() {
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: SUSPECTS_GRID,
-        gap: SUSPECTS_GAP,
-        alignItems: "center",
-        minHeight: ROW_MIN_HEIGHT,
-        padding: `12px ${SUSPECTS_PAD_X}px`,
-        backgroundColor: C.bgCard,
-        borderBottom: `1px solid ${C.rowDivider}`,
-        animation: `pulseSk 1.4s ease-in-out ${index * 80}ms infinite`,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: tokens.slate200 }} />
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ width: "70%", height: 12, borderRadius: 4, background: tokens.slate200 }} />
-          <div style={{ width: "50%", height: 9, borderRadius: 4, background: tokens.slate100 }} />
-        </div>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <div style={{ width: "80%", height: 12, borderRadius: 4, background: tokens.slate200 }} />
-        <div style={{ width: "55%", height: 9, borderRadius: 4, background: tokens.slate100 }} />
-      </div>
-      <div style={{ width: 92, height: 22, borderRadius: 999, background: tokens.slate200 }} />
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <div style={{ flex: 1, height: 6, borderRadius: 4, background: tokens.slate200 }} />
-        <div style={{ width: 30, height: 12, borderRadius: 4, background: tokens.slate200 }} />
-      </div>
-      <div style={{ width: 50, height: 14, borderRadius: 4, background: tokens.slate200, justifySelf: "end" }} />
-      <div style={{ width: 60, height: 14, borderRadius: 4, background: tokens.slate200, justifySelf: "end" }} />
-      <div style={{ width: 78, height: 22, borderRadius: 999, background: tokens.slate200, justifySelf: "end" }} />
-      <div style={{ width: 64, height: 28, borderRadius: 8, background: tokens.slate200, justifySelf: "end" }} />
-    </div>
+    <>
+      {Array.from({ length: 8 }).map((_, i) => (
+        <TableRow
+          key={i}
+          className="animate-pulse"
+          style={{ animationDelay: `${i * 80}ms` }}
+        >
+          {/* Patient */}
+          <TableCell className="py-4 pl-6">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-muted shrink-0" />
+              <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                <div className="h-3 w-2/3 rounded bg-muted" />
+                <div className="h-2.5 w-1/2 rounded bg-muted/70" />
+              </div>
+            </div>
+          </TableCell>
+          {/* Condition */}
+          <TableCell className="py-4">
+            <div className="flex flex-col gap-1.5">
+              <div className="h-3 w-4/5 rounded bg-muted" />
+              <div className="h-2.5 w-3/5 rounded bg-muted/70" />
+            </div>
+          </TableCell>
+          {/* Evidence */}
+          <TableCell className="py-4">
+            <div className="h-5 w-24 rounded-full bg-muted" />
+          </TableCell>
+          {/* Confidence */}
+          <TableCell className="py-4">
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-1.5 rounded bg-muted" />
+              <div className="w-14 h-3 rounded bg-muted" />
+            </div>
+          </TableCell>
+          {/* RAF */}
+          <TableCell className="py-4 text-right">
+            <div className="h-3.5 w-14 rounded bg-muted ml-auto" />
+          </TableCell>
+          {/* Revenue */}
+          <TableCell className="py-4 text-right">
+            <div className="h-3.5 w-16 rounded bg-muted ml-auto" />
+          </TableCell>
+          {/* Status */}
+          <TableCell className="py-4 text-right">
+            <div className="h-5 w-20 rounded-full bg-muted ml-auto" />
+          </TableCell>
+          {/* Actions */}
+          <TableCell className="py-4 pr-6 text-right">
+            <div className="h-7 w-16 rounded-lg bg-muted ml-auto" />
+          </TableCell>
+        </TableRow>
+      ))}
+    </>
   );
 }
 
@@ -291,7 +309,13 @@ export default function SuspectsPage() {
 
   // Keyboard navigation — track focused row for A/D/R shortcut dispatch
   const [focusedRowIdx, setFocusedRowIdx] = useState(0);
-  const rowRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
+
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedRationale, setExpandedRationale] = useState<Set<number>>(new Set());
+  const [bulkAction, setBulkAction] = useState<"accept" | "dismiss" | null>(null);
+  const { paymentYear: measurementYear, setPaymentYear: setMeasurementYear } = usePaymentYear();
 
   // Sync filter state to URL (no history pollution)
   useEffect(() => {
@@ -304,11 +328,6 @@ export default function SuspectsPage() {
     const qs = params.toString();
     router.replace(qs ? `?${qs}` : "/suspects", { scroll: false });
   }, [statusFilter, evidenceFilter, searchTerm, confidenceBand, sortField, router]);
-  const [bulkAction, setBulkAction] = useState<"accept" | "dismiss" | null>(null);
-  const [hoveredId, setHoveredId] = useState<number | null>(null);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [expandedRationale, setExpandedRationale] = useState<Set<number>>(new Set());
-  const { paymentYear: measurementYear, setPaymentYear: setMeasurementYear } = usePaymentYear();
 
   // Close "More" popover on outside click
   useEffect(() => {
@@ -415,18 +434,11 @@ export default function SuspectsPage() {
       openSet.length > 0
         ? openSet.reduce((sum, s) => sum + (s.confidence_score ?? 0), 0) / openSet.length
         : 0;
-    return {
-      openCount: openSet.length,
-      totalUplift,
-      totalRevenue,
-      avgConf,
-    };
+    return { openCount: openSet.length, totalUplift, totalRevenue, avgConf };
   }, [allSuspects]);
 
   /* --- Mutations --------------------------------------------------- */
 
-  // Undo refs — keyed by suspect id, value is the timeout handle.
-  // When Undo is clicked the timeout is cleared and the reverse API is called.
   const undoTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
   const undoMut = useMutation({
@@ -444,26 +456,19 @@ export default function SuspectsPage() {
       acceptSuspect(id)
         .then(() => {
           queryClient.invalidateQueries({ queryKey: ["suspects"] });
-          const timer = setTimeout(() => {
-            undoTimers.current.delete(id);
-          }, 5500);
+          const timer = setTimeout(() => { undoTimers.current.delete(id); }, 5500);
           undoTimers.current.set(id, timer);
-          toast.success(
-            "Accepted",
-            "Suspect accepted & written to OpenEMR.",
-            {
-              duration: 5500,
-              action: {
-                label: "Undo",
-                onClick: () => {
-                  const t = undoTimers.current.get(id);
-                  if (t) { clearTimeout(t); undoTimers.current.delete(id); }
-                  undoMut.mutate({ id, kind: "accept" });
-                },
+          toast.success("Accepted", "Suspect accepted & written to OpenEMR.", {
+            duration: 5500,
+            action: {
+              label: "Undo",
+              onClick: () => {
+                const t = undoTimers.current.get(id);
+                if (t) { clearTimeout(t); undoTimers.current.delete(id); }
+                undoMut.mutate({ id, kind: "accept" });
               },
-            }
-          );
-          // Prompt provider to push to EHR Problem List
+            },
+          });
           const accepted = allSuspects.find((s) => s.id === id) ?? null;
           setWriteBackSuspect(accepted);
         })
@@ -478,25 +483,19 @@ export default function SuspectsPage() {
       dismissSuspect(id)
         .then(() => {
           queryClient.invalidateQueries({ queryKey: ["suspects"] });
-          const timer = setTimeout(() => {
-            undoTimers.current.delete(id);
-          }, 5500);
+          const timer = setTimeout(() => { undoTimers.current.delete(id); }, 5500);
           undoTimers.current.set(id, timer);
-          toast.success(
-            "Dismissed",
-            "Suspect condition dismissed.",
-            {
-              duration: 5500,
-              action: {
-                label: "Undo",
-                onClick: () => {
-                  const t = undoTimers.current.get(id);
-                  if (t) { clearTimeout(t); undoTimers.current.delete(id); }
-                  undoMut.mutate({ id, kind: "dismiss" });
-                },
+          toast.success("Dismissed", "Suspect condition dismissed.", {
+            duration: 5500,
+            action: {
+              label: "Undo",
+              onClick: () => {
+                const t = undoTimers.current.get(id);
+                if (t) { clearTimeout(t); undoTimers.current.delete(id); }
+                undoMut.mutate({ id, kind: "dismiss" });
               },
-            }
-          );
+            },
+          });
         })
         .catch(() => toast.error("Error", "Failed to dismiss suspect."));
     },
@@ -528,13 +527,10 @@ export default function SuspectsPage() {
 
   /* --- Keyboard shortcuts: A/D/R on focused row -------------------- */
 
-  // Reset focus index when filtered data changes so it doesn't point past end
   useEffect(() => {
     setFocusedRowIdx(0);
   }, [filteredSorted.length, page]);
 
-  // Register A/D/R context shortcuts that operate on the focused row.
-  // Guards: skip when focus is inside a typing surface (search box etc.)
   useEffect(() => {
     function isTyping(): boolean {
       const el = document.activeElement as HTMLElement | null;
@@ -546,25 +542,19 @@ export default function SuspectsPage() {
     const unregAccept = registerContextShortcut("accept-focused-suspect", () => {
       if (isTyping()) return;
       const row = pagedSuspects[focusedRowIdx];
-      if (row && (row.status || "open") === "open") {
-        acceptMut.mutate(row.id);
-      }
+      if (row && (row.status || "open") === "open") acceptMut.mutate(row.id);
     });
 
     const unregDismiss = registerContextShortcut("dismiss-focused-suspect", () => {
       if (isTyping()) return;
       const row = pagedSuspects[focusedRowIdx];
-      if (row && (row.status || "open") === "open") {
-        dismissMut.mutate(row.id);
-      }
+      if (row && (row.status || "open") === "open") dismissMut.mutate(row.id);
     });
 
     const unregReview = registerContextShortcut("mark-meat-reviewed", () => {
       if (isTyping()) return;
       const row = pagedSuspects[focusedRowIdx];
-      if (row) {
-        router.push(`/patients/${row.patient_id}?tab=suspects`);
-      }
+      if (row) router.push(`/patients/${row.patient_id}?tab=suspects`);
     });
 
     return () => {
@@ -572,12 +562,12 @@ export default function SuspectsPage() {
       unregDismiss();
       unregReview();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusedRowIdx, pagedSuspects]);
 
-  // Arrow / J / K key navigation across rows — only when not typing
+  // Arrow / J / K key navigation across rows
   const handleListKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
+    (e: React.KeyboardEvent<HTMLTableSectionElement>) => {
       const el = e.target as HTMLElement;
       const tag = el.tagName.toLowerCase();
       if (tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable) return;
@@ -658,451 +648,224 @@ export default function SuspectsPage() {
   }
 
   /* ============================================================== */
+  /*  Filter bar helpers                                             */
+  /* ============================================================== */
+
+  const PRIMARY_STATUS: StatusTab[] = ["all", "open", "accepted"];
+  const MORE_STATUS: StatusTab[] = ["dismissed", "coded"];
+
+  const moreActiveCount =
+    (MORE_STATUS.includes(statusFilter) ? 1 : 0) +
+    (evidenceFilter !== "all" ? 1 : 0) +
+    (confidenceBand !== "all" ? 1 : 0);
+
+  const handleMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = Array.from(
+      morePopoverRef.current?.querySelectorAll<HTMLElement>("[data-menu-item]") ?? []
+    );
+    const idx = items.indexOf(e.target as HTMLElement);
+    if (e.key === "ArrowDown") { e.preventDefault(); items[(idx + 1) % items.length]?.focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); items[(idx - 1 + items.length) % items.length]?.focus(); }
+    else if (e.key === "Escape") { setMoreOpen(false); moreTriggerRef.current?.focus(); }
+  };
+
+  /* ============================================================== */
   /*  Render                                                         */
   /* ============================================================== */
 
   return (
     <TooltipProvider delayDuration={200}>
-    <div
-      className="suspects-page-wrap"
-      style={{
-        background: C.bgPage,
-        minHeight: "100vh",
-        padding: "20px 16px 48px",
-        fontFamily: FONT_SYS,
-        color: C.text,
-        overflowX: "hidden",
-      }}
-    >
-      <PageAlerts defaultOpen>
-        <HistoricalPYBanner paymentYear={measurementYear} />
-        <DataQualityBanner />
-        <WorkflowProgressBar currentStage="suspects" />
-        <WorkflowHandoffBanner
-          count={statusCounts.accepted}
-          message="{count} suspects ready for attestation"
-          ctaLabel="Send to Attestations"
-          ctaHref="/attestations"
-          showWhenZero
-          zeroMessage="No suspects accepted yet — review AI suspects below and accept to proceed."
-          zeroCtaLabel="View Suspects"
-          zeroCtaHref="/suspects"
-        />
-      </PageAlerts>
-      <style>{`
-        @media (prefers-reduced-motion: no-preference) {
-          @keyframes pulseSk { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
-          @keyframes rowEnter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-          @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-        }
-        .suspect-row {
-          animation: rowEnter 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
-          transition: background-color 0.15s ease;
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .suspect-row { animation: none; }
-        }
-        .suspect-row:hover { background-color: ${C.bgBand} !important; }
-        .suspect-row:focus-visible {
-          outline: 2px solid ${C.brand};
-          outline-offset: -2px;
-        }
-        .row-action-btn {
-          opacity: 0;
-          transform: translateY(2px);
-          transition: opacity 0.15s ease, transform 0.15s ease, background-color 0.15s ease, color 0.15s ease;
-        }
-        .suspect-row:hover .row-action-btn,
-        .suspect-row:focus-within .row-action-btn { opacity: 1; transform: translateY(0); }
-        @media (max-width: 900px) {
-          .row-action-btn { opacity: 1; transform: none; }
-        }
-        @media (min-width: 640px) {
-          .suspects-page-wrap { padding: 32px 40px 48px !important; }
-        }
-        /* WCAG 2.5.5 — touch targets ≥44px on mobile */
-        @media (max-width: 768px) {
-          .row-action-btn {
-            width: 44px !important;
-            height: 44px !important;
-            border-radius: 10px !important;
-          }
-          .suspects-filter-chip-group {
-            min-height: 44px !important;
-          }
-          .suspects-filter-chip-group button {
-            min-height: 38px !important;
-            padding-top: 5px !important;
-            padding-bottom: 5px !important;
-          }
-        }
-      `}</style>
+      <div className="p-6 pb-12 min-h-screen bg-background">
 
-      {/* ── Error Banner ─────────────────────────────────────────── */}
-      {isError && (
-        <div
-          role="alert"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            background: C.highSoft,
-            border: `1px solid ${tokens.dangerBorder}`,
-            borderRadius: 10,
-            padding: "12px 16px",
-            marginBottom: 20,
-            fontSize: 13,
-            color: C.high,
-            fontWeight: 600,
-          }}
-        >
-          <AlertCircle size={18} />
-          Failed to load suspects. Please check the server connection and refresh.
-        </div>
-      )}
+        <PageAlerts defaultOpen>
+          <HistoricalPYBanner paymentYear={measurementYear} />
+          <DataQualityBanner />
+          <WorkflowProgressBar currentStage="suspects" />
+          <WorkflowHandoffBanner
+            count={statusCounts.accepted}
+            message="{count} suspects ready for attestation"
+            ctaLabel="Send to Attestations"
+            ctaHref="/attestations"
+            showWhenZero
+            zeroMessage="No suspects accepted yet — review AI suspects below and accept to proceed."
+            zeroCtaLabel="View Suspects"
+            zeroCtaHref="/suspects"
+          />
+        </PageAlerts>
 
-      {/* ============================================================ */}
-      {/* Page header                                                  */}
-      {/* ============================================================ */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          gap: 16,
-          marginBottom: 24,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0 }}>
+        {/* ── Error Banner ───────────────────────────────────────── */}
+        {isError && (
           <div
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: 14,
-              background: `linear-gradient(135deg, ${C.brand} 0%, ${C.brandDark} 100%)`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow:
-                "0 6px 16px rgba(15, 118, 110, 0.25), inset 0 1px 0 rgba(255,255,255,0.18)",
-              flexShrink: 0,
-            }}
+            role="alert"
+            className="flex items-center gap-3 bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-3 mb-5 text-sm font-semibold text-destructive"
           >
-            <Sparkles size={22} color={tokens.white} strokeWidth={2.25} aria-hidden="true" />
+            <AlertCircle size={18} aria-hidden="true" />
+            Failed to load suspects. Please check the server connection and refresh.
           </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <h1
-                style={{
-                  margin: 0,
-                  fontSize: 24,
-                  fontWeight: 700,
-                  color: C.text,
-                  letterSpacing: "-0.02em",
-                  lineHeight: 1.15,
-                }}
-              >
-                Suspect Conditions
-              </h1>
+        )}
+
+        {/* ── Page Header ────────────────────────────────────────── */}
+        <PageHeader
+          icon={<Sparkles size={20} aria-hidden="true" />}
+          title={
+            <span className="flex items-center gap-2.5 flex-wrap">
+              Suspect Conditions
               <Tooltip>
                 <TooltipTrigger asChild>
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  height: 26,
-                  padding: "0 4px 0 10px",
-                  borderRadius: 8,
-                  backgroundColor: C.brandSoft,
-                  border: `1px solid ${C.brandRing}`,
-                  color: C.brand,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: "0.02em",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                <span>MY</span>
-                <select
-                  value={measurementYear}
-                  onChange={(e) => setMeasurementYear(Number(e.target.value))}
-                  aria-label="Measurement year"
-                  style={{
-                    appearance: "none",
-                    WebkitAppearance: "none",
-                    MozAppearance: "none",
-                    background: "transparent",
-                    border: "none",
-                    color: C.brand,
-                    fontSize: 12,
-                    fontWeight: 700,
-                    fontFamily: FONT_SYS,
-                    fontVariantNumeric: "tabular-nums",
-                    letterSpacing: "0.01em",
-                    cursor: "pointer",
-                    padding: "0 18px 0 2px",
-                    backgroundImage:
-                      "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 20 20' fill='%230F766E'><path d='M5 8l5 5 5-5H5z'/></svg>\")",
-                    backgroundRepeat: "no-repeat",
-                    backgroundPosition: "right 2px center",
-                  }}
-                >
-                  {PAYMENT_YEARS.map((y) => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
-              </div>
+                  <span className="inline-flex items-center gap-1 h-6 pl-2.5 pr-1 rounded-lg border text-[11px] font-bold tracking-wide cursor-default select-none"
+                    style={{
+                      backgroundColor: C.brandSoft,
+                      borderColor: C.brandRing,
+                      color: C.brand,
+                    }}
+                  >
+                    MY
+                    <select
+                      value={measurementYear}
+                      onChange={(e) => setMeasurementYear(Number(e.target.value))}
+                      aria-label="Measurement year"
+                      className="bg-transparent border-none text-[12px] font-bold cursor-pointer pr-5 pl-0.5 focus:outline-none appearance-none"
+                      style={{
+                        color: C.brand,
+                        backgroundImage:
+                          "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 20 20' fill='%230F766E'><path d='M5 8l5 5 5-5H5z'/></svg>\")",
+                        backgroundRepeat: "no-repeat",
+                        backgroundPosition: "right 2px center",
+                      }}
+                    >
+                      {PAYMENT_YEARS.map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
                   Measurement year — affects HCC code set (V28 for 2026+)
                 </TooltipContent>
               </Tooltip>
-            </div>
-            <p
-              style={{
-                margin: "4px 0 0",
-                fontSize: 13,
-                color: C.textSubtle,
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {isLoading
-                ? "Loading review queue\u2026"
-                : `${heroStats.openCount.toLocaleString()} open suspects · ${formatCurrency(heroStats.totalRevenue)} estimated RAF opportunity · CMS-HCC V28`}
-            </p>
-          </div>
-        </div>
+            </span>
+          }
+          subtitle={
+            isLoading
+              ? "Loading review queue…"
+              : `${heroStats.openCount.toLocaleString()} open suspects · ${formatCurrency(heroStats.totalRevenue)} estimated RAF opportunity · CMS-HCC V28`
+          }
+          actions={<HelpButton />}
+        />
 
-        {/* Help button — top-right of page header */}
-        <div style={{ marginLeft: "auto", flexShrink: 0 }}>
-          <HelpButton />
-        </div>
-      </div>
-
-      {/* ============================================================ */}
-      {/* Hero summary strip — 4 cards                                 */}
-      {/* ============================================================ */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: 12,
-          marginBottom: 16,
-        }}
-      >
-        {[
-          {
-            label: "Open Suspects",
-            value: isLoading ? "\u2014" : heroStats.openCount.toLocaleString(),
-            sub: `In MY ${measurementYear}`,
-            icon: ClipboardList,
-            tone: C.blue,
-          },
-          {
-            label: "Est. RAF Uplift",
-            value: isLoading ? "\u2014" : heroStats.totalUplift > 0 ? `+${heroStats.totalUplift.toFixed(2)}` : "Not yet started",
-            sub: heroStats.totalUplift > 0 ? "Sum of coefficients" : "Accept suspects to calculate uplift",
-            icon: TrendingUp,
-            tone: C.brand,
-          },
-          {
-            label: "Est. Annual Revenue",
-            value: isLoading ? "\u2014" : formatCurrency(heroStats.totalRevenue),
-            sub: heroStats.totalRevenue > 0 ? `at $${REVENUE_PER_RAF.toLocaleString()}/RAF point` : "Not yet started — accept suspects to calculate",
-            icon: DollarSign,
-            tone: C.low,
-          },
-          {
-            label: "Avg Confidence",
-            value: isLoading ? "\u2014" : heroStats.avgConf > 0 ? `${(heroStats.avgConf * 100).toFixed(0)}%` : "\u2014",
-            sub: heroStats.openCount > 0 ? "Across open suspects" : "No open suspects",
-            icon: Activity,
-            tone: C.medium,
-          },
-        ].map(({ label, value, sub, icon: Icon, tone }) => (
-          <div
-            key={label}
-            style={{
-              backgroundColor: C.bgCard,
-              border: `1px solid ${C.borderSoft}`,
-              borderRadius: 10,
-              padding: "14px 16px",
-              display: "flex",
-              alignItems: "center",
-              gap: 14,
-              boxShadow: "0 1px 2px rgba(15, 23, 42, 0.03)",
-            }}
-          >
+        {/* ── Hero Stats Strip ───────────────────────────────────── */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+          {[
+            {
+              label: "Open Suspects",
+              value: isLoading ? "—" : heroStats.openCount.toLocaleString(),
+              sub: `In MY ${measurementYear}`,
+              icon: ClipboardList,
+              tone: C.blue,
+            },
+            {
+              label: "Est. RAF Uplift",
+              value: isLoading ? "—" : heroStats.totalUplift > 0 ? `+${heroStats.totalUplift.toFixed(2)}` : "Not yet started",
+              sub: heroStats.totalUplift > 0 ? "Sum of coefficients" : "Accept suspects to calculate",
+              icon: TrendingUp,
+              tone: C.brand,
+            },
+            {
+              label: "Est. Annual Revenue",
+              value: isLoading ? "—" : formatCurrency(heroStats.totalRevenue),
+              sub: heroStats.totalRevenue > 0 ? `at $${REVENUE_PER_RAF.toLocaleString()}/RAF point` : "Accept suspects to calculate",
+              icon: DollarSign,
+              tone: C.low,
+            },
+            {
+              label: "Avg Confidence",
+              value: isLoading ? "—" : heroStats.avgConf > 0 ? `${(heroStats.avgConf * 100).toFixed(0)}%` : "—",
+              sub: heroStats.openCount > 0 ? "Across open suspects" : "No open suspects",
+              icon: Activity,
+              tone: C.medium,
+            },
+          ].map(({ label, value, sub, icon: Icon, tone }) => (
             <div
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                backgroundColor: `${tone}14`,
-                color: tone,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
+              key={label}
+              className="bg-card border border-border rounded-lg px-4 py-3.5 flex items-center gap-3.5 shadow-sm"
             >
-              <Icon size={17} strokeWidth={2.25} />
-            </div>
-            <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                  color: C.label,
-                }}
+              <div
+                className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                style={{ backgroundColor: `${tone}18`, color: tone }}
               >
-                {label}
-              </span>
-              <span
-                style={{
-                  fontSize: 22,
-                  fontWeight: 700,
-                  color: C.text,
-                  lineHeight: 1.1,
-                  letterSpacing: "-0.02em",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {value}
-              </span>
-              <span
-                style={{
-                  fontSize: 11,
-                  color: C.textSubtle,
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {sub}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ============================================================ */}
-      {/* Filter strip                                                 */}
-      {/* ============================================================ */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: 12,
-          marginBottom: 14,
-        }}
-      >
-        {/* ── Progressive-disclosure filter strip ──────────────────── */}
-        {/* Primary (always visible): All / Open / Accepted + "More"   */}
-        {/* Collapsed into "More": Dismissed, Coded, Evidence, Signal  */}
-        {/* Always visible: Sort button                                */}
-        {(() => {
-          const PRIMARY_STATUS: StatusTab[] = ["all", "open", "accepted"];
-          const MORE_STATUS: StatusTab[] = ["dismissed", "coded"];
-
-          const moreActiveCount =
-            (MORE_STATUS.includes(statusFilter) ? 1 : 0) +
-            (evidenceFilter !== "all" ? 1 : 0) +
-            (confidenceBand !== "all" ? 1 : 0);
-
-          const groupStyle: React.CSSProperties = {
-            display: "inline-flex",
-            alignItems: "center",
-            backgroundColor: tokens.white,
-            border: `1px solid ${C.border}`,
-            borderRadius: 10,
-            padding: 3,
-            gap: 2,
-            height: 36,
-          };
-
-          const primaryChipStyle = (active: boolean): React.CSSProperties => ({
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            height: 28,
-            padding: "0 12px",
-            borderRadius: 7,
-            border: "none",
-            backgroundColor: active ? C.text : "transparent",
-            color: active ? tokens.white : C.textMuted,
-            fontSize: 12,
-            fontWeight: 600,
-            fontFamily: FONT_SYS,
-            cursor: "pointer",
-            transition: "all 0.15s ease",
-            whiteSpace: "nowrap" as const,
-          });
-
-          const activeTagStyle = (borderColor: string, bgColor: string, color: string): React.CSSProperties => ({
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 5,
-            height: 28,
-            padding: "0 10px",
-            borderRadius: 999,
-            border: `1px solid ${borderColor}`,
-            backgroundColor: bgColor,
-            color,
-            fontSize: 12,
-            fontWeight: 600,
-            fontFamily: FONT_SYS,
-            cursor: "pointer",
-          });
-
-          const handleMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-            const items = Array.from(
-              morePopoverRef.current?.querySelectorAll<HTMLElement>("[data-menu-item]") ?? []
-            );
-            const idx = items.indexOf(e.target as HTMLElement);
-            if (e.key === "ArrowDown") { e.preventDefault(); items[(idx + 1) % items.length]?.focus(); }
-            else if (e.key === "ArrowUp") { e.preventDefault(); items[(idx - 1 + items.length) % items.length]?.focus(); }
-            else if (e.key === "Escape") { setMoreOpen(false); moreTriggerRef.current?.focus(); }
-          };
-
-          return (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-
-              {/* Primary status chips */}
-              <div className="suspects-filter-chip-group" style={groupStyle} role="group" aria-label="Status filter">
-                {STATUS_TABS.filter((t) => PRIMARY_STATUS.includes(t.value)).map(({ value, label, dot }) => {
-                  const active = statusFilter === value;
-                  const chipTooltip: Record<string, string> = {
-                    all: "Show all suspects regardless of status",
-                    open: "Suspects not yet reviewed — requires coder action",
-                    accepted: "Suspects accepted and written to OpenEMR",
-                  };
-                  return (
-                    <Tooltip key={value}>
-                      <TooltipTrigger asChild>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleStatusChange(value); }}
-                          onKeyDown={(e) => e.stopPropagation()}
-                          aria-pressed={active}
-                          style={primaryChipStyle(active)}
-                        >
-                          {dot && <span style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: dot, boxShadow: active ? "0 0 0 1.5px rgba(255,255,255,0.25)" : "none" }} />}
-                          {label}
-                          <span style={{ fontSize: 11, fontWeight: 600, color: active ? "rgba(255,255,255,0.7)" : C.label, fontVariantNumeric: "tabular-nums" }}>{statusCounts[value]}</span>
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">{chipTooltip[value]}</TooltipContent>
-                    </Tooltip>
-                  );
-                })}
+                <Icon size={17} strokeWidth={2.25} aria-hidden="true" />
               </div>
+              <div className="min-w-0 flex flex-col gap-0.5">
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  {label}
+                </span>
+                <span className="text-xl font-bold text-foreground leading-tight tabular-nums tracking-tight">
+                  {value}
+                </span>
+                <span className="text-[11px] text-muted-foreground tabular-nums">
+                  {sub}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
 
-              {/* "More filters" trigger + popover */}
-              <div style={{ position: "relative" }}>
-                <Tooltip>
-                <TooltipTrigger asChild>
+        {/* ── Filter Strip ───────────────────────────────────────── */}
+        <div className="flex items-center gap-2 flex-wrap mb-3.5">
+
+          {/* Primary status chips */}
+          <div
+            className="inline-flex items-center bg-card border border-border rounded-lg p-0.5 gap-0.5 h-9"
+            role="group"
+            aria-label="Status filter"
+          >
+            {STATUS_TABS.filter((t) => PRIMARY_STATUS.includes(t.value)).map(({ value, label, dot }) => {
+              const active = statusFilter === value;
+              const chipTooltip: Record<string, string> = {
+                all: "Show all suspects regardless of status",
+                open: "Suspects not yet reviewed — requires coder action",
+                accepted: "Suspects accepted and written to OpenEMR",
+              };
+              return (
+                <Tooltip key={value}>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleStatusChange(value); }}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      aria-pressed={active}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 h-7 px-3 rounded-md text-[12px] font-semibold transition-all duration-150 border-0 cursor-pointer whitespace-nowrap",
+                        active
+                          ? "bg-foreground text-background"
+                          : "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
+                      )}
+                    >
+                      {dot && (
+                        <span
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                          style={{ backgroundColor: dot }}
+                          aria-hidden="true"
+                        />
+                      )}
+                      {label}
+                      <span className={cn(
+                        "text-[11px] font-semibold tabular-nums",
+                        active ? "text-background/70" : "text-muted-foreground"
+                      )}>
+                        {statusCounts[value]}
+                      </span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{chipTooltip[value]}</TooltipContent>
+                </Tooltip>
+              );
+            })}
+          </div>
+
+          {/* "More filters" trigger + popover */}
+          <div className="relative">
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <button
                   ref={moreTriggerRef}
                   id={`${moreMenuId}-btn`}
@@ -1110,1667 +873,909 @@ export default function SuspectsPage() {
                   aria-expanded={moreOpen}
                   aria-controls={`${moreMenuId}-menu`}
                   onClick={() => setMoreOpen((o) => !o)}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 6,
-                    height: 36, padding: "0 14px", borderRadius: 10,
-                    border: `1px solid ${moreActiveCount > 0 ? C.brand : C.border}`,
-                    backgroundColor: moreActiveCount > 0 ? C.brandSoft : tokens.white,
-                    color: moreActiveCount > 0 ? C.brand : C.textMuted,
-                    fontSize: 12, fontWeight: 600, fontFamily: FONT_SYS,
-                    cursor: "pointer", transition: "all 0.15s ease",
-                  }}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg border text-[12px] font-semibold transition-all duration-150 cursor-pointer",
+                    moreActiveCount > 0
+                      ? "border-primary/30 bg-primary/8 text-primary"
+                      : "border-border bg-card text-muted-foreground hover:bg-muted"
+                  )}
                 >
                   More filters
                   {moreActiveCount > 0 && (
                     <span
                       aria-label={`${moreActiveCount} active`}
-                      style={{
-                        display: "inline-flex", alignItems: "center", justifyContent: "center",
-                        minWidth: 18, height: 18, borderRadius: 999,
-                        backgroundColor: C.brand, color: tokens.white,
-                        fontSize: 10, fontWeight: 700, padding: "0 4px",
-                      }}
+                      className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[10px] font-bold px-1 text-white"
+                      style={{ backgroundColor: C.brand }}
                     >
                       {moreActiveCount}
                     </span>
                   )}
-                  <ChevronDown size={13} style={{ transition: "transform 0.15s", transform: moreOpen ? "rotate(180deg)" : "none" }} />
+                  <ChevronDown
+                    size={13}
+                    className="transition-transform duration-150"
+                    style={{ transform: moreOpen ? "rotate(180deg)" : "none" }}
+                    aria-hidden="true"
+                  />
                 </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Filter by status (Dismissed / Coded), evidence source, or confidence signal</TooltipContent>
-                </Tooltip>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                Filter by status (Dismissed / Coded), evidence source, or confidence signal
+              </TooltipContent>
+            </Tooltip>
 
-                {moreOpen && (
-                  <div
-                    ref={morePopoverRef}
-                    id={`${moreMenuId}-menu`}
-                    role="dialog"
-                    aria-label="More filters"
-                    onKeyDown={handleMenuKeyDown}
-                    style={{
-                      position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 120,
-                      backgroundColor: tokens.white, border: `1px solid ${C.border}`,
-                      borderRadius: 10, boxShadow: "0 8px 24px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.06)",
-                      padding: "14px 16px", minWidth: 280, display: "flex", flexDirection: "column", gap: 14,
-                    }}
-                  >
-                    {/* Status: Dismissed / Coded */}
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.label, marginBottom: 6 }}>Status</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                        {STATUS_TABS.filter((t) => MORE_STATUS.includes(t.value)).map(({ value, label, dot }) => {
-                          const active = statusFilter === value;
-                          return (
-                            <button
-                              key={value}
-                              data-menu-item
-                              onClick={() => { handleStatusChange(value); setMoreOpen(false); }}
-                              aria-pressed={active}
-                              style={{
-                                display: "inline-flex", alignItems: "center", gap: 6,
-                                height: 30, padding: "0 12px", borderRadius: 8,
-                                border: `1px solid ${active ? C.brand : C.border}`,
-                                backgroundColor: active ? C.brandSoft : C.bgSubtle,
-                                color: active ? C.brand : C.textMuted,
-                                fontSize: 12, fontWeight: 600, fontFamily: FONT_SYS, cursor: "pointer", transition: "all 0.15s ease",
-                              }}
-                            >
-                              {dot && <span style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: dot }} />}
-                              {label}
-                              <span style={{ fontSize: 10, color: active ? C.brand : C.label, fontVariantNumeric: "tabular-nums" }}>{statusCounts[value]}</span>
-                              {active && <X size={10} onClick={(e) => { e.stopPropagation(); handleStatusChange("open"); }} aria-label={`Remove ${label} filter`} />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <div style={{ height: 1, backgroundColor: C.borderSoft }} />
-
-                    {/* Evidence source */}
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.label, marginBottom: 6 }}>Evidence source</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                        {EVIDENCE_FILTERS.filter((f) => f.value !== "all").map(({ value, label }) => {
-                          const active = evidenceFilter === value;
-                          return (
-                            <button
-                              key={value}
-                              data-menu-item
-                              onClick={() => { setEvidenceFilter(active ? "all" : value); setPage(0); }}
-                              aria-pressed={active}
-                              style={{
-                                display: "inline-flex", alignItems: "center", gap: 5,
-                                height: 30, padding: "0 10px", borderRadius: 8,
-                                border: `1px solid ${active ? C.brand : C.border}`,
-                                backgroundColor: active ? C.brandSoft : C.bgSubtle,
-                                color: active ? C.brand : C.textMuted,
-                                fontSize: 12, fontWeight: 600, fontFamily: FONT_SYS, cursor: "pointer", transition: "all 0.15s ease",
-                              }}
-                            >
-                              {evidenceIcon(value, 11)}{label}
-                              {active && <X size={10} aria-label={`Remove ${label} filter`} />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <div style={{ height: 1, backgroundColor: C.borderSoft }} />
-
-                    {/* Confidence signal */}
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.label, marginBottom: 6 }}>Confidence signal</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                        {CONFIDENCE_OPTIONS.filter((o) => o.value !== "all").map(({ value, label, color }) => {
-                          const active = confidenceBand === value;
-                          return (
-                            <button
-                              key={value}
-                              data-menu-item
-                              onClick={() => { setConfidenceBand(active ? "all" : value); setPage(0); }}
-                              aria-pressed={active}
-                              style={{
-                                display: "inline-flex", alignItems: "center", gap: 6,
-                                height: 30, padding: "0 10px", borderRadius: 8,
-                                border: `1px solid ${active ? color : C.border}`,
-                                backgroundColor: active ? `${color}14` : C.bgSubtle,
-                                color: active ? color : C.textMuted,
-                                fontSize: 12, fontWeight: 600, fontFamily: FONT_SYS, cursor: "pointer", transition: "all 0.15s ease",
-                              }}
-                            >
-                              <span style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
-                              {label}
-                              {active && <X size={10} aria-label={`Remove ${label} filter`} />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+            {moreOpen && (
+              <div
+                ref={morePopoverRef}
+                id={`${moreMenuId}-menu`}
+                role="dialog"
+                aria-label="More filters"
+                onKeyDown={handleMenuKeyDown}
+                className="absolute top-[calc(100%+6px)] left-0 z-[120] bg-card border border-border rounded-lg shadow-lg p-4 min-w-[280px] flex flex-col gap-3.5"
+              >
+                {/* Status: Dismissed / Coded */}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
+                    Status
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {STATUS_TABS.filter((t) => MORE_STATUS.includes(t.value)).map(({ value, label, dot }) => {
+                      const active = statusFilter === value;
+                      return (
+                        <button
+                          key={value}
+                          data-menu-item
+                          onClick={() => { handleStatusChange(value); setMoreOpen(false); }}
+                          aria-pressed={active}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 h-[30px] px-3 rounded-lg border text-[12px] font-semibold transition-all cursor-pointer",
+                            active
+                              ? "border-primary/30 bg-primary/8 text-primary"
+                              : "border-border bg-muted/50 text-muted-foreground hover:bg-muted"
+                          )}
+                        >
+                          {dot && (
+                            <span
+                              className="w-1.5 h-1.5 rounded-full"
+                              style={{ backgroundColor: dot }}
+                              aria-hidden="true"
+                            />
+                          )}
+                          {label}
+                          <span className="text-[10px] tabular-nums">{statusCounts[value]}</span>
+                          {active && (
+                            <X
+                              size={10}
+                              onClick={(e) => { e.stopPropagation(); handleStatusChange("open"); }}
+                              aria-label={`Remove ${label} filter`}
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
-                )}
+                </div>
+                <div className="h-px bg-border" />
+
+                {/* Evidence source */}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
+                    Evidence source
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {EVIDENCE_FILTERS.filter((f) => f.value !== "all").map(({ value, label }) => {
+                      const active = evidenceFilter === value;
+                      return (
+                        <button
+                          key={value}
+                          data-menu-item
+                          onClick={() => { setEvidenceFilter(active ? "all" : value); setPage(0); }}
+                          aria-pressed={active}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 h-[30px] px-2.5 rounded-lg border text-[12px] font-semibold transition-all cursor-pointer",
+                            active
+                              ? "border-primary/30 bg-primary/8 text-primary"
+                              : "border-border bg-muted/50 text-muted-foreground hover:bg-muted"
+                          )}
+                        >
+                          {evidenceIcon(value, 11)}
+                          {label}
+                          {active && <X size={10} aria-label={`Remove ${label} filter`} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="h-px bg-border" />
+
+                {/* Confidence signal */}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
+                    Confidence signal
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CONFIDENCE_OPTIONS.filter((o) => o.value !== "all").map(({ value, label, color }) => {
+                      const active = confidenceBand === value;
+                      return (
+                        <button
+                          key={value}
+                          data-menu-item
+                          onClick={() => { setConfidenceBand(active ? "all" : value); setPage(0); }}
+                          aria-pressed={active}
+                          className="inline-flex items-center gap-1.5 h-[30px] px-2.5 rounded-lg border text-[12px] font-semibold transition-all cursor-pointer"
+                          style={{
+                            borderColor: active ? color : undefined,
+                            backgroundColor: active ? `${color}14` : undefined,
+                            color: active ? color : undefined,
+                          }}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
+                          {label}
+                          {active && <X size={10} aria-label={`Remove ${label} filter`} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
+            )}
+          </div>
 
-              {/* Surfaced active "More" chips — removable inline */}
-              {MORE_STATUS.includes(statusFilter) && (() => {
-                const t = STATUS_TABS.find((x) => x.value === statusFilter)!;
-                return (
-                  <button key={`active-${statusFilter}`} onClick={() => handleStatusChange("open")} aria-label={`Remove ${t.label} filter`} style={activeTagStyle(C.brand, C.brandSoft, C.brand)}>
-                    {t.dot && <span style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.dot }} />}
-                    {t.label} <X size={11} />
-                  </button>
-                );
-              })()}
+          {/* Surfaced active "More" chips — removable inline */}
+          {MORE_STATUS.includes(statusFilter) && (() => {
+            const t = STATUS_TABS.find((x) => x.value === statusFilter)!;
+            return (
+              <button
+                key={`active-${statusFilter}`}
+                onClick={() => handleStatusChange("open")}
+                aria-label={`Remove ${t.label} filter`}
+                className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border text-[12px] font-semibold transition-all cursor-pointer"
+                style={{ borderColor: C.brand, backgroundColor: C.brandSoft, color: C.brand }}
+              >
+                {t.dot && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: t.dot }} aria-hidden="true" />}
+                {t.label} <X size={11} aria-hidden="true" />
+              </button>
+            );
+          })()}
 
-              {evidenceFilter !== "all" && (
-                <button onClick={() => { setEvidenceFilter("all"); setPage(0); }} aria-label={`Remove evidence filter: ${evidenceFilter}`} style={activeTagStyle(C.brand, C.brandSoft, C.brand)}>
-                  {evidenceIcon(evidenceFilter, 11)}
-                  {EVIDENCE_FILTERS.find((f) => f.value === evidenceFilter)?.label}
-                  <X size={11} />
-                </button>
+          {evidenceFilter !== "all" && (
+            <button
+              onClick={() => { setEvidenceFilter("all"); setPage(0); }}
+              aria-label={`Remove evidence filter: ${evidenceFilter}`}
+              className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border text-[12px] font-semibold cursor-pointer"
+              style={{ borderColor: C.brand, backgroundColor: C.brandSoft, color: C.brand }}
+            >
+              {evidenceIcon(evidenceFilter, 11)}
+              {EVIDENCE_FILTERS.find((f) => f.value === evidenceFilter)?.label}
+              <X size={11} aria-hidden="true" />
+            </button>
+          )}
+
+          {confidenceBand !== "all" && (() => {
+            const opt = CONFIDENCE_OPTIONS.find((o) => o.value === confidenceBand)!;
+            return (
+              <button
+                onClick={() => { setConfidenceBand("all"); setPage(0); }}
+                aria-label={`Remove confidence filter: ${opt.label}`}
+                className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border text-[12px] font-semibold cursor-pointer"
+                style={{ borderColor: opt.color, backgroundColor: `${opt.color}14`, color: opt.color }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: opt.color }} aria-hidden="true" />
+                {opt.label} <X size={11} aria-hidden="true" />
+              </button>
+            );
+          })()}
+
+          {/* Sort */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setSortField((f) => f === "confidence" ? "raf" : f === "raf" ? "patient" : "confidence")}
+                className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg border border-border bg-card text-muted-foreground text-[12px] font-semibold cursor-pointer hover:bg-muted transition-colors"
+              >
+                Sort: {sortField === "confidence" ? "Confidence" : sortField === "raf" ? "RAF lift" : "Patient"}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {sortField === "confidence"
+                ? "Sorted by AI confidence score — highest signal first. Click to switch to RAF lift."
+                : sortField === "raf"
+                ? "Sorted by RAF coefficient — highest revenue impact first. Click to switch to patient name."
+                : "Sorted alphabetically by patient name. Click to switch to confidence."}
+            </TooltipContent>
+          </Tooltip>
+
+          {hasActiveFilters && (
+            <button
+              onClick={clearAllFilters}
+              className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full border border-dashed border-border bg-transparent text-muted-foreground text-[12px] font-semibold cursor-pointer hover:border-foreground/30 transition-colors"
+            >
+              <X size={12} aria-hidden="true" /> Clear filters
+            </button>
+          )}
+
+          {/* Divider */}
+          <div className="w-px h-6 bg-border shrink-0 mx-1" aria-hidden="true" />
+
+          {/* Search */}
+          <div className="relative shrink-0">
+            <Search
+              size={14}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+              aria-hidden="true"
+            />
+            <input
+              type="text"
+              placeholder="Search suspects…"
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
+              onKeyDown={(e) => e.stopPropagation()}
+              aria-label="Search suspects"
+              className="h-9 w-[220px] rounded-lg border border-border bg-card pl-8 pr-3 text-[12px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary transition-all"
+            />
+          </div>
+
+          {/* Export */}
+          <Button
+            onClick={exportSuspectsCSV}
+            aria-label="Export suspects as CSV"
+            className="h-9 gap-1.5 text-[12px] font-semibold shrink-0"
+            size="sm"
+          >
+            <FileDown size={13} aria-hidden="true" />
+            Export
+          </Button>
+        </div>
+
+        {/* Count indicator */}
+        <p className="text-[12px] font-semibold text-muted-foreground tabular-nums mb-2">
+          Showing {filteredSorted.length.toLocaleString()} of {allSuspects.length.toLocaleString()}
+        </p>
+
+        {/* ── Keyboard hints ─────────────────────────────────────── */}
+        <div
+          className="flex items-center gap-4 flex-wrap mb-2 text-[11px] text-muted-foreground"
+          aria-label="Keyboard shortcuts: use Up/Down or J/K to navigate rows, then A to accept, D to dismiss, R to open chart"
+        >
+          <span className="font-semibold text-foreground/70">Keyboard shortcuts:</span>
+          {(
+            [
+              ["Up/Down", "Navigate rows"],
+              ["A", "Accept focused"],
+              ["D", "Dismiss focused"],
+              ["R", "Open chart"],
+            ] as [string, string][]
+          ).map(([key, desc]) => (
+            <span key={key} className="inline-flex items-center gap-1">
+              <kbd className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded border border-border bg-muted font-mono text-[11px] font-bold text-muted-foreground shadow-[0_1px_1px_rgba(0,0,0,0.06)]">
+                {key}
+              </kbd>
+              <span>{desc}</span>
+            </span>
+          ))}
+        </div>
+
+        {/* ── Suspects Table ─────────────────────────────────────── */}
+        <div
+          role="grid"
+          aria-label="Suspected conditions"
+          className="bg-card border border-border rounded-xl overflow-x-auto shadow-sm"
+        >
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead
+                  className="pl-6 py-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground"
+                  role="columnheader"
+                  aria-sort={sortField === "patient" ? "ascending" : "none"}
+                >
+                  <div className="flex items-center gap-2.5">
+                    {selectableIds.length > 0 && (
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        aria-label="Select all on page"
+                        className="w-3.5 h-3.5 cursor-pointer accent-primary"
+                      />
+                    )}
+                    Patient
+                  </div>
+                </TableHead>
+                <TableHead className="py-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground" role="columnheader">
+                  Suspected Condition
+                </TableHead>
+                <TableHead className="py-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground" role="columnheader">
+                  Evidence
+                </TableHead>
+                <TableHead
+                  className="py-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground"
+                  role="columnheader"
+                  aria-sort={sortField === "confidence" ? "descending" : "none"}
+                >
+                  Confidence
+                </TableHead>
+                <TableHead
+                  className="py-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground text-right"
+                  role="columnheader"
+                  aria-sort={sortField === "raf" ? "descending" : "none"}
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help border-b border-dashed border-current">RAF Lift</span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      Estimated RAF score increase if this HCC is documented this year
+                    </TooltipContent>
+                  </Tooltip>
+                </TableHead>
+                <TableHead className="py-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground text-right" role="columnheader">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help border-b border-dashed border-current">Revenue</span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      Estimated $ = RAF lift × ${MA_PAYMENT_PER_RAF.toLocaleString()} (CMS V28 per-point rate, 2026)
+                    </TooltipContent>
+                  </Tooltip>
+                </TableHead>
+                <TableHead className="py-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground text-right" role="columnheader">
+                  Status
+                </TableHead>
+                <TableHead className="pr-6 py-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground text-right" role="columnheader">
+                  Actions
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+
+            <TableBody onKeyDown={handleListKeyDown}>
+              {/* Loading skeleton */}
+              {isLoading && <SkeletonRows />}
+
+              {/* Empty state */}
+              {!isLoading && filteredSorted.length === 0 && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={8} className="py-10 px-6">
+                    <EmptyState
+                      state={hasActiveFilters ? "filtered-out" : "no-data"}
+                      icon={<SearchCheck size={22} aria-hidden="true" />}
+                      title={hasActiveFilters ? undefined : "No open suspects"}
+                      description={
+                        hasActiveFilters
+                          ? "Try adjusting your filters or clearing them to see all suspects."
+                          : "No suspect conditions were found for the current measurement year."
+                      }
+                      cta={hasActiveFilters ? { label: "Clear filters", onClick: clearAllFilters } : undefined}
+                    />
+                  </TableCell>
+                </TableRow>
               )}
 
-              {confidenceBand !== "all" && (() => {
-                const opt = CONFIDENCE_OPTIONS.find((o) => o.value === confidenceBand)!;
-                return (
-                  <button onClick={() => { setConfidenceBand("all"); setPage(0); }} aria-label={`Remove confidence filter: ${opt.label}`} style={activeTagStyle(opt.color, `${opt.color}14`, opt.color)}>
-                    <span style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: opt.color }} />
-                    {opt.label} <X size={11} />
-                  </button>
-                );
-              })()}
+              {/* Data rows */}
+              {!isLoading && pagedSuspects.map((s, idx) => {
+                const conf = s.calibrated_confidence ?? s.confidence_score ?? 0;
+                const isCalibrated = s.calibrated_confidence != null && s.calibrated_confidence !== s.confidence_score;
+                const cConf = confColor(conf);
+                const accent = confAccent(conf);
+                const isOpen = (s.status || "open") === "open";
+                const isSelected = selected.has(s.id);
+                const pill = statusPill(s.status);
+                const coef = getCoefficient(s);
+                const revenue = coef * REVENUE_PER_RAF;
+                const initials = deriveInitials(s.patient_name, undefined, s.patient_id);
+                const seed = (s.patient_name || String(s.patient_id) || "x").trim();
+                const aColor = initialsColor(seed);
+                const conditionLabel =
+                  s.suspected_condition ||
+                  (s.suspect_hcc ? `HCC ${s.suspect_hcc}` : "Suspected Condition");
+                const rationale = rationaleText(s);
+                const isExpanded = expandedId === s.id;
+                const isFocused = focusedRowIdx === idx;
 
-              {/* Sort — always visible */}
+                return (
+                  <React.Fragment key={s.id}>
+                    <TableRow
+                      ref={(el) => { rowRefs.current[idx] = el; }}
+                      tabIndex={0}
+                      role="row"
+                      aria-selected={isSelected}
+                      onClick={() => {
+                        setFocusedRowIdx(idx);
+                        setExpandedId((cur) => (cur === s.id ? null : s.id));
+                      }}
+                      onFocus={() => setFocusedRowIdx(idx)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setExpandedId((cur) => (cur === s.id ? null : s.id));
+                        }
+                      }}
+                      onMouseEnter={() => setHoveredId(s.id)}
+                      onMouseLeave={() => setHoveredId(null)}
+                      className={cn(
+                        "cursor-pointer transition-colors duration-150 group motion-safe:animate-[rowEnter_0.32s_cubic-bezier(0.16,1,0.3,1)_both]",
+                        isExpanded ? "bg-muted/30" : isSelected ? "bg-primary/5" : "bg-card hover:bg-muted/20",
+                        isFocused && "outline outline-2 outline-primary outline-offset-[-2px]"
+                      )}
+                      style={{
+                        borderLeft: `3px solid ${accent}`,
+                        animationDelay: `${idx * 25}ms`,
+                      }}
+                    >
+                      {/* Patient cell */}
+                      <TableCell className="py-4 pl-6">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {isOpen ? (
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelect(s.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label={`Select suspect ${s.id}`}
+                              className="w-3.5 h-3.5 cursor-pointer accent-primary shrink-0"
+                            />
+                          ) : (
+                            <div className="w-3.5 shrink-0" />
+                          )}
+                          <div
+                            aria-hidden="true"
+                            className="w-9 h-9 rounded-xl flex items-center justify-center text-[12px] font-bold text-white shrink-0 shadow-inner"
+                            style={{
+                              background: `linear-gradient(135deg, ${aColor}, ${aColor}CC)`,
+                            }}
+                          >
+                            {initials}
+                          </div>
+                          <div className="min-w-0 flex flex-col gap-0.5">
+                            <span className="text-[14px] font-semibold text-foreground truncate tracking-[-0.005em]">
+                              {s.patient_name ?? `Patient ${s.patient_id}`}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground tabular-nums truncate">
+                              PID {s.patient_id} · MY {s.measurement_year ?? measurementYear}
+                            </span>
+                          </div>
+                        </div>
+                      </TableCell>
+
+                      {/* Condition + rationale */}
+                      <TableCell className="py-4 min-w-0 max-w-[320px]">
+                        <div className="flex flex-col gap-1 min-w-0">
+                          <span
+                            className="text-[14px] font-semibold text-foreground truncate tracking-[-0.005em]"
+                            title={conditionLabel}
+                          >
+                            {conditionLabel}
+                          </span>
+                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-mono tracking-[0.01em] flex-wrap">
+                            {s.suspect_hcc != null && (
+                              <FeatureFlag flagKey="kg_evidence_panel" fallback={<span>HCC {s.suspect_hcc}</span>}>
+                                <HccChipWithPopover hccCode={String(s.suspect_hcc)}>
+                                  <span>HCC {s.suspect_hcc}</span>
+                                </HccChipWithPopover>
+                              </FeatureFlag>
+                            )}
+                            {s.suspect_hcc != null && s.suspect_icd10 && (
+                              <span className="text-muted-foreground/50" aria-hidden="true">·</span>
+                            )}
+                            {s.suspect_icd10 && <span>ICD {s.suspect_icd10}</span>}
+                            <FeatureFlag flagKey="kg_evidence_panel">
+                              <KgGapBadge
+                                evidenceType={s.evidence_type}
+                                suspectId={s.id}
+                                hccCode={s.suspect_hcc != null ? String(s.suspect_hcc) : undefined}
+                                patientId={s.patient_id}
+                              />
+                            </FeatureFlag>
+                          </div>
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedRationale(prev => {
+                                const next = new Set(prev);
+                                next.has(s.id) ? next.delete(s.id) : next.add(s.id);
+                                return next;
+                              });
+                            }}
+                            className={cn(
+                              "text-[12px] text-muted-foreground italic cursor-pointer",
+                              !expandedRationale.has(s.id) && "line-clamp-1"
+                            )}
+                            title={expandedRationale.has(s.id) ? "Click to collapse" : "Click to expand"}
+                          >
+                            &ldquo;{rationale}&rdquo;
+                          </div>
+                        </div>
+                      </TableCell>
+
+                      {/* Evidence pill */}
+                      <TableCell className="py-4">
+                        {(() => {
+                          const evidenceTooltips: Record<string, string> = {
+                            medication: "Medication — a prescribed drug suggests this condition may be active",
+                            lab: "Lab — a lab result or abnormal value flagged this condition",
+                            imaging: "Imaging — a radiology report or scan referenced this diagnosis",
+                            referral: "Referral — a specialist referral indicates this condition was suspected",
+                            historical: "Historical — condition was documented in a prior measurement year",
+                          };
+                          const tipText = evidenceTooltips[s.evidence_type ?? ""] ?? "Clinical — evidence detected in chart notes";
+                          return (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex items-center gap-1.5 h-[22px] px-2.5 rounded-full bg-muted border border-border text-muted-foreground text-[11px] font-semibold capitalize cursor-help whitespace-nowrap">
+                                  {evidenceIcon(s.evidence_type, 11)}
+                                  {evidenceLabelShort(s.evidence_type)}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">{tipText}</TooltipContent>
+                            </Tooltip>
+                          );
+                        })()}
+                      </TableCell>
+
+                      {/* Confidence bar */}
+                      <TableCell className="py-4 min-w-[140px]">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex flex-col gap-1 min-w-0 cursor-help">
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="flex-1 h-1.5 rounded overflow-hidden min-w-[40px]"
+                                  style={{ backgroundColor: confSoftBg(conf) }}
+                                >
+                                  <div
+                                    className="h-full rounded transition-[width_0.3s_ease]"
+                                    style={{
+                                      width: `${Math.max(4, conf * 100)}%`,
+                                      backgroundColor: cConf,
+                                    }}
+                                  />
+                                </div>
+                                <span
+                                  className="text-[11px] font-bold tabular-nums min-w-[56px] text-right whitespace-nowrap"
+                                  style={{ color: cConf }}
+                                >
+                                  {conf >= 0.85 ? "Strong" : conf >= 0.65 ? "Moderate" : "Weak"}
+                                </span>
+                              </div>
+                              {isCalibrated && (
+                                <span
+                                  className="text-[9px] font-semibold uppercase tracking-[0.04em] rounded-[3px] px-1 py-[1px] w-fit"
+                                  style={{
+                                    color: tokens.indigoText,
+                                    backgroundColor: tokens.indigoBg,
+                                  }}
+                                >
+                                  calibrated
+                                </span>
+                              )}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-[260px]">
+                            {conf >= 0.85
+                              ? `Strong: ≥0.85 score · High confidence this HCC is undocumented (raw: ${(conf * 100).toFixed(0)}%)`
+                              : conf >= 0.65
+                              ? `Moderate: 0.65–0.85 score · Reasonable evidence, coder review recommended (raw: ${(conf * 100).toFixed(0)}%)`
+                              : `Weak: <0.65 score · AI-uncertain — requires careful coder review (raw: ${(conf * 100).toFixed(0)}%)`}
+                            {isCalibrated ? ` · Platt-calibrated from ${((s.confidence_score ?? 0) * 100).toFixed(0)}%` : ""}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TableCell>
+
+                      {/* RAF lift */}
+                      <TableCell className="py-4 text-right">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="inline-flex flex-col items-end gap-0.5 cursor-help">
+                              <span
+                                className="text-[14px] font-bold tabular-nums tracking-[-0.01em]"
+                                style={{ color: C.brand }}
+                              >
+                                +{coef.toFixed(3)}
+                              </span>
+                              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                                RAF
+                              </span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            Estimated RAF score increase of +{coef.toFixed(3)} if this HCC is documented this year
+                          </TooltipContent>
+                        </Tooltip>
+                      </TableCell>
+
+                      {/* Revenue — bold, teal for positive $ */}
+                      <TableCell className="py-4 text-right">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span
+                              className={cn(
+                                "text-[13px] font-bold tabular-nums cursor-help",
+                                revenue > 0 ? "text-teal-600 dark:text-teal-400" : "text-muted-foreground"
+                              )}
+                            >
+                              {formatCurrency(revenue)}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            Estimated $ = RAF lift ({coef.toFixed(3)}) × ${MA_PAYMENT_PER_RAF.toLocaleString()} (CMS V28 per-point rate, 2026)
+                          </TooltipContent>
+                        </Tooltip>
+                      </TableCell>
+
+                      {/* Status pill */}
+                      <TableCell className="py-4 text-right">
+                        <span
+                          className="inline-flex items-center gap-1.5 h-[22px] px-2.5 rounded-full border text-[11px] font-bold tracking-[0.02em]"
+                          style={{
+                            backgroundColor: pill.bg,
+                            color: pill.fg,
+                            borderColor: pill.border,
+                            textDecoration: s.status === "dismissed" ? "line-through" : "none",
+                          }}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full"
+                            style={{ backgroundColor: pill.fg }}
+                            aria-hidden="true"
+                          />
+                          {pill.label}
+                        </span>
+                      </TableCell>
+
+                      {/* Actions */}
+                      <TableCell
+                        className="py-4 pr-6 text-right"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="inline-flex items-center gap-1.5 justify-end">
+                          {isOpen ? (
+                            <>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    disabled={acceptMut.isPending}
+                                    onClick={() => acceptMut.mutate(s.id)}
+                                    aria-label="Accept suspect — push to OpenEMR (keyboard: A)"
+                                    className={cn(
+                                      "row-action-btn w-8 h-8 rounded-lg border flex items-center justify-center cursor-pointer transition-colors",
+                                      "opacity-0 translate-y-0.5 group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0",
+                                      "focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary/50",
+                                      "@media (max-width: 900px):opacity-100",
+                                      "hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                    )}
+                                    style={{
+                                      borderColor: C.low,
+                                      color: C.low,
+                                      transition: "opacity 0.15s ease, transform 0.15s ease, background-color 0.15s ease",
+                                    }}
+                                  >
+                                    <Check size={15} strokeWidth={2.5} aria-hidden="true" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  Accept &amp; write to OpenEMR · keyboard <kbd>A</kbd>
+                                </TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    disabled={dismissMut.isPending}
+                                    onClick={() => dismissMut.mutate(s.id)}
+                                    aria-label="Dismiss suspect — mark not applicable (keyboard: D)"
+                                    className={cn(
+                                      "row-action-btn w-8 h-8 rounded-lg border flex items-center justify-center cursor-pointer transition-colors",
+                                      "opacity-0 translate-y-0.5 group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0",
+                                      "focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-destructive/50",
+                                      "hover:bg-red-50 dark:hover:bg-red-950/30"
+                                    )}
+                                    style={{
+                                      borderColor: C.high,
+                                      color: C.high,
+                                      transition: "opacity 0.15s ease, transform 0.15s ease, background-color 0.15s ease",
+                                    }}
+                                  >
+                                    <X size={15} strokeWidth={2.5} aria-hidden="true" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  Dismiss — condition not applicable · keyboard <kbd>D</kbd>
+                                </TooltipContent>
+                              </Tooltip>
+                            </>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground" aria-label={`Status: ${s.status}`}>
+                              {s.status === "accepted" && <CheckCircle2 size={13} color={C.low} aria-hidden="true" />}
+                              {s.status === "dismissed" && <XCircle size={13} color={C.textSubtle} aria-hidden="true" />}
+                              {s.status === "coded" && <CheckCircle2 size={13} color={C.brand} aria-hidden="true" />}
+                            </span>
+                          )}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span
+                                aria-label={isExpanded ? "Collapse row" : "Expand row — open chart (keyboard: R)"}
+                                className="inline-flex items-center"
+                              >
+                                <ChevronRight
+                                  size={14}
+                                  className="transition-transform duration-[180ms] ease"
+                                  style={{
+                                    color: isExpanded || hoveredId === s.id ? C.brand : tokens.slate300,
+                                    transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+                                  }}
+                                />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              {isExpanded ? "Collapse detail" : "Expand — view evidence · keyboard R opens chart"}
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+
+                    {/* Expanded detail drawer */}
+                    {isExpanded && (
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={8} className="p-0">
+                          <SuspectDrawerDynamic
+                            suspect={s}
+                            conf={conf}
+                            coef={coef}
+                            revenue={revenue}
+                            rationale={rationale}
+                            conditionLabel={conditionLabel}
+                            onOpenChart={() => router.push(`/patients/${s.patient_id}`)}
+                            onAccept={() => acceptMut.mutate(s.id)}
+                            onDismiss={() => dismissMut.mutate(s.id)}
+                            acceptPending={acceptMut.isPending}
+                            dismissPending={dismissMut.isPending}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* ── Pagination ─────────────────────────────────────────── */}
+        {!isLoading && filteredSorted.length > PAGE_SIZE && (
+          <div className="flex items-center justify-center gap-4 mt-5">
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={page === 0}
+              onClick={() => setPage((p) => p - 1)}
+              aria-label="Previous page"
+              className="w-9 h-9"
+            >
+              <ChevronLeft size={16} aria-hidden="true" />
+            </Button>
+            <span className="text-[13px] font-semibold text-muted-foreground tabular-nums">
+              Page {page + 1} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => p + 1)}
+              aria-label="Next page"
+              className="w-9 h-9"
+            >
+              <ChevronRight size={16} aria-hidden="true" />
+            </Button>
+          </div>
+        )}
+
+        {/* ── Bulk Action Bar ────────────────────────────────────── */}
+        {selected.size > 0 && (
+          <>
+            <div className="h-20" aria-hidden="true" />
+            <div
+              className="fixed bottom-5 left-1/2 -translate-x-1/2 w-[min(720px,calc(100%-32px))] bg-foreground/95 backdrop-blur-md rounded-xl shadow-2xl px-5 py-3.5 flex items-center gap-3.5 z-50"
+              role="toolbar"
+              aria-label="Bulk actions"
+            >
+              <span className="text-[13px] font-semibold text-background flex items-center gap-2">
+                <span
+                  className="inline-flex items-center justify-center min-w-[24px] h-[22px] rounded-full text-[12px] font-bold px-2.5 tabular-nums text-white"
+                  style={{ backgroundColor: C.brand }}
+                >
+                  {selected.size}
+                </span>
+                selected
+              </span>
+
+              <div className="w-px h-6 bg-background/15" aria-hidden="true" />
+
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    onClick={() => setSortField((f) => f === "confidence" ? "raf" : f === "raf" ? "patient" : "confidence")}
-                    style={{
-                      display: "inline-flex", alignItems: "center", gap: 6,
-                      height: 36, padding: "0 14px", borderRadius: 10,
-                      border: `1px solid ${C.border}`, backgroundColor: tokens.white,
-                      color: C.textMuted, fontSize: 12, fontWeight: 600,
-                      fontFamily: FONT_SYS, cursor: "pointer", transition: "all 0.15s ease",
-                    }}
+                    disabled={bulkMut.isPending}
+                    onClick={() => { setBulkAction("accept"); bulkMut.mutate({ action: "accept" }); }}
+                    aria-label={`Accept all ${selected.size} selected suspects and write to OpenEMR`}
+                    className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg text-[13px] font-bold text-white cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 transition-opacity"
+                    style={{ backgroundColor: C.low }}
                   >
-                    Sort: {sortField === "confidence" ? "Confidence" : sortField === "raf" ? "RAF lift" : "Patient"}
+                    <Check size={14} strokeWidth={2.5} aria-hidden="true" />
+                    {bulkMut.isPending && bulkAction === "accept" ? "Accepting…" : "Accept all"}
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  {sortField === "confidence"
-                    ? "Sorted by AI confidence score — highest signal first. Click to switch to RAF lift."
-                    : sortField === "raf"
-                    ? "Sorted by RAF coefficient — highest revenue impact first. Click to switch to patient name."
-                    : "Sorted alphabetically by patient name. Click to switch to confidence."}
+                <TooltipContent side="top">
+                  Accept all {selected.size} selected suspects — writes each to OpenEMR
                 </TooltipContent>
               </Tooltip>
 
-              {hasActiveFilters && (
-                <button
-                  onClick={clearAllFilters}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 6,
-                    height: 36, padding: "0 14px", borderRadius: 999,
-                    border: `1px dashed ${C.border}`, backgroundColor: "transparent",
-                    color: C.textSubtle, fontSize: 12, fontWeight: 600,
-                    fontFamily: FONT_SYS, cursor: "pointer",
-                  }}
-                >
-                  <X size={12} /> Clear filters
-                </button>
-              )}
-
-              {/* Divider between filter-side and action-side */}
-              <div style={{ width: 1, height: 24, backgroundColor: C.border, flexShrink: 0, marginLeft: 4, marginRight: 4 }} aria-hidden="true" />
-
-              {/* Search input */}
-              <div style={{ position: "relative", flexShrink: 0 }}>
-                <Search
-                  size={14}
-                  style={{
-                    position: "absolute",
-                    left: 10,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    color: C.label,
-                    pointerEvents: "none",
-                  }}
-                />
-                <input
-                  type="text"
-                  title="Search by patient, ICD, HCC, or rationale"
-                  placeholder="Search suspects…"
-                  value={searchTerm}
-                  onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  aria-label="Search suspects"
-                  style={{
-                    height: 36,
-                    width: 220,
-                    borderRadius: 10,
-                    border: `1px solid ${C.border}`,
-                    backgroundColor: tokens.white,
-                    paddingLeft: 30,
-                    paddingRight: 12,
-                    fontSize: 12,
-                    color: C.text,
-                    fontFamily: FONT_SYS,
-                    transition: "border-color 0.15s, box-shadow 0.15s",
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = C.brand;
-                    e.currentTarget.style.boxShadow = `0 0 0 3px ${C.brandSoft}`;
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = C.border;
-                    e.currentTarget.style.boxShadow = "none";
-                  }}
-                />
-              </div>
-
-              {/* Export button */}
-              <button
-                onClick={exportSuspectsCSV}
-                aria-label="Export suspects as CSV"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  height: 36,
-                  padding: "0 14px",
-                  borderRadius: 10,
-                  border: "none",
-                  backgroundColor: C.brand,
-                  color: tokens.white,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  fontFamily: FONT_SYS,
-                  cursor: "pointer",
-                  flexShrink: 0,
-                  boxShadow: "0 1px 2px rgba(15, 118, 110, 0.25), 0 4px 12px rgba(15, 118, 110, 0.18)",
-                  transition: "background-color 0.15s ease",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = tokens.teal900; }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = C.brand; }}
-              >
-                <FileDown size={13} />
-                Export
-              </button>
-            </div>
-          );
-        })()}
-
-        <div style={{ fontSize: 12, fontWeight: 600, color: C.textSubtle, fontVariantNumeric: "tabular-nums" }}>
-          Showing {filteredSorted.length.toLocaleString()} of {allSuspects.length.toLocaleString()}
-        </div>
-      </div>
-
-      {/* ============================================================ */}
-      {/* Worklist                                                     */}
-      {/* ============================================================ */}
-      {/* Keyboard hint footer — surface A/D/R affordance */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 16,
-          marginBottom: 8,
-          fontSize: 11,
-          color: "#64748B",
-          flexWrap: "wrap",
-        }}
-        aria-label="Keyboard shortcuts: use Up/Down or J/K to navigate rows, then A to accept, D to dismiss, R to open chart"
-      >
-        <span style={{ fontWeight: 600, color: "#475569" }}>Keyboard shortcuts:</span>
-        {(
-          [
-            ["Up/Down", "Navigate rows"],
-            ["A", "Accept focused"],
-            ["D", "Dismiss focused"],
-            ["R", "Open chart"],
-          ] as [string, string][]
-        ).map(([key, desc]) => (
-          <span key={key} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <kbd
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                minWidth: 22,
-                height: 20,
-                padding: "0 5px",
-                borderRadius: 4,
-                border: "1px solid #CBD5E1",
-                background: "#F8FAFC",
-                fontFamily: "monospace",
-                fontSize: 11,
-                fontWeight: 700,
-                color: C.label,
-                boxShadow: "0 1px 1px rgba(0,0,0,0.06)",
-              }}
-            >
-              {key}
-            </kbd>
-            <span>{desc}</span>
-          </span>
-        ))}
-      </div>
-
-      {/* a11y: role=grid + rowgroup/columnheader + aria-sort; @keyframes guarded by prefers-reduced-motion */}
-      <div
-        role="grid"
-        aria-label="Suspected conditions"
-        onKeyDown={handleListKeyDown}
-        style={{
-          backgroundColor: C.bgCard,
-          border: `1px solid ${C.border}`,
-          borderRadius: 14,
-          overflowX: "auto",
-          overflowY: "visible",
-          boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
-        }}
-      >
-        {/* Header row */}
-        <div
-          role="rowgroup"
-        >
-        <div
-          role="row"
-          style={{
-            display: "grid",
-            gridTemplateColumns: SUSPECTS_GRID,
-            gap: SUSPECTS_GAP,
-            alignItems: "center",
-            padding: `12px ${SUSPECTS_PAD_X}px`,
-            backgroundColor: C.bgBand,
-            borderBottom: `1px solid ${C.border}`,
-            fontSize: 11,
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.06em",
-            color: C.label,
-          }}
-        >
-          <div role="columnheader" aria-sort={sortField === "patient" ? "ascending" : "none"} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {selectableIds.length > 0 && (
-              <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={toggleAll}
-                aria-label="Select all on page"
-                style={{ width: 14, height: 14, accentColor: C.brand, cursor: "pointer" }}
-              />
-            )}
-            Patient
-          </div>
-          <div role="columnheader">Suspected Condition</div>
-          <div role="columnheader">Evidence</div>
-          <div role="columnheader" aria-sort={sortField === "confidence" ? "descending" : "none"}>Confidence</div>
-          <div role="columnheader" aria-sort={sortField === "raf" ? "descending" : "none"} style={{ justifySelf: "end" }}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span style={{ cursor: "help", borderBottom: "1px dashed currentColor" }}>RAF Lift</span>
-              </TooltipTrigger>
-              <TooltipContent side="top">Estimated RAF score increase if this HCC is documented this year</TooltipContent>
-            </Tooltip>
-          </div>
-          <div role="columnheader" style={{ justifySelf: "end" }}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span style={{ cursor: "help", borderBottom: "1px dashed currentColor" }}>Revenue</span>
-              </TooltipTrigger>
-              <TooltipContent side="top">Estimated $ = RAF lift × ${MA_PAYMENT_PER_RAF.toLocaleString()} (CMS V28 per-point rate, 2026)</TooltipContent>
-            </Tooltip>
-          </div>
-          <div role="columnheader" style={{ justifySelf: "end" }}>Status</div>
-          <div role="columnheader" style={{ justifySelf: "end" }}>Actions</div>
-        </div>
-        </div>
-
-        {/* Body */}
-        {isLoading && (
-          <div role="rowgroup">
-            {Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} index={i} />)}
-          </div>
-        )}
-
-        <div role="rowgroup">
-        {!isLoading && filteredSorted.length === 0 && (
-          <div
-            style={{
-              padding: "28px 24px",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 10,
-              textAlign: "center",
-            }}
-          >
-            <div
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 12,
-                backgroundColor: C.brandSoft,
-                color: C.brand,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <FileSearch size={22} />
-            </div>
-            <div className="text-foreground" style={{ fontSize: 14, fontWeight: 700 }}>
-              No matches. {hasActiveFilters ? "Clear filters?" : "No suspect conditions found."}
-            </div>
-            {hasActiveFilters && (
-              <button
-                onClick={clearAllFilters}
-                style={{
-                  height: 34,
-                  padding: "0 16px",
-                  borderRadius: 10,
-                  border: `1px solid ${C.brand}`,
-                  backgroundColor: C.brandSoft,
-                  color: C.brand,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                Clear filters
-              </button>
-            )}
-          </div>
-        )}
-
-        {!isLoading && pagedSuspects.map((s, idx) => {
-          // Prefer calibrated_confidence (Platt-scaled) over the raw score.
-          // Falls back to confidence_score so legacy rows without the
-          // calibrated field still render correctly.
-          const conf = s.calibrated_confidence ?? s.confidence_score ?? 0;
-          const isCalibrated = s.calibrated_confidence != null && s.calibrated_confidence !== s.confidence_score;
-          const cConf = confColor(conf);
-          const accent = confAccent(conf);
-          const isOpen = (s.status || "open") === "open";
-          const isSelected = selected.has(s.id);
-          const pill = statusPill(s.status);
-          const coef = getCoefficient(s);
-          const revenue = coef * REVENUE_PER_RAF;
-          const initials = deriveInitials(s.patient_name, undefined, s.patient_id);
-          const seed = (s.patient_name || String(s.patient_id) || "x").trim();
-          const aColor = initialsColor(seed);
-          const conditionLabel =
-            s.suspected_condition ||
-            (s.suspect_hcc ? `HCC ${s.suspect_hcc}` : "Suspected Condition");
-          const rationale = rationaleText(s);
-
-          const isExpanded = expandedId === s.id;
-          const isFocused = focusedRowIdx === idx;
-
-          return (
-            <div
-              key={s.id}
-              style={{
-                borderBottom: idx < pagedSuspects.length - 1 ? `1px solid ${C.rowDivider}` : "none",
-                backgroundColor: isExpanded ? C.bgBand : isSelected ? C.brandSoft : C.bgCard,
-                outline: isFocused ? `2px solid ${C.brand}` : "none",
-                outlineOffset: -2,
-                borderRadius: isFocused ? 4 : 0,
-              }}
-            >
-            <div
-              role="row"
-              tabIndex={0}
-              ref={(el) => { rowRefs.current[idx] = el; }}
-              className="suspect-row"
-              onClick={() => {
-                setFocusedRowIdx(idx);
-                setExpandedId((cur) => (cur === s.id ? null : s.id));
-              }}
-              onFocus={() => setFocusedRowIdx(idx)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  setExpandedId((cur) => (cur === s.id ? null : s.id));
-                }
-              }}
-              onMouseEnter={() => setHoveredId(s.id)}
-              onMouseLeave={() => setHoveredId(null)}
-              style={{
-                display: "grid",
-                gridTemplateColumns: SUSPECTS_GRID,
-                gap: SUSPECTS_GAP,
-                alignItems: "center",
-                minHeight: ROW_MIN_HEIGHT,
-                padding: `14px ${SUSPECTS_PAD_X}px`,
-                borderLeft: `3px solid ${accent}`,
-                cursor: "pointer",
-                animationDelay: `${idx * 25}ms`,
-                position: "relative",
-              }}
-            >
-              {/* Patient cell */}
-              <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-                {isOpen && (
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => toggleSelect(s.id)}
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label={`Select suspect ${s.id}`}
-                    style={{
-                      width: 14,
-                      height: 14,
-                      accentColor: C.brand,
-                      cursor: "pointer",
-                      flexShrink: 0,
-                    }}
-                  />
-                )}
-                {!isOpen && <div style={{ width: 14, flexShrink: 0 }} />}
-                <div
-                  aria-hidden
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    background: `linear-gradient(135deg, ${aColor}, ${aColor}CC)`,
-                    color: tokens.white,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    letterSpacing: "0.02em",
-                    flexShrink: 0,
-                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.18)",
-                  }}
-                >
-                  {initials}
-                </div>
-                <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-                  <div
-                    style={{
-                      fontSize: 14,
-                      fontWeight: 600,
-                      color: C.text,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      letterSpacing: "-0.005em",
-                    }}
-                  >
-                    {s.patient_name ?? `Patient ${s.patient_id}`}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: C.label,
-                      fontVariantNumeric: "tabular-nums",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    PID {s.patient_id} · MY {s.measurement_year ?? measurementYear}
-                  </div>
-                </div>
-              </div>
-
-              {/* Condition + rationale */}
-              <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
-                <div
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: C.text,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    letterSpacing: "-0.005em",
-                  }}
-                  title={conditionLabel}
-                >
-                  {conditionLabel}
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    fontSize: 11,
-                    color: C.textSubtle,
-                    fontFamily: FONT_MONO,
-                    letterSpacing: "0.01em",
-                  }}
-                >
-                  {s.suspect_hcc != null && (
-                    <FeatureFlag flagKey="kg_evidence_panel" fallback={<span>HCC {s.suspect_hcc}</span>}>
-                      <HccChipWithPopover hccCode={String(s.suspect_hcc)}>
-                        <span>HCC {s.suspect_hcc}</span>
-                      </HccChipWithPopover>
-                    </FeatureFlag>
-                  )}
-                  {s.suspect_hcc != null && s.suspect_icd10 && <span className="text-muted-foreground">·</span>}
-                  {s.suspect_icd10 && <span>ICD {s.suspect_icd10}</span>}
-                  <FeatureFlag flagKey="kg_evidence_panel">
-                    <KgGapBadge
-                      evidenceType={s.evidence_type}
-                      suspectId={s.id}
-                      hccCode={s.suspect_hcc != null ? String(s.suspect_hcc) : undefined}
-                      patientId={s.patient_id}
-                    />
-                  </FeatureFlag>
-                </div>
-                <div
-                  onClick={() => setExpandedRationale(prev => {
-                    const next = new Set(prev);
-                    next.has(s.id) ? next.delete(s.id) : next.add(s.id);
-                    return next;
-                  })}
-                  style={{
-                    fontSize: 12,
-                    color: C.textSubtle,
-                    fontStyle: "italic",
-                    fontFamily: FONT_SYS,
-                    cursor: "pointer",
-                    ...(expandedRationale.has(s.id) ? {} : {
-                      overflow: "hidden",
-                      display: "-webkit-box",
-                      WebkitLineClamp: 1,
-                      WebkitBoxOrient: "vertical",
-                      textOverflow: "ellipsis",
-                    }),
-                  }}
-                  title={expandedRationale.has(s.id) ? "Click to collapse" : "Click to expand"}
-                >
-                  &ldquo;{rationale}&rdquo;
-                </div>
-              </div>
-
-              {/* Evidence pill */}
-              <div>
-                {(() => {
-                  const evidenceTooltips: Record<string, string> = {
-                    medication: "Medication — a prescribed drug suggests this condition may be active",
-                    lab: "Lab — a lab result or abnormal value flagged this condition",
-                    imaging: "Imaging — a radiology report or scan referenced this diagnosis",
-                    referral: "Referral — a specialist referral indicates this condition was suspected",
-                    historical: "Historical — condition was documented in a prior measurement year",
-                  };
-                  const tipText = evidenceTooltips[s.evidence_type ?? ""] ?? "Clinical — evidence detected in chart notes";
-                  return (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 6,
-                            height: 22,
-                            padding: "0 10px",
-                            borderRadius: 999,
-                            backgroundColor: C.bgBand,
-                            border: `1px solid ${C.border}`,
-                            color: C.textMuted,
-                            fontSize: 11,
-                            fontWeight: 600,
-                            textTransform: "capitalize",
-                            cursor: "help",
-                          }}
-                        >
-                          {evidenceIcon(s.evidence_type, 11)}
-                          {evidenceLabelShort(s.evidence_type)}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">{tipText}</TooltipContent>
-                    </Tooltip>
-                  );
-                })()}
-              </div>
-
-              {/* Confidence bar — numeric score shown as tooltip; label uses signal-strength words */}
               <Tooltip>
                 <TooltipTrigger asChild>
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0, cursor: "help" }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div
-                    style={{
-                      flex: 1,
-                      height: 6,
-                      borderRadius: 4,
-                      backgroundColor: confSoftBg(conf),
-                      overflow: "hidden",
-                      minWidth: 40,
-                    }}
+                  <button
+                    disabled={bulkMut.isPending}
+                    onClick={() => { setBulkAction("dismiss"); bulkMut.mutate({ action: "dismiss" }); }}
+                    aria-label={`Dismiss all ${selected.size} selected suspects`}
+                    className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg border border-background/20 bg-transparent text-background text-[13px] font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 transition-opacity"
                   >
-                    <div
-                      style={{
-                        height: "100%",
-                        width: `${Math.max(4, conf * 100)}%`,
-                        borderRadius: 4,
-                        backgroundColor: cConf,
-                        transition: "width 0.3s ease",
-                      }}
-                    />
-                  </div>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: cConf,
-                      fontVariantNumeric: "tabular-nums",
-                      minWidth: 56,
-                      textAlign: "right",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {conf >= 0.85 ? "Strong" : conf >= 0.65 ? "Moderate" : "Weak"}
-                  </span>
-                </div>
-                {/* Calibrated chip — shown when Platt scaling has been applied */}
-                {isCalibrated && (
-                  <span
-                    style={{
-                      fontSize: 9,
-                      fontWeight: 600,
-                      letterSpacing: "0.04em",
-                      color: tokens.indigoText,
-                      backgroundColor: tokens.indigoBg,
-                      borderRadius: 3,
-                      padding: "1px 4px",
-                      width: "fit-content",
-                      textTransform: "uppercase" as const,
-                    }}
-                  >
-                    calibrated
-                  </span>
-                )}
-              </div>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-[260px]">
-                  {conf >= 0.85
-                    ? `Strong: ≥0.85 score · High confidence this HCC is undocumented (raw: ${(conf * 100).toFixed(0)}%)`
-                    : conf >= 0.65
-                    ? `Moderate: 0.65–0.85 score · Reasonable evidence, coder review recommended (raw: ${(conf * 100).toFixed(0)}%)`
-                    : `Weak: <0.65 score · AI-uncertain — requires careful coder review (raw: ${(conf * 100).toFixed(0)}%)`}
-                  {isCalibrated ? ` · Platt-calibrated from ${((s.confidence_score ?? 0) * 100).toFixed(0)}%` : ""}
-                </TooltipContent>
-              </Tooltip>
-
-              {/* RAF lift */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-              <div
-                style={{
-                  justifySelf: "end",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-end",
-                  gap: 1,
-                  cursor: "help",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 700,
-                    color: C.brand,
-                    fontVariantNumeric: "tabular-nums",
-                    letterSpacing: "-0.01em",
-                  }}
-                >
-                  +{coef.toFixed(3)}
-                </span>
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 600,
-                    color: C.label,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                  }}
-                >
-                  RAF
-                </span>
-              </div>
+                    <X size={14} strokeWidth={2.5} aria-hidden="true" />
+                    {bulkMut.isPending && bulkAction === "dismiss" ? "Dismissing…" : "Dismiss all"}
+                  </button>
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  Estimated RAF score increase of +{coef.toFixed(3)} if this HCC is documented this year
+                  Mark all {selected.size} selected suspects as not applicable
                 </TooltipContent>
               </Tooltip>
 
-              {/* Revenue */}
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div
-                    style={{
-                      justifySelf: "end",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: C.text,
-                      fontVariantNumeric: "tabular-nums",
-                      cursor: "help",
-                    }}
+                  <button
+                    onClick={() => setSelected(new Set())}
+                    aria-label="Clear selection — no changes will be saved"
+                    className="ml-auto h-9 px-3.5 rounded-lg bg-transparent text-background/70 text-[13px] font-semibold cursor-pointer hover:text-background transition-colors"
                   >
-                    {formatCurrency(revenue)}
-                  </div>
+                    Clear
+                  </button>
                 </TooltipTrigger>
-                <TooltipContent side="top">
-                  Estimated $ = RAF lift ({coef.toFixed(3)}) × ${MA_PAYMENT_PER_RAF.toLocaleString()} (CMS V28 per-point rate, 2026)
-                </TooltipContent>
+                <TooltipContent side="top">Deselect all — no changes will be saved</TooltipContent>
               </Tooltip>
-
-              {/* Status pill */}
-              <div style={{ justifySelf: "end" }}>
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    height: 22,
-                    padding: "0 10px",
-                    borderRadius: 999,
-                    backgroundColor: pill.bg,
-                    color: pill.fg,
-                    border: `1px solid ${pill.border}`,
-                    fontSize: 11,
-                    fontWeight: 700,
-                    letterSpacing: "0.02em",
-                    textDecoration: s.status === "dismissed" ? "line-through" : "none",
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: 3,
-                      backgroundColor: pill.fg,
-                    }}
-                  />
-                  {pill.label}
-                </span>
-              </div>
-
-              {/* Actions */}
-              <div
-                style={{
-                  justifySelf: "end",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {isOpen ? (
-                  <>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          className="row-action-btn"
-                          disabled={acceptMut.isPending}
-                          onClick={() => acceptMut.mutate(s.id)}
-                          aria-label="Accept suspect — push to OpenEMR (keyboard: A)"
-                          title="Accept suspect — push to OpenEMR (keyboard: A)"
-                          style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 8,
-                            border: `1px solid ${C.low}`,
-                            backgroundColor: "transparent",
-                            color: C.low,
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = C.lowSoft;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = "transparent";
-                          }}
-                        >
-                          <Check size={15} strokeWidth={2.5} />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">Accept &amp; write to OpenEMR · keyboard <kbd>A</kbd></TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          className="row-action-btn"
-                          disabled={dismissMut.isPending}
-                          onClick={() => dismissMut.mutate(s.id)}
-                          aria-label="Dismiss suspect — mark not applicable (keyboard: D)"
-                          title="Dismiss suspect — mark not applicable (keyboard: D)"
-                          style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 8,
-                            border: `1px solid ${C.high}`,
-                            backgroundColor: "transparent",
-                            color: C.high,
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = C.highSoft;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = "transparent";
-                          }}
-                        >
-                          <X size={15} strokeWidth={2.5} />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">Dismiss — condition not applicable · keyboard <kbd>D</kbd></TooltipContent>
-                    </Tooltip>
-                  </>
-                ) : (
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: C.label,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                    }}
-                  >
-                    {s.status === "accepted" && <CheckCircle2 size={13} color={C.low} />}
-                    {s.status === "dismissed" && <XCircle size={13} color={C.textSubtle} />}
-                    {s.status === "coded" && <CheckCircle2 size={13} color={C.brand} />}
-                  </span>
-                )}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span
-                      aria-label={isExpanded ? "Collapse row" : "Expand row — open chart (keyboard: R)"}
-                      title={isExpanded ? "Collapse row" : "Expand row — open chart (keyboard: R)"}
-                      style={{ display: "inline-flex", alignItems: "center" }}
-                    >
-                      <ChevronRight
-                        size={14}
-                        color={isExpanded || hoveredId === s.id ? C.brand : tokens.slate300}
-                        style={{
-                          transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
-                          transition: "transform 0.18s ease",
-                        }}
-                      />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                    {isExpanded ? "Collapse detail" : "Expand — view evidence · keyboard  R  opens chart"}
-                  </TooltipContent>
-                </Tooltip>
-              </div>
             </div>
-            {isExpanded && (
-              <SuspectDrawerDynamic
-                suspect={s}
-                conf={conf}
-                coef={coef}
-                revenue={revenue}
-                rationale={rationale}
-                conditionLabel={conditionLabel}
-                onOpenChart={() => router.push(`/patients/${s.patient_id}`)}
-                onAccept={() => acceptMut.mutate(s.id)}
-                onDismiss={() => dismissMut.mutate(s.id)}
-                acceptPending={acceptMut.isPending}
-                dismissPending={dismissMut.isPending}
-              />
-            )}
-            </div>
-          );
-        })}
-        </div>{/* /rowgroup */}
-      </div>
+          </>
+        )}
 
-      {/* ============================================================ */}
-      {/* Pagination                                                   */}
-      {/* ============================================================ */}
-      {!isLoading && filteredSorted.length > PAGE_SIZE && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 16,
-            marginTop: 20,
-          }}
-        >
-          <button
-            disabled={page === 0}
-            onClick={() => setPage((p) => p - 1)}
-            aria-label="Previous page"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 10,
-              border: `1px solid ${C.border}`,
-              backgroundColor: tokens.white,
-              cursor: page === 0 ? "default" : "pointer",
-              opacity: page === 0 ? 0.4 : 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: C.textMuted,
-            }}
-          >
-            <ChevronLeft size={16} />
-          </button>
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: C.textMuted,
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            Page {page + 1} of {totalPages}
-          </span>
-          <button
-            disabled={page >= totalPages - 1}
-            onClick={() => setPage((p) => p + 1)}
-            aria-label="Next page"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 10,
-              border: `1px solid ${C.border}`,
-              backgroundColor: tokens.white,
-              cursor: page >= totalPages - 1 ? "default" : "pointer",
-              opacity: page >= totalPages - 1 ? 0.4 : 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: C.textMuted,
-            }}
-          >
-            <ChevronRight size={16} />
-          </button>
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* Bulk action bar                                              */}
-      {/* ============================================================ */}
-      {selected.size > 0 && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 20,
-            left: "50%",
-            transform: "translateX(-50%)",
-            width: "min(720px, calc(100% - 32px))",
-            backgroundColor: "rgba(15, 23, 42, 0.96)",
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
-            borderRadius: 14,
-            boxShadow:
-              "0 -4px 32px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.06)",
-            padding: "14px 20px",
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-            zIndex: 50,
-          }}
-        >
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: tokens.white,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <span
-              style={{
-                backgroundColor: C.brand,
-                color: tokens.white,
-                fontSize: 12,
-                fontWeight: 700,
-                borderRadius: 999,
-                padding: "2px 10px",
-                minWidth: 24,
-                textAlign: "center",
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {selected.size}
-            </span>
-            selected
-          </span>
-
-          <div
-            style={{
-              width: 1,
-              height: 24,
-              backgroundColor: "rgba(255,255,255,0.15)",
-            }}
-          />
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                disabled={bulkMut.isPending}
-                onClick={() => { setBulkAction("accept"); bulkMut.mutate({ action: "accept" }); }}
-                aria-label={`Accept all ${selected.size} selected suspects and write to OpenEMR`}
-                style={{
-                  height: 36,
-                  padding: "0 18px",
-                  borderRadius: 10,
-                  border: "none",
-                  backgroundColor: C.low,
-                  color: tokens.white,
-                  fontSize: 13,
-                  fontWeight: 700,
-                  cursor: bulkMut.isPending ? "not-allowed" : "pointer",
-                  opacity: bulkMut.isPending ? 0.6 : 1,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  boxShadow: "0 2px 8px rgba(5, 150, 105, 0.3)",
-                }}
-              >
-                <Check size={14} strokeWidth={2.5} />
-                {bulkMut.isPending && bulkAction === "accept" ? "Accepting\u2026" : "Accept all"}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              Accept all {selected.size} selected suspects — writes each to OpenEMR
-            </TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                disabled={bulkMut.isPending}
-                onClick={() => { setBulkAction("dismiss"); bulkMut.mutate({ action: "dismiss" }); }}
-                aria-label={`Dismiss all ${selected.size} selected suspects`}
-                style={{
-                  height: 36,
-                  padding: "0 18px",
-                  borderRadius: 10,
-                  border: `1px solid rgba(255,255,255,0.2)`,
-                  backgroundColor: "transparent",
-                  color: tokens.white,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: bulkMut.isPending ? "not-allowed" : "pointer",
-                  opacity: bulkMut.isPending ? 0.6 : 1,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <X size={14} strokeWidth={2.5} />
-                {bulkMut.isPending && bulkAction === "dismiss" ? "Dismissing\u2026" : "Dismiss all"}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              Mark all {selected.size} selected suspects as not applicable
-            </TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => setSelected(new Set())}
-                aria-label="Clear selection — no changes will be saved"
-                style={{
-                  marginLeft: "auto",
-                  height: 36,
-                  padding: "0 14px",
-                  borderRadius: 10,
-                  border: "none",
-                  backgroundColor: "transparent",
-                  color: "rgba(255,255,255,0.7)",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                Clear
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top">Deselect all — no changes will be saved</TooltipContent>
-          </Tooltip>
-        </div>
-      )}
-
-      {selected.size > 0 && <div style={{ height: 80 }} />}
-
-      {/* EHR Problem List write-back modal */}
-      <ProblemListWriteBackModal
-        open={writeBackSuspect !== null}
-        patientId={writeBackSuspect?.patient_id ?? 0}
-        patientName={writeBackSuspect?.patient_name}
-        icd10={writeBackSuspect?.suspect_icd10 ?? ""}
-        hccCode={writeBackSuspect ? String(writeBackSuspect.suspect_hcc) : null}
-        evidenceText={
-          typeof writeBackSuspect?.evidence_detail === "string"
-            ? writeBackSuspect.evidence_detail
-            : writeBackSuspect?.evidence_detail?.rationale ?? null
-        }
-        onClose={() => setWriteBackSuspect(null)}
-      />
-    </div>
-    </TooltipProvider>
-  );
-}
-
-/* ================================================================== */
-/*  SuspectDrawer — inline expanded row                                */
-/* ================================================================== */
-
-function SuspectDrawer({
-  suspect,
-  conf,
-  coef,
-  revenue,
-  rationale,
-  conditionLabel,
-  onOpenChart,
-  onAccept,
-  onDismiss,
-  acceptPending,
-  dismissPending,
-}: {
-  suspect: DBSuspect;
-  conf: number;
-  coef: number;
-  revenue: number;
-  rationale: string;
-  conditionLabel: string;
-  onOpenChart: () => void;
-  onAccept: () => void;
-  onDismiss: () => void;
-  acceptPending: boolean;
-  dismissPending: boolean;
-}) {
-  const s = suspect;
-  const isOpen = (s.status || "open") === "open";
-  const cConf = confColor(conf);
-
-  // Parse evidence_detail if it's a JSON string
-  const evidenceLines: { label: string; value: string }[] = [];
-  const detail = s.evidence_detail;
-  try {
-    const obj =
-      typeof detail === "string" && detail.trim().startsWith("{")
-        ? JSON.parse(detail)
-        : detail && typeof detail === "object"
-          ? detail
-          : null;
-    if (obj && typeof obj === "object") {
-      for (const [k, v] of Object.entries(obj)) {
-        if (v == null || v === "") continue;
-        const label = k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-        const value =
-          typeof v === "object" ? JSON.stringify(v) : String(v);
-        evidenceLines.push({ label, value });
-      }
-    }
-  } catch {
-    // ignore
-  }
-
-  const fmtDate = (d?: string) => {
-    if (!d) return "—";
-    try {
-      return new Date(d).toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      });
-    } catch {
-      return d;
-    }
-  };
-
-  return (
-    <div
-      onClick={(e) => e.stopPropagation()}
-      style={{
-        padding: "18px 22px 22px 22px",
-        backgroundColor: tokens.bgFaintCard,
-        borderTop: `1px solid ${C.borderSoft}`,
-        borderLeft: `3px solid ${confAccent(conf)}`,
-        display: "grid",
-        gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr)",
-        gap: 24,
-        animation: "drawerFadeIn 0.22s ease",
-      }}
-    >
-      <style>{`
-        @media (prefers-reduced-motion: no-preference) {
-          @keyframes drawerFadeIn {
-            from { opacity: 0; transform: translateY(-4px); }
-            to { opacity: 1; transform: translateY(0); }
+        {/* EHR Problem List write-back modal */}
+        <ProblemListWriteBackModal
+          open={writeBackSuspect !== null}
+          patientId={writeBackSuspect?.patient_id ?? 0}
+          patientName={writeBackSuspect?.patient_name}
+          icd10={writeBackSuspect?.suspect_icd10 ?? ""}
+          hccCode={writeBackSuspect ? String(writeBackSuspect.suspect_hcc) : null}
+          evidenceText={
+            typeof writeBackSuspect?.evidence_detail === "string"
+              ? writeBackSuspect.evidence_detail
+              : writeBackSuspect?.evidence_detail?.rationale ?? null
           }
-        }
-      `}</style>
+          onClose={() => setWriteBackSuspect(null)}
+        />
 
-      {/* LEFT — Clinical evidence */}
-      <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
-        <div>
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              color: C.label,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              marginBottom: 6,
-            }}
-          >
-            Why we flagged this
-          </div>
-          <div
-            style={{
-              fontSize: 14,
-              lineHeight: 1.55,
-              color: C.text,
-              fontStyle: "italic",
-              padding: "12px 14px",
-              borderRadius: 10,
-              backgroundColor: "hsl(var(--card))",
-              border: `1px solid ${C.borderSoft}`,
-            }}
-          >
-            &ldquo;{rationale}&rdquo;
-          </div>
-        </div>
-
-        {evidenceLines.length > 0 && (
-          <div>
-            <div
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                color: C.label,
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                marginBottom: 6,
-              }}
-            >
-              Supporting evidence
-            </div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                gap: 8,
-                padding: 12,
-                borderRadius: 10,
-                backgroundColor: "hsl(var(--card))",
-                border: `1px solid ${C.borderSoft}`,
-              }}
-            >
-              {evidenceLines.map((ln, i) => (
-                <div key={i} style={{ minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 10,
-                      color: C.label,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                      fontWeight: 600,
-                      marginBottom: 2,
-                    }}
-                  >
-                    {ln.label}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: C.text,
-                      fontFamily: FONT_MONO,
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    {ln.value}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div
-          style={{
-            display: "flex",
-            gap: 16,
-            fontSize: 11,
-            color: C.textSubtle,
-          }}
-        >
-          <span>
-            <span className="text-muted-foreground">Detected </span>
-            {fmtDate(s.created_at)}
-          </span>
-          {s.reviewed_at && (
-            <span>
-              <span className="text-muted-foreground">Reviewed </span>
-              {fmtDate(s.reviewed_at)}
-              {s.reviewed_by && <span className="text-muted-foreground"> · {s.reviewed_by}</span>}
-            </span>
-          )}
-        </div>
+        {/* Row enter animation */}
+        <style>{`
+          @media (prefers-reduced-motion: no-preference) {
+            @keyframes rowEnter {
+              from { opacity: 0; transform: translateY(4px); }
+              to   { opacity: 1; transform: translateY(0);   }
+            }
+          }
+          @media (prefers-reduced-motion: reduce) {
+            [class*='animate-[rowEnter'] { animation: none !important; }
+          }
+          /* Always-visible action buttons on touch/small screens */
+          @media (max-width: 900px) {
+            .row-action-btn { opacity: 1 !important; transform: none !important; }
+          }
+          /* WCAG 2.5.5 — minimum 44px touch targets on mobile */
+          @media (max-width: 768px) {
+            .row-action-btn { width: 44px !important; height: 44px !important; border-radius: 10px !important; }
+          }
+        `}</style>
       </div>
-
-      {/* RIGHT — Code card + actions */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div
-          style={{
-            padding: 16,
-            borderRadius: 10,
-            backgroundColor: "hsl(var(--card))",
-            border: `1px solid ${C.border}`,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              color: C.label,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              marginBottom: 8,
-            }}
-          >
-            Suspected Code
-          </div>
-          <div
-            style={{
-              fontSize: 15,
-              fontWeight: 700,
-              color: C.text,
-              marginBottom: 6,
-              letterSpacing: "-0.01em",
-            }}
-          >
-            {conditionLabel}
-          </div>
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              fontFamily: FONT_MONO,
-              fontSize: 11,
-              color: C.textMuted,
-              marginBottom: 12,
-            }}
-          >
-            {s.suspect_hcc != null && (
-              <FeatureFlag
-                flagKey="kg_evidence_panel"
-                fallback={
-                  <span
-                    style={{
-                      padding: "2px 8px",
-                      borderRadius: 6,
-                      backgroundColor: C.brandSoft,
-                      color: C.brand,
-                      fontWeight: 700,
-                    }}
-                  >
-                    HCC {s.suspect_hcc}
-                  </span>
-                }
-              >
-                <HccChipWithPopover hccCode={String(s.suspect_hcc)}>
-                  <span
-                    style={{
-                      padding: "2px 8px",
-                      borderRadius: 6,
-                      backgroundColor: C.brandSoft,
-                      color: C.brand,
-                      fontWeight: 700,
-                    }}
-                  >
-                    HCC {s.suspect_hcc}
-                  </span>
-                </HccChipWithPopover>
-              </FeatureFlag>
-            )}
-            {s.suspect_icd10 && (
-              <span
-                style={{
-                  padding: "2px 8px",
-                  borderRadius: 6,
-                  backgroundColor: C.bgSubtle,
-                  border: `1px solid ${C.borderSoft}`,
-                  fontWeight: 700,
-                }}
-              >
-                ICD {s.suspect_icd10}
-              </span>
-            )}
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr",
-              gap: 10,
-              paddingTop: 12,
-              borderTop: `1px solid ${C.borderSoft}`,
-            }}
-          >
-            <div>
-              <div className="text-muted-foreground" style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
-                Signal
-              </div>
-              <div
-                style={{ fontSize: 16, fontWeight: 700, color: cConf }}
-                title={`Internal signal score: ${(conf * 100).toFixed(0)}% (not a calibrated probability)`}
-              >
-                {conf >= 0.85 ? "Strong" : conf >= 0.65 ? "Moderate" : "Weak"}
-              </div>
-            </div>
-            <div>
-              <div className="text-muted-foreground" style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
-                RAF Lift
-              </div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: C.brand, fontVariantNumeric: "tabular-nums" }}>
-                +{coef.toFixed(3)}
-              </div>
-            </div>
-            <div>
-              <div className="text-muted-foreground" style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
-                Revenue
-              </div>
-              <div className="text-foreground" style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-                {formatCurrency(revenue)}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {isOpen && (
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={onAccept}
-              disabled={acceptPending}
-              style={{
-                flex: 1,
-                height: 40,
-                borderRadius: 10,
-                border: "none",
-                backgroundColor: C.low,
-                color: tokens.white,
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: acceptPending ? "default" : "pointer",
-                opacity: acceptPending ? 0.6 : 1,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                letterSpacing: "0.01em",
-              }}
-            >
-              <Check size={15} strokeWidth={2.5} />
-              Push to EMR
-            </button>
-            <button
-              onClick={onDismiss}
-              disabled={dismissPending}
-              style={{
-                flex: 1,
-                height: 40,
-                borderRadius: 10,
-                border: `1px solid ${C.high}`,
-                backgroundColor: tokens.white,
-                color: C.high,
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: dismissPending ? "default" : "pointer",
-                opacity: dismissPending ? 0.6 : 1,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                letterSpacing: "0.01em",
-              }}
-            >
-              <X size={15} strokeWidth={2.5} />
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        <button
-          onClick={onOpenChart}
-          style={{
-            height: 40,
-            borderRadius: 10,
-            border: `1px solid ${C.brand}`,
-            backgroundColor: C.brandSoft,
-            color: C.brand,
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: "pointer",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            letterSpacing: "0.01em",
-          }}
-        >
-          <FileSearch size={15} strokeWidth={2.2} />
-          Open Patient Chart
-          <ChevronRight size={14} />
-        </button>
-      </div>
-    </div>
+    </TooltipProvider>
   );
 }

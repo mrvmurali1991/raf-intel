@@ -30,10 +30,19 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
+  FileSignature,
 } from "lucide-react";
-import { PageHeader, EmptyState } from "@/components/healthcare-ui";
+import { PageHeader } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 import { MetricCard } from "@/components/ui/metric-card";
-import { tokens } from "@/styles/tokens";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
 import api from "@/lib/api";
 
 // ---------------------------------------------------------------------------
@@ -92,21 +101,18 @@ const STATUS_TABS: { value: StatusFilter; label: string }[] = [
 
 const STATUS_BADGE: Record<
   AttestationRow["status"],
-  { label: string; bg: string; color: string }
+  { label: string; className: string }
 > = {
-  pending: { label: "Pending", bg: "#FEF3C7", color: "#92400E" },
-  attested: { label: "Attested", bg: "#D1FAE5", color: "#065F46" },
-  rejected: { label: "Rejected", bg: "#FEE2E2", color: "#991B1B" },
-  deferred: { label: "Deferred", bg: "#E0E7FF", color: "#3730A3" },
+  pending:  { label: "Pending",  className: "bg-amber-100 text-amber-800" },
+  attested: { label: "Attested", className: "bg-emerald-100 text-emerald-800" },
+  rejected: { label: "Rejected", className: "bg-red-100 text-red-800" },
+  deferred: { label: "Deferred", className: "bg-indigo-100 text-indigo-800" },
 };
 
 // ---------------------------------------------------------------------------
 // Fetchers
 // ---------------------------------------------------------------------------
 
-// Backend shape: { period_days, total, by_status: {pending,attested,rejected,deferred},
-//                   attestation_rate_pct, avg_turnaround_hours, ... }
-// Map to the flat DashboardStats shape the component consumes.
 async function fetchDashboard(): Promise<DashboardStats> {
   const { data } = await api.get<{
     total: number;
@@ -120,8 +126,6 @@ async function fetchDashboard(): Promise<DashboardStats> {
     attested: data.by_status?.attested ?? 0,
     rejected: data.by_status?.rejected ?? 0,
     deferred: data.by_status?.deferred ?? 0,
-    // Backend returns a percentage (0–100); frontend displays it as-is via toFixed(1)%
-    // so we normalise to 0–1 fraction here.
     attestation_rate: (data.attestation_rate_pct ?? 0) / 100,
     avg_turnaround_hours: data.avg_turnaround_hours,
   };
@@ -203,14 +207,7 @@ export default function AttestationsPage() {
   const isLoading = statsLoading || listLoading;
 
   return (
-    <main
-      style={{
-        padding: "24px",
-        maxWidth: 1280,
-        margin: "0 auto",
-        fontFamily: tokens.font?.sans ?? "system-ui, sans-serif",
-      }}
-    >
+    <main className="p-6 max-w-[1280px] mx-auto">
       <WorkflowProgressBar currentStage="attestations" />
       <WorkflowHandoffBanner
         count={stats?.attested ?? 0}
@@ -222,40 +219,26 @@ export default function AttestationsPage() {
         zeroCtaLabel="Go to Suspects"
         zeroCtaHref="/suspects"
       />
+
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-        <PageHeader
-          title="Provider Attestations"
-          subtitle="Review and track provider sign-off on suspect HCC conditions"
-        />
-        <button
-          onClick={handleRefresh}
-          aria-label="Refresh attestations"
-          className="bg-card border border-border text-foreground"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "8px 14px",
-            borderRadius: 8,
-            cursor: "pointer",
-            fontSize: 13,
-          }}
-        >
-          <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
-          Refresh
-        </button>
-      </div>
+      <PageHeader
+        title="Provider Attestations"
+        subtitle="Review and track provider sign-off on suspect HCC conditions"
+        icon={<ClipboardCheck size={20} />}
+        actions={
+          <button
+            onClick={handleRefresh}
+            aria-label="Refresh attestations"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-border bg-card text-foreground text-[13px] font-medium cursor-pointer hover:bg-muted transition-colors"
+          >
+            <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
+            Refresh
+          </button>
+        }
+      />
 
       {/* KPI Cards */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-          gap: 16,
-          marginBottom: 24,
-        }}
-      >
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4 mb-6">
         <MetricCard
           label="Total"
           value={statsLoading ? "—" : (stats?.total ?? 0) === 0 ? "None yet" : String(stats!.total)}
@@ -301,34 +284,20 @@ export default function AttestationsPage() {
       </div>
 
       {/* Filters row */}
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          alignItems: "center",
-          marginBottom: 16,
-          flexWrap: "wrap",
-        }}
-      >
+      <div className="flex flex-wrap items-center gap-3 mb-4">
         {/* Status tabs */}
-        <div style={{ display: "flex", gap: 4, background: "#F3F4F6", borderRadius: 8, padding: 4 }}>
+        <div className="flex gap-1 bg-muted rounded-lg p-1">
           {STATUS_TABS.map((tab) => (
             <button
               key={tab.value}
               onClick={() => handleStatusTab(tab.value)}
               aria-pressed={statusFilter === tab.value}
-              style={{
-                padding: "6px 14px",
-                borderRadius: 6,
-                border: "none",
-                background: statusFilter === tab.value ? "var(--card)" : "transparent",
-                boxShadow: statusFilter === tab.value ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-                fontWeight: statusFilter === tab.value ? 600 : 400,
-                fontSize: 13,
-                color: statusFilter === tab.value ? "#111827" : "#6B7280",
-                cursor: "pointer",
-                transition: "all 0.15s",
-              }}
+              className={[
+                "px-3.5 py-1.5 rounded-md border-none text-[13px] cursor-pointer transition-all",
+                statusFilter === tab.value
+                  ? "bg-card shadow font-semibold text-foreground"
+                  : "bg-transparent font-normal text-muted-foreground hover:text-foreground",
+              ].join(" ")}
             >
               {tab.label}
             </button>
@@ -336,10 +305,10 @@ export default function AttestationsPage() {
         </div>
 
         {/* Search */}
-        <div style={{ position: "relative", flex: "1 1 200px", maxWidth: 320 }}>
+        <div className="relative flex-[1_1_200px] max-w-xs">
           <Search
             size={14}
-            style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#9CA3AF" }}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
           />
           <input
             type="search"
@@ -347,21 +316,12 @@ export default function AttestationsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search attestations"
-            style={{
-              width: "100%",
-              padding: "8px 10px 8px 32px",
-              borderRadius: 8,
-              border: "1px solid #E5E7EB",
-              fontSize: 13,
-              color: "#111827",
-              outline: "none",
-              boxSizing: "border-box",
-            }}
+            className="w-full pl-8 pr-3 py-2 rounded-lg border border-border bg-card text-[13px] text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-ring box-border"
           />
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table area */}
       {isError ? (
         <EmptyState
           icon={<AlertCircle size={40} />}
@@ -369,14 +329,15 @@ export default function AttestationsPage() {
           description="Check your connection or try refreshing."
         />
       ) : listLoading ? (
-        <div style={{ textAlign: "center", padding: 48, color: "#9CA3AF" }}>
-          Loading attestations…
+        <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+          <RefreshCw size={24} className="animate-spin" aria-hidden="true" />
+          <span className="text-[13px]">Loading attestations…</span>
         </div>
       ) : filtered.length === 0 ? (
         search || statusFilter !== "all" ? (
           <EmptyState
             state="filtered-out"
-            icon={<ClipboardCheck size={40} />}
+            icon={<FileSignature size={40} />}
             description={
               search
                 ? "Try a different search term."
@@ -385,134 +346,94 @@ export default function AttestationsPage() {
           />
         ) : (
           <EmptyState
-            state="awaiting-action"
-            icon={<ClipboardCheck size={40} />}
-            title="No attestations yet — accepted suspects appear here"
+            state="no-data"
+            icon={<FileSignature size={40} />}
+            title="No attestations pending"
+            description="Accepted suspects will appear here once providers submit attestations."
             cta={{ label: "Go to Suspects", href: "/suspects" }}
           />
         )
       ) : (
-        <div
-          className="bg-card border border-border"
-          style={{
-            borderRadius: 10,
-            overflow: "hidden",
-          }}
-        >
-          <table style={{ width: "100%", borderCollapse: "collapse" }} role="table">
-            <thead>
-              <tr className="bg-muted">
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted hover:bg-muted">
                 {["Patient ID", "HCC", "ICD-10", "Provider NPI", "Source", "Status", "Created"].map(
                   (h) => (
-                    <th
+                    <TableHead
                       key={h}
                       scope="col"
-                      style={{
-                        padding: "10px 14px",
-                        textAlign: "left",
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: "#6B7280",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                        borderBottom: "1px solid var(--border)",
-                        whiteSpace: "nowrap",
-                      }}
+                      className="px-3.5 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap border-b border-border"
                     >
                       {h}
-                    </th>
+                    </TableHead>
                   )
                 )}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {filtered.map((row, idx) => {
                 const badge = STATUS_BADGE[row.status] ?? STATUS_BADGE.pending;
                 return (
-                  <tr
+                  <TableRow
                     key={row.id}
                     className={idx % 2 === 1 ? "bg-muted/40" : "bg-card"}
-                    style={{
-                      borderBottom: idx < filtered.length - 1 ? "1px solid var(--border)" : "none",
-                    }}
                   >
-                    <td style={tdStyle}>{row.patient_id}</td>
-                    <td style={tdStyle}>
-                      <span style={{ fontWeight: 600 }}>{row.hcc_code}</span>
+                    <TableCell className="px-3.5 py-2.5 text-[13px] text-foreground align-top">
+                      {row.patient_id}
+                    </TableCell>
+                    <TableCell className="px-3.5 py-2.5 align-top">
+                      <span className="text-[13px] font-semibold text-foreground">{row.hcc_code}</span>
                       {row.hcc_description && (
-                        <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>
+                        <div className="text-[11px] text-muted-foreground mt-0.5">
                           {row.hcc_description}
                         </div>
                       )}
-                    </td>
-                    <td style={tdStyle}>
-                      <span style={{ fontFamily: "monospace", fontSize: 13 }}>{row.icd10_code}</span>
+                    </TableCell>
+                    <TableCell className="px-3.5 py-2.5 align-top">
+                      <span className="font-mono text-[13px] text-foreground">{row.icd10_code}</span>
                       {row.icd10_description && (
-                        <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>
+                        <div className="text-[11px] text-muted-foreground mt-0.5">
                           {row.icd10_description}
                         </div>
                       )}
-                    </td>
-                    <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: 12 }}>
+                    </TableCell>
+                    <TableCell className="px-3.5 py-2.5 font-mono text-[12px] text-foreground align-top">
                       {row.provider_npi}
-                    </td>
-                    <td style={tdStyle}>
-                      <span
-                        style={{
-                          padding: "2px 8px",
-                          borderRadius: 4,
-                          background: "#F3F4F6",
-                          fontSize: 11,
-                          color: "#374151",
-                        }}
-                      >
+                    </TableCell>
+                    <TableCell className="px-3.5 py-2.5 align-top">
+                      <span className="px-2 py-0.5 rounded bg-muted text-[11px] text-muted-foreground">
                         {row.source}
                       </span>
-                    </td>
-                    <td style={tdStyle}>
+                    </TableCell>
+                    <TableCell className="px-3.5 py-2.5 align-top">
                       <span
-                        style={{
-                          padding: "3px 10px",
-                          borderRadius: 99,
-                          background: badge.bg,
-                          color: badge.color,
-                          fontSize: 11,
-                          fontWeight: 600,
-                        }}
+                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${badge.className}`}
                       >
                         {badge.label}
                       </span>
-                    </td>
-                    <td style={{ ...tdStyle, color: "#6B7280", fontSize: 12, whiteSpace: "nowrap" }}>
+                    </TableCell>
+                    <TableCell className="px-3.5 py-2.5 text-[12px] text-muted-foreground whitespace-nowrap align-top">
                       {new Date(row.created_at).toLocaleDateString()}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div
-              className="bg-muted"
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "12px 16px",
-                borderTop: "1px solid var(--border)",
-              }}
-            >
-              <span style={{ fontSize: 12, color: "#6B7280" }}>
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted">
+              <span className="text-[12px] text-muted-foreground">
                 Page {currentPage} of {totalPages} ({totalCount} total)
               </span>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div className="flex gap-2">
                 <button
                   onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
                   disabled={offset === 0}
                   aria-label="Previous page"
-                  style={paginationBtnStyle(offset === 0)}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-border text-[12px] font-medium bg-card text-foreground cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors"
                 >
                   <ChevronLeft size={14} />
                   Prev
@@ -521,7 +442,7 @@ export default function AttestationsPage() {
                   onClick={() => setOffset(offset + PAGE_SIZE)}
                   disabled={offset + PAGE_SIZE >= totalCount}
                   aria-label="Next page"
-                  style={paginationBtnStyle(offset + PAGE_SIZE >= totalCount)}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-border text-[12px] font-medium bg-card text-foreground cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors"
                 >
                   Next
                   <ChevronRight size={14} />
@@ -533,31 +454,4 @@ export default function AttestationsPage() {
       )}
     </main>
   );
-}
-
-// ---------------------------------------------------------------------------
-// Style helpers
-// ---------------------------------------------------------------------------
-
-const tdStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  verticalAlign: "top",
-  fontSize: 13,
-  color: "#111827",
-};
-
-function paginationBtnStyle(disabled: boolean): React.CSSProperties {
-  return {
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
-    padding: "6px 12px",
-    borderRadius: 6,
-    border: "1px solid #E5E7EB",
-    background: disabled ? "var(--muted)" : "var(--card)",
-    color: disabled ? "#D1D5DB" : "#374151",
-    cursor: disabled ? "not-allowed" : "pointer",
-    fontSize: 12,
-    fontWeight: 500,
-  };
 }

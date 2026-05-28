@@ -15,11 +15,18 @@
 
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Users, Award, ArrowUpDown, ArrowUp, ArrowDown, RefreshCw } from "lucide-react";
+import {
+  Users,
+  Award,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  RefreshCw,
+} from "lucide-react";
 
 import api from "@/lib/api";
-import { PageHeader, EmptyState } from "@/components/healthcare-ui";
-import { tokens } from "@/styles/tokens";
+import { PageHeader } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 
 // ---------------------------------------------------------------------------
 // Types — mirror backend ProviderScorecardV2
@@ -63,7 +70,9 @@ type SortKey =
 // API
 // ---------------------------------------------------------------------------
 
-async function fetchProviderScorecards(year: number): Promise<ProviderScorecardListResponse> {
+async function fetchProviderScorecards(
+  year: number,
+): Promise<ProviderScorecardListResponse> {
   const { data } = await api.get<ProviderScorecardListResponse>(
     `/api/provider-scorecards?year=${year}`,
   );
@@ -74,44 +83,45 @@ async function fetchProviderScorecards(year: number): Promise<ProviderScorecardL
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatDelta(delta: number, decimals = 1, suffix = ""): string {
+function formatDelta(
+  delta: number,
+  decimals = 1,
+  suffix = "",
+): string {
   const sign = delta > 0 ? "+" : "";
   return `${sign}${delta.toFixed(decimals)}${suffix}`;
 }
 
-/**
- * For RAF higher is better, but only marginally — peer comparison is still
- * relevant for outliers. For recapture % and MEAT % higher is unambiguously
- * better.  All three metrics use the same direction here (higher = better).
- */
-function deltaColor(delta: number, epsilon = 0.05): string {
-  if (delta > epsilon) return tokens.successStrong;
-  if (delta < -epsilon) return tokens.dangerStrong;
-  return tokens.slate500;
+function deltaColorClass(delta: number, epsilon = 0.05): string {
+  if (delta > epsilon) return "text-emerald-600 dark:text-emerald-400";
+  if (delta < -epsilon) return "text-red-600 dark:text-red-400";
+  return "text-muted-foreground";
 }
 
-function DeltaBadge({ delta, suffix = "", decimals = 1, epsilon = 0.05 }: {
+function DeltaBadge({
+  delta,
+  suffix = "",
+  decimals = 1,
+  epsilon = 0.05,
+}: {
   delta: number;
   suffix?: string;
   decimals?: number;
   epsilon?: number;
 }) {
-  const color = deltaColor(delta, epsilon);
   return (
     <span
-      style={{
-        marginLeft: 6,
-        fontSize: 11,
-        fontWeight: 600,
-        color,
-        whiteSpace: "nowrap",
-      }}
+      className={`ml-1.5 text-[11px] font-semibold whitespace-nowrap ${deltaColorClass(delta, epsilon)}`}
       title="vs tenant average"
     >
       {formatDelta(delta, decimals, suffix)}
     </span>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Sort header
+// ---------------------------------------------------------------------------
 
 function SortHeader({
   label,
@@ -129,26 +139,18 @@ function SortHeader({
   return (
     <th
       onClick={onClick}
-      style={{
-        padding: "12px 14px",
-        textAlign: align,
-        fontSize: 11,
-        fontWeight: 600,
-        color: tokens.slate600,
-        textTransform: "uppercase",
-        letterSpacing: 0.4,
-        cursor: "pointer",
-        userSelect: "none",
-        borderBottom: `1px solid ${tokens.slate200}`,
-        background: tokens.slate50,
-      }}
+      className={`px-3.5 py-3 text-[11px] font-semibold uppercase tracking-wide cursor-pointer select-none border-b border-border bg-muted/40 text-muted-foreground hover:text-foreground transition-colors ${align === "right" ? "text-right" : "text-left"}`}
     >
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <span className="inline-flex items-center gap-1">
         {label}
         {active ? (
-          direction === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+          direction === "asc" ? (
+            <ArrowUp size={12} />
+          ) : (
+            <ArrowDown size={12} />
+          )
         ) : (
-          <ArrowUpDown size={12} style={{ opacity: 0.4 }} />
+          <ArrowUpDown size={12} className="opacity-40" />
         )}
       </span>
     </th>
@@ -162,29 +164,33 @@ function SortHeader({
 function TableSkeleton() {
   const rows = Array.from({ length: 6 });
   return (
-    <div style={{ background: tokens.white, border: `1px solid ${tokens.slate200}`, borderRadius: 10, overflow: "hidden" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    <div
+      className="bg-card border border-border rounded-xl overflow-hidden"
+      aria-busy="true"
+      aria-label="Loading scorecards"
+    >
+      <table className="w-full border-collapse">
         <thead>
           <tr>
-            {["Provider", "Panel", "Avg RAF", "Recapture %", "MEAT %"].map((h) => (
-              <th key={h} style={{ padding: "12px 14px", fontSize: 11, fontWeight: 600, color: tokens.slate600, textTransform: "uppercase", background: tokens.slate50, borderBottom: `1px solid ${tokens.slate200}`, textAlign: h === "Provider" ? "left" : "right" }}>{h}</th>
-            ))}
+            {["Provider", "Panel", "Avg RAF", "Recapture %", "MEAT %"].map(
+              (h) => (
+                <th
+                  key={h}
+                  className={`px-3.5 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground bg-muted/40 border-b border-border ${h === "Provider" ? "text-left" : "text-right"}`}
+                >
+                  {h}
+                </th>
+              ),
+            )}
           </tr>
         </thead>
         <tbody>
           {rows.map((_, i) => (
             <tr key={i}>
               {Array.from({ length: 5 }).map((__, j) => (
-                <td key={j} style={{ padding: "14px", borderBottom: `1px solid ${tokens.slate100}` }}>
+                <td key={j} className="px-3.5 py-3.5 border-b border-border/50">
                   <div
-                    style={{
-                      height: 12,
-                      width: j === 0 ? "70%" : "50%",
-                      marginLeft: j === 0 ? 0 : "auto",
-                      background: tokens.slate100,
-                      borderRadius: 4,
-                      animation: "pulse 1.4s ease-in-out infinite",
-                    }}
+                    className={`h-3 rounded animate-pulse bg-muted ${j === 0 ? "w-[70%]" : "w-1/2 ml-auto"}`}
                   />
                 </td>
               ))}
@@ -192,12 +198,49 @@ function TableSkeleton() {
           ))}
         </tbody>
       </table>
-      <style jsx>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 0.5; }
-          50% { opacity: 1; }
-        }
-      `}</style>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Tenant benchmark strip
+// ---------------------------------------------------------------------------
+
+function BenchmarkStrip({
+  data,
+}: {
+  data: ProviderScorecardListResponse;
+}) {
+  const items = [
+    { label: "Tenant Avg RAF", value: data.tenant_avg_raf.toFixed(3) },
+    {
+      label: "Tenant Avg Recapture",
+      value: `${data.tenant_avg_recapture_rate.toFixed(1)}%`,
+    },
+    {
+      label: "Tenant Avg MEAT",
+      value:
+        data.tenant_avg_meat_compliance === null
+          ? "—"
+          : `${data.tenant_avg_meat_compliance.toFixed(1)}%`,
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+      {items.map((kpi) => (
+        <div
+          key={kpi.label}
+          className="bg-card border border-border rounded-xl px-4 py-3.5"
+        >
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {kpi.label}
+          </div>
+          <div className="mt-1 text-xl font-bold text-foreground">
+            {kpi.value}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -225,9 +268,7 @@ export default function ProviderScorecardsPage() {
       const va = a[sortKey];
       const vb = b[sortKey];
       if (typeof va === "string" && typeof vb === "string") {
-        return sortDir === "asc"
-          ? va.localeCompare(vb)
-          : vb.localeCompare(va);
+        return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
       }
       const na = Number(va);
       const nb = Number(vb);
@@ -245,56 +286,44 @@ export default function ProviderScorecardsPage() {
     }
   };
 
-  // Year options: current + previous 3
   const yearOptions = useMemo(
     () => [currentYear, currentYear - 1, currentYear - 2, currentYear - 3],
     [currentYear],
   );
 
   return (
-    <div style={{ maxWidth: 1280, margin: "0 auto", padding: "24px 28px" }}>
+    <div className="p-6 max-w-screen-xl mx-auto">
       <PageHeader
         title="Provider Scorecards"
         subtitle="Per-provider performance with peer benchmarks vs the tenant average"
         icon={<Award size={20} />}
         actions={
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <label style={{ fontSize: 12, color: tokens.slate600, display: "flex", alignItems: "center", gap: 6 }}>
+          <div className="flex items-center gap-2.5">
+            <label className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
               Year
               <select
                 value={year}
                 onChange={(e) => setYear(Number(e.target.value))}
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: 8,
-                  border: `1px solid ${tokens.slate200}`,
-                  fontSize: 13,
-                  background: tokens.white,
-                  color: tokens.slate900,
-                }}
+                className="px-2.5 py-1.5 rounded-lg border border-border bg-card text-[13px] text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 {yearOptions.map((y) => (
-                  <option key={y} value={y}>{y}</option>
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
                 ))}
               </select>
             </label>
             <button
               onClick={() => refetch()}
               disabled={isFetching}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "7px 12px",
-                borderRadius: 8,
-                border: `1px solid ${tokens.slate200}`,
-                background: tokens.white,
-                color: tokens.slate700,
-                fontSize: 13,
-                cursor: isFetching ? "wait" : "pointer",
-              }}
+              aria-label="Refresh provider scorecards"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-[13px] text-foreground hover:bg-muted/60 disabled:opacity-50 disabled:cursor-wait transition-colors"
             >
-              <RefreshCw size={14} style={{ animation: isFetching ? "spin 1s linear infinite" : "none" }} />
+              <RefreshCw
+                size={14}
+                className={isFetching ? "animate-spin" : ""}
+                aria-hidden
+              />
               Refresh
             </button>
           </div>
@@ -302,147 +331,197 @@ export default function ProviderScorecardsPage() {
       />
 
       {/* Tenant averages summary strip */}
-      {data && !isLoading && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-            gap: 12,
-            marginBottom: 20,
-          }}
-        >
-          {[
-            { label: "Tenant Avg RAF", value: data.tenant_avg_raf.toFixed(3) },
-            { label: "Tenant Avg Recapture %", value: `${data.tenant_avg_recapture_rate.toFixed(1)}%` },
-            { label: "Tenant Avg MEAT %", value: data.tenant_avg_meat_compliance === null ? "—" : `${data.tenant_avg_meat_compliance.toFixed(1)}%` },
-          ].map((kpi) => (
-            <div
-              key={kpi.label}
-              style={{
-                background: tokens.white,
-                border: `1px solid ${tokens.slate200}`,
-                borderRadius: 10,
-                padding: "14px 16px",
-              }}
-            >
-              <div style={{ fontSize: 11, color: tokens.slate600, textTransform: "uppercase", letterSpacing: 0.3, fontWeight: 600 }}>
-                {kpi.label}
-              </div>
-              <div style={{ marginTop: 4, fontSize: 20, fontWeight: 700, color: tokens.slate900 }}>
-                {kpi.value}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {data && !isLoading && <BenchmarkStrip data={data} />}
 
+      {/* Loading skeleton */}
       {isLoading && <TableSkeleton />}
 
+      {/* Error state */}
       {isError && (
         <EmptyState
+          state="no-data"
+          icon={<Award size={28} />}
           title="Could not load provider scorecards"
-          description="The backend returned an error. Try again, or pick a different year."
+          description="The backend returned an error. Try again or pick a different year."
+          cta={{ label: "Retry", onClick: () => refetch() }}
         />
       )}
 
+      {/* No providers */}
       {!isLoading && !isError && sortedRows.length === 0 && (
         <EmptyState
+          state="no-data"
           icon={<Users size={28} />}
           title="No providers found"
           description={`No active providers have data for ${year}. Try a different year or seed provider attribution.`}
         />
       )}
 
+      {/* Table */}
       {!isLoading && !isError && sortedRows.length > 0 && (
-        <div
-          style={{
-            background: tokens.white,
-            border: `1px solid ${tokens.slate200}`,
-            borderRadius: 10,
-            overflow: "hidden",
-          }}
-        >
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <SortHeader label="Provider" active={sortKey === "provider_name"} direction={sortDir} onClick={() => handleSort("provider_name")} />
-                <SortHeader label="Panel" active={sortKey === "panel_size"} direction={sortDir} onClick={() => handleSort("panel_size")} align="right" />
-                <SortHeader label="Avg RAF" active={sortKey === "avg_raf"} direction={sortDir} onClick={() => handleSort("avg_raf")} align="right" />
-                <SortHeader label="Recapture %" active={sortKey === "recapture_rate_pct"} direction={sortDir} onClick={() => handleSort("recapture_rate_pct")} align="right" />
-                <SortHeader label="MEAT %" active={sortKey === "meat_compliance_pct"} direction={sortDir} onClick={() => handleSort("meat_compliance_pct")} align="right" />
-              </tr>
-            </thead>
-            <tbody>
-              {sortedRows.map((r, idx) => {
-                const rafDelta = r.avg_raf - r.tenant_avg_raf;
-                const recDelta = r.recapture_rate_pct - r.tenant_avg_recapture_rate;
-                const meatDelta =
-                  r.meat_compliance_pct !== null && r.tenant_avg_meat_compliance !== null
-                    ? r.meat_compliance_pct - r.tenant_avg_meat_compliance
-                    : null;
-                const recTooltip =
-                  r.data_quality_flag === "leakage_exceeds_prior_hcc_count"
-                    ? "Open gaps exceed prior-year HCC count — leakage > 100% (likely cohort expansion mid-year)"
-                    : undefined;
-                const stripe = idx % 2 === 0 ? tokens.white : tokens.slate50;
-                return (
-                  <tr key={r.provider_id} style={{ background: stripe }}>
-                    <td style={{ padding: "12px 14px", borderBottom: `1px solid ${tokens.slate100}` }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: tokens.slate900 }}>
-                        {r.provider_name || `Provider #${r.provider_id}`}
-                      </div>
-                      {(r.specialty || r.provider_npi) && (
-                        <div style={{ marginTop: 2, fontSize: 11, color: tokens.slate500 }}>
-                          {r.specialty || "—"}{r.provider_npi ? `  ·  NPI ${r.provider_npi}` : ""}
-                        </div>
-                      )}
-                    </td>
-                    <td style={{ padding: "12px 14px", textAlign: "right", fontSize: 13, color: tokens.slate900, borderBottom: `1px solid ${tokens.slate100}` }}>
-                      {r.panel_size.toLocaleString()}
-                    </td>
-                    <td style={{ padding: "12px 14px", textAlign: "right", fontSize: 13, color: tokens.slate900, borderBottom: `1px solid ${tokens.slate100}` }}>
-                      <span style={{ fontWeight: 600 }}>{r.avg_raf.toFixed(3)}</span>
-                      <DeltaBadge delta={rafDelta} decimals={3} epsilon={0.01} />
-                    </td>
-                    <td
-                      style={{ padding: "12px 14px", textAlign: "right", fontSize: 13, color: tokens.slate900, borderBottom: `1px solid ${tokens.slate100}` }}
-                      title={recTooltip}
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-[13px]">
+              <thead>
+                <tr>
+                  <SortHeader
+                    label="Provider"
+                    active={sortKey === "provider_name"}
+                    direction={sortDir}
+                    onClick={() => handleSort("provider_name")}
+                  />
+                  <SortHeader
+                    label="Panel"
+                    active={sortKey === "panel_size"}
+                    direction={sortDir}
+                    onClick={() => handleSort("panel_size")}
+                    align="right"
+                  />
+                  <SortHeader
+                    label="Avg RAF"
+                    active={sortKey === "avg_raf"}
+                    direction={sortDir}
+                    onClick={() => handleSort("avg_raf")}
+                    align="right"
+                  />
+                  <SortHeader
+                    label="Recapture %"
+                    active={sortKey === "recapture_rate_pct"}
+                    direction={sortDir}
+                    onClick={() => handleSort("recapture_rate_pct")}
+                    align="right"
+                  />
+                  <SortHeader
+                    label="MEAT %"
+                    active={sortKey === "meat_compliance_pct"}
+                    direction={sortDir}
+                    onClick={() => handleSort("meat_compliance_pct")}
+                    align="right"
+                  />
+                </tr>
+              </thead>
+              <tbody>
+                {sortedRows.map((r, idx) => {
+                  const rafDelta = r.avg_raf - r.tenant_avg_raf;
+                  const recDelta =
+                    r.recapture_rate_pct - r.tenant_avg_recapture_rate;
+                  const meatDelta =
+                    r.meat_compliance_pct !== null &&
+                    r.tenant_avg_meat_compliance !== null
+                      ? r.meat_compliance_pct - r.tenant_avg_meat_compliance
+                      : null;
+                  const recTooltip =
+                    r.data_quality_flag ===
+                    "leakage_exceeds_prior_hcc_count"
+                      ? "Open gaps exceed prior-year HCC count — leakage > 100% (likely cohort expansion mid-year)"
+                      : undefined;
+                  const stripeClass =
+                    idx % 2 === 0 ? "bg-card" : "bg-muted/20";
+
+                  return (
+                    <tr
+                      key={r.provider_id}
+                      className={`${stripeClass} hover:bg-primary/5 transition-colors`}
                     >
-                      {r.data_quality_flag === "leakage_exceeds_prior_hcc_count" ? (
-                        <span style={{ fontWeight: 600, color: tokens.slate400 }} aria-label="Metric not yet computed — data quality anomaly">—</span>
-                      ) : (
-                        <>
-                          <span style={{ fontWeight: 600 }}>{r.recapture_rate_pct.toFixed(1)}%</span>
-                          <DeltaBadge delta={recDelta} decimals={1} suffix="pp" epsilon={0.1} />
-                        </>
-                      )}
-                    </td>
-                    <td style={{ padding: "12px 14px", textAlign: "right", fontSize: 13, color: tokens.slate900, borderBottom: `1px solid ${tokens.slate100}` }}>
-                      {r.meat_compliance_pct === null ? (
-                        <span style={{ fontWeight: 600, color: tokens.slate400 }} title="No HCCs MEAT-scored yet for this provider's panel">—</span>
-                      ) : (
-                        <>
-                          <span style={{ fontWeight: 600 }}>{r.meat_compliance_pct.toFixed(1)}%</span>
-                          {meatDelta !== null && (
-                            <DeltaBadge delta={meatDelta} decimals={1} suffix="pp" epsilon={0.1} />
-                          )}
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      {/* Provider */}
+                      <td className="px-3.5 py-3 border-b border-border/50">
+                        <div className="font-semibold text-foreground">
+                          {r.provider_name || `Provider #${r.provider_id}`}
+                        </div>
+                        {(r.specialty || r.provider_npi) && (
+                          <div className="mt-0.5 text-[11px] text-muted-foreground">
+                            {r.specialty || "—"}
+                            {r.provider_npi
+                              ? `  ·  NPI ${r.provider_npi}`
+                              : ""}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Panel */}
+                      <td className="px-3.5 py-3 text-right border-b border-border/50 text-foreground">
+                        {r.panel_size.toLocaleString()}
+                      </td>
+
+                      {/* Avg RAF */}
+                      <td className="px-3.5 py-3 text-right border-b border-border/50">
+                        <span className="font-semibold text-foreground">
+                          {r.avg_raf.toFixed(3)}
+                        </span>
+                        <DeltaBadge
+                          delta={rafDelta}
+                          decimals={3}
+                          epsilon={0.01}
+                        />
+                      </td>
+
+                      {/* Recapture % */}
+                      <td
+                        className="px-3.5 py-3 text-right border-b border-border/50"
+                        title={recTooltip}
+                      >
+                        {r.data_quality_flag ===
+                        "leakage_exceeds_prior_hcc_count" ? (
+                          <span
+                            className="font-semibold text-muted-foreground"
+                            aria-label="Metric not yet computed — data quality anomaly"
+                          >
+                            —
+                          </span>
+                        ) : (
+                          <>
+                            <span className="font-semibold text-foreground">
+                              {r.recapture_rate_pct.toFixed(1)}%
+                            </span>
+                            <DeltaBadge
+                              delta={recDelta}
+                              decimals={1}
+                              suffix="pp"
+                              epsilon={0.1}
+                            />
+                          </>
+                        )}
+                      </td>
+
+                      {/* MEAT % */}
+                      <td className="px-3.5 py-3 text-right border-b border-border/50">
+                        {r.meat_compliance_pct === null ? (
+                          <span
+                            className="font-semibold text-muted-foreground"
+                            title="No HCCs MEAT-scored yet for this provider's panel"
+                          >
+                            —
+                          </span>
+                        ) : (
+                          <>
+                            <span className="font-semibold text-foreground">
+                              {r.meat_compliance_pct.toFixed(1)}%
+                            </span>
+                            {meatDelta !== null && (
+                              <DeltaBadge
+                                delta={meatDelta}
+                                decimals={1}
+                                suffix="pp"
+                                epsilon={0.1}
+                              />
+                            )}
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Footer row count */}
+          <div className="px-4 py-2.5 border-t border-border text-[12px] text-muted-foreground">
+            {sortedRows.length} provider
+            {sortedRows.length !== 1 ? "s" : ""} for {year}
+          </div>
         </div>
       )}
-
-      <style jsx>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }

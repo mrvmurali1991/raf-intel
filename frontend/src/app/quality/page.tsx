@@ -29,7 +29,8 @@ import {
   GitMerge,
   RefreshCw,
 } from "lucide-react";
-import { PageHeader, SectionHeader } from "@/components/healthcare-ui";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionHeader } from "@/components/ui/section-header";
 import { MetricCard } from "@/components/ui/metric-card";
 import { DataQualityBanner } from "@/components/DataQualityBanner";
 import { tokens } from "@/styles/tokens";
@@ -88,12 +89,9 @@ function SummaryTab({
   const total = measures.length;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <div className="flex flex-col gap-5">
       {/* KPI strip */}
-      <div
-        className="qs-kpi-strip qs-fade-in"
-        style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 18 }}
-      >
+      <div className="qs-kpi-strip qs-fade-in grid grid-cols-4 gap-[18px]">
         <MetricCard
           label="Total Measures"
           value={summary.total_measures}
@@ -124,9 +122,9 @@ function SummaryTab({
 
       {/* Compliance distribution bar */}
       {total > 0 && (
-        <div className="premium-card premium-shadow hover-lift qs-fade-in qs-fade-in-1" style={{ ...T.card, borderRadius: 14 }}>
+        <div className="premium-card premium-shadow hover-lift qs-fade-in qs-fade-in-1 rounded-xl" style={T.card}>
           <SectionHeader title="Compliance Rate Distribution" icon={<Activity size={18} />} />
-          <div style={{ display: "flex", gap: 0, borderRadius: 10, overflow: "hidden", height: 32, marginBottom: 14, boxShadow: "inset 0 1px 3px rgba(0,0,0,0.08)" }}>
+          <div className="flex overflow-hidden rounded-lg h-8 mb-3.5" style={{ boxShadow: "inset 0 1px 3px rgba(0,0,0,0.08)" }}>
             {[
               { pct: (green / total) * 100, color: C.emerald },
               { pct: (amber / total) * 100, color: C.amber },
@@ -150,19 +148,32 @@ function SummaryTab({
               </div>
             ))}
           </div>
-          <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+          <div className="flex gap-5 flex-wrap">
             {[
               { label: "Meeting target (≥80%)", color: C.emerald, count: green },
               { label: "Near target (60–80%)", color: C.amber, count: amber },
               { label: "Below target (<60%)", color: C.red, count: red },
             ].map((leg) => (
-              <div key={leg.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.textMuted }}>
-                <div style={{ width: 10, height: 10, borderRadius: 2, background: leg.color }} />
+              <div key={leg.label} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <div className="w-2.5 h-2.5 rounded-sm" style={{ background: leg.color }} />
                 <span>
                   <strong className="text-foreground">{leg.count}</strong> {leg.label}
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state when no measures are loaded yet */}
+      {total === 0 && (
+        <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 p-5 text-sm text-warning-foreground">
+          <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" />
+          <div>
+            <div className="font-semibold mb-0.5">No measure data to display</div>
+            <div className="text-xs text-muted-foreground">
+              Compliance distribution will appear once HEDIS measures have been ingested for this plan year.
+            </div>
           </div>
         </div>
       )}
@@ -200,21 +211,19 @@ export default function QualityPage() {
     queryFn: () => getCareGaps({ limit: 500 }),
   });
 
-  // Derived: true while any of the four queries are in-flight (used for the 15 s deadline)
+  // Derived: true while any of the four queries are in-flight
   const anyFetching = summaryQ.isFetching || measuresQ.isFetching || starsQ.isFetching || gapsQ.isFetching;
 
   // Start/reset the 15-second timeout whenever fetching begins.
   // Clear it as soon as all loading finishes or an error is surfaced.
   useEffect(() => {
     if (anyFetching) {
-      // Reset previous timer so a refetch always gets a fresh 15 s window
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       setLoadTimedOut(false);
       timeoutRef.current = setTimeout(() => {
         setLoadTimedOut(true);
       }, 15_000);
     } else {
-      // Requests settled — cancel any pending timeout
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
@@ -259,7 +268,13 @@ export default function QualityPage() {
           (measuresQ.error as Error | null)?.message ??
           "Unknown error"
         }`} onRetry={refetchAll} />;
-      if (!summaryQ.data) return <ErrorBox message="No quality summary data available for this tenant. Ensure the quality pipeline has run." onRetry={refetchAll} />;
+      if (!summaryQ.data)
+        return (
+          <ErrorBox
+            message="No quality summary data available for this tenant. Ensure the quality pipeline has run."
+            onRetry={refetchAll}
+          />
+        );
       return (
         <SummaryTab summary={summaryQ.data} measures={measuresQ.data ?? []} />
       );
@@ -272,29 +287,24 @@ export default function QualityPage() {
         return <Spinner label="Loading HEDIS measures..." />;
       }
       if (measuresQ.isError)
-        return <ErrorBox message={`Failed to load measures: ${(measuresQ.error as Error | null)?.message ?? "Unknown error"}`} onRetry={refetchAll} />;
+        return (
+          <ErrorBox
+            message={`Failed to load measures: ${(measuresQ.error as Error | null)?.message ?? "Unknown error"}`}
+            onRetry={refetchAll}
+          />
+        );
       const measures = measuresQ.data ?? [];
       if (measures.length === 0)
         return (
           <div
             role="status"
-            style={{
-              margin: "0 0 16px",
-              padding: "16px 20px",
-              borderRadius: 10,
-              background: tokens.warningSoft,
-              border: `1px solid ${tokens.warningBorder}`,
-              color: tokens.warningText,
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 12,
-              fontSize: 13,
-            }}
+            className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 p-4 text-sm mb-4"
+            style={{ color: tokens.warningText }}
           >
-            <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+            <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" />
             <div>
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>No HEDIS measures available — this is unusual</div>
-              <div style={{ fontSize: 12 }}>
+              <div className="font-semibold mb-0.5">No HEDIS measures available — this is unusual</div>
+              <div className="text-xs text-muted-foreground">
                 STARS ratings depend on HEDIS measure data. Verify the quality pipeline is running
                 and that measure data has been ingested for this plan year.
               </div>
@@ -311,28 +321,23 @@ export default function QualityPage() {
         return <Spinner label="Loading STARS estimate..." />;
       }
       if (starsQ.isError)
-        return <ErrorBox message={`Failed to load STARS estimate: ${(starsQ.error as Error | null)?.message ?? "Unknown error"}`} onRetry={refetchAll} />;
+        return (
+          <ErrorBox
+            message={`Failed to load STARS estimate: ${(starsQ.error as Error | null)?.message ?? "Unknown error"}`}
+            onRetry={refetchAll}
+          />
+        );
       if (!starsQ.data)
         return (
           <div
             role="status"
-            style={{
-              margin: "0 0 16px",
-              padding: "16px 20px",
-              borderRadius: 10,
-              background: tokens.warningSoft,
-              border: `1px solid ${tokens.warningBorder}`,
-              color: tokens.warningText,
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 12,
-              fontSize: 13,
-            }}
+            className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 p-4 text-sm"
+            style={{ color: tokens.warningText }}
           >
-            <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+            <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" />
             <div>
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>No STARS data available — this is unusual</div>
-              <div style={{ fontSize: 12 }}>
+              <div className="font-semibold mb-0.5">No STARS data available — this is unusual</div>
+              <div className="text-xs text-muted-foreground">
                 STARS estimates are required for CMS bonus payments and quality bonuses.
                 Verify STARS calculation pipeline is configured.
               </div>
@@ -349,7 +354,12 @@ export default function QualityPage() {
         return <Spinner label="Loading care gaps..." />;
       }
       if (gapsQ.isError)
-        return <ErrorBox message={`Failed to load care gaps: ${(gapsQ.error as Error | null)?.message ?? "Unknown error"}`} onRetry={refetchAll} />;
+        return (
+          <ErrorBox
+            message={`Failed to load care gaps: ${(gapsQ.error as Error | null)?.message ?? "Unknown error"}`}
+            onRetry={refetchAll}
+          />
+        );
       return (
         <CareGapsTabDynamic
           gaps={gapsQ.data?.gaps ?? []}
@@ -362,7 +372,7 @@ export default function QualityPage() {
   }
 
   return (
-    <div style={{ background: C.bg, minHeight: "100vh", padding: "36px 44px", overflowX: "hidden" }} className="rci-page-pad-desktop">
+    <div className="min-h-screen bg-slate-50 p-6 overflow-x-hidden">
       <style>{`
         @keyframes qs-spin { to { transform: rotate(360deg) } }
         @keyframes qs-fadeInUp {
@@ -400,7 +410,6 @@ export default function QualityPage() {
         }
         @media (max-width: 640px) {
           .qs-kpi-strip { grid-template-columns: 1fr !important; }
-          .rci-page-pad-desktop { padding: 20px 16px !important; }
         }
         .qs-measure-table tr:hover td { background: ${tokens.primarySoft} !important; }
         .qs-tab-btn { cursor: pointer; transition: all 0.2s ease; position: relative; }
@@ -439,24 +448,8 @@ export default function QualityPage() {
         actions={
           <button
             onClick={refetchAll}
-            disabled={summaryQ.isFetching || measuresQ.isFetching || starsQ.isFetching || gapsQ.isFetching}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 16px",
-              border: `1px solid ${C.border}`,
-              borderRadius: 8,
-              background: C.card,
-              color: C.textMuted,
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: "pointer",
-              opacity:
-                summaryQ.isFetching || measuresQ.isFetching || starsQ.isFetching || gapsQ.isFetching
-                  ? 0.6
-                  : 1,
-            }}
+            disabled={anyFetching}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border bg-card text-muted-foreground text-[13px] font-medium cursor-pointer disabled:opacity-60 hover:text-foreground transition-colors"
           >
             <RefreshCw size={14} />
             Refresh
@@ -467,33 +460,36 @@ export default function QualityPage() {
       {/* ── Top stripe: current STARS summary ── */}
       {currentStars > 0 && (
         <div
-          className="premium-card premium-shadow mesh-pattern qs-fade-in"
+          className="premium-card premium-shadow mesh-pattern qs-fade-in flex items-center gap-7 mb-7 flex-wrap rounded-xl"
           style={{
             ...T.card,
-            display: "flex",
-            alignItems: "center",
-            gap: 28,
             background: `linear-gradient(135deg, ${tokens.slate900} 0%, ${tokens.slate800} 50%, ${tokens.slate900} 100%)`,
             border: "1px solid rgba(255,255,255,0.06)",
-            marginBottom: 28,
-            flexWrap: "wrap",
-            borderRadius: 14,
           }}
         >
           <StarsGauge rating={currentStars} />
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: tokens.slate400, marginBottom: 8 }}>
+          <div className="flex-1 min-w-[200px]">
+            <div
+              className="text-xs font-bold uppercase tracking-widest mb-2"
+              style={{ color: tokens.slate400 }}
+            >
               Estimated STARS Rating
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              {diffUp ? <TrendingUp size={16} color={tokens.success} /> : <TrendingDown size={16} color={tokens.riskHigh} />}
-              <span style={{ color: diffUp ? tokens.success : tokens.riskHigh, fontWeight: 700, fontSize: 14 }}>
+            <div className="flex items-center gap-2 mb-2">
+              {diffUp
+                ? <TrendingUp size={16} color={tokens.success} />
+                : <TrendingDown size={16} color={tokens.riskHigh} />}
+              <span
+                className="font-bold text-sm"
+                style={{ color: diffUp ? tokens.success : tokens.riskHigh }}
+              >
                 {diffUp ? "+" : ""}{(diff ?? 0).toFixed(2)} projected change
               </span>
             </div>
             {summaryQ.data && (
-              <div style={{ fontSize: 12, color: tokens.slate500 }}>
-                {summaryQ.data.total_measures} measures tracked &middot; {summaryQ.data.measures_above_benchmark} above benchmark
+              <div className="text-xs" style={{ color: tokens.slate500 }}>
+                {summaryQ.data.total_measures} measures tracked &middot;{" "}
+                {summaryQ.data.measures_above_benchmark} above benchmark
               </div>
             )}
           </div>
@@ -501,32 +497,37 @@ export default function QualityPage() {
       )}
 
       {/* ── Tab Bar ── */}
-      {/* overflow-x: auto lets the strip scroll horizontally on narrow viewports */}
-      <div className="qs-fade-in qs-fade-in-2" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", borderBottom: `2px solid ${C.borderLight}`, marginBottom: 24 } as React.CSSProperties}>
-        <div style={{ display: "flex", gap: 0, minWidth: "max-content" }}>
-        {TABS.map((tab) => (
-          <button
-            key={tab}
-            className={`qs-tab-btn ${activeTab === tab ? "qs-tab-active" : ""}`}
-            onClick={() => setActiveTab(tab)}
-            style={{
-              padding: "12px 22px",
-              fontSize: 14,
-              fontWeight: 600,
-              color: activeTab === tab ? C.primary : C.textMuted,
-              background: activeTab === tab ? `${C.primary}08` : "none",
-              border: "none",
-              borderBottom: activeTab === tab ? `2px solid ${C.primary}` : "2px solid transparent",
-              borderRadius: "8px 8px 0 0",
-              marginBottom: -2,
-              cursor: "pointer",
-              letterSpacing: "0.01em",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {tab}
-          </button>
-        ))}
+      <div
+        className="qs-fade-in qs-fade-in-2 overflow-x-auto mb-6"
+        style={{
+          WebkitOverflowScrolling: "touch",
+          borderBottom: `2px solid ${C.borderLight}`,
+        } as React.CSSProperties}
+      >
+        <div className="flex min-w-max">
+          {TABS.map((tab) => (
+            <button
+              key={tab}
+              className={`qs-tab-btn ${activeTab === tab ? "qs-tab-active" : ""}`}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                padding: "12px 22px",
+                fontSize: 14,
+                fontWeight: 600,
+                color: activeTab === tab ? C.primary : C.textMuted,
+                background: activeTab === tab ? `${C.primary}08` : "none",
+                border: "none",
+                borderBottom: activeTab === tab ? `2px solid ${C.primary}` : "2px solid transparent",
+                borderRadius: "8px 8px 0 0",
+                marginBottom: -2,
+                cursor: "pointer",
+                letterSpacing: "0.01em",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {tab}
+            </button>
+          ))}
         </div>
       </div>
 

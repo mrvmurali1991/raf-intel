@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { HelpButton } from "@/components/HelpPanel";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Target,
   Plus,
@@ -44,7 +45,8 @@ function currentQuarter(): string {
 }
 
 function formatValue(metric: GoalMetric, value: number): string {
-  if (metric === "revenue") return `$${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  if (metric === "revenue")
+    return `$${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
   return value.toLocaleString("en-US", { maximumFractionDigits: 0 });
 }
 
@@ -54,27 +56,21 @@ function formatValue(metric: GoalMetric, value: number): string {
 
 /**
  * Color thresholds (relative to expected pace):
- *   >= 80 % of pace → green (on track)
+ *   >= 80 % of pace → teal (on track)
  *   50 – 79 % of pace → amber (slight lag)
- *   < 50 % of pace → red (behind pace)
- *   >= 100 % complete → green regardless
+ *   < 50 % of pace → red (at risk)
+ *   >= 100 % complete → teal regardless
  */
 function paceColor(pct: number, pace: number): string {
-  if (pct >= 100) return "bg-green-500";
-  if (pace === 0) return "bg-green-500"; // quarter hasn't started yet
-  const ratio = pct / pace; // e.g. 0.9 = 90% of what we should have hit
-  if (ratio >= 0.8) return "bg-green-500";
+  if (pct >= 100) return "bg-teal-500";
+  if (pace === 0) return "bg-teal-500"; // quarter hasn't started yet
+  const ratio = pct / pace;
+  if (ratio >= 0.8) return "bg-teal-500";
   if (ratio >= 0.5) return "bg-amber-400";
   return "bg-red-500";
 }
 
-function GoalProgressBar({
-  pct,
-  pace,
-}: {
-  pct: number;
-  pace: number;
-}) {
+function GoalProgressBar({ pct, pace }: { pct: number; pace: number }) {
   const color = paceColor(pct, pace);
   return (
     <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
@@ -86,6 +82,39 @@ function GoalProgressBar({
         aria-valuemin={0}
         aria-valuemax={100}
       />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Loading skeleton
+// ---------------------------------------------------------------------------
+
+function GoalCardSkeleton() {
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-muted animate-pulse" />
+          <div className="h-4 w-28 rounded bg-muted animate-pulse" />
+        </div>
+        <div className="h-5 w-16 rounded-full bg-muted animate-pulse" />
+      </div>
+      <div className="space-y-1.5">
+        <div className="flex justify-between">
+          <div className="h-3.5 w-14 rounded bg-muted animate-pulse" />
+          <div className="h-3.5 w-10 rounded bg-muted animate-pulse" />
+        </div>
+        <div className="w-full bg-muted rounded-full h-2.5 animate-pulse" />
+        <div className="flex justify-between">
+          <div className="h-3 w-20 rounded bg-muted animate-pulse" />
+          <div className="h-3 w-20 rounded bg-muted animate-pulse" />
+        </div>
+      </div>
+      <div className="pt-1 border-t border-border flex justify-between">
+        <div className="h-3 w-24 rounded bg-muted animate-pulse" />
+        <div className="h-3 w-16 rounded bg-muted animate-pulse" />
+      </div>
     </div>
   );
 }
@@ -118,7 +147,17 @@ function GoalCard({ goal }: { goal: RafGoal }) {
       <div className="space-y-1.5">
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Progress</span>
-          <span className={`font-semibold ${isComplete ? "text-green-600" : isRed ? "text-red-600" : isAmber ? "text-amber-600" : "text-foreground"}`}>
+          <span
+            className={`font-semibold ${
+              isComplete
+                ? "text-teal-600"
+                : isRed
+                ? "text-red-600"
+                : isAmber
+                ? "text-amber-600"
+                : "text-teal-600"
+            }`}
+          >
             {goal.percent_complete}%
           </span>
         </div>
@@ -132,10 +171,12 @@ function GoalCard({ goal }: { goal: RafGoal }) {
       <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">
         <span className="flex items-center gap-1">
           <Calendar className="h-3.5 w-3.5" />
-          {goal.days_remaining > 0 ? `${goal.days_remaining}d remaining` : "Quarter ended"}
+          {goal.days_remaining > 0
+            ? `${goal.days_remaining}d remaining`
+            : "Quarter ended"}
         </span>
         {isComplete && (
-          <span className="flex items-center gap-1 text-green-600 font-medium">
+          <span className="flex items-center gap-1 text-teal-600 font-medium">
             <CheckCircle className="h-3.5 w-3.5" />
             Goal met
           </span>
@@ -143,17 +184,17 @@ function GoalCard({ goal }: { goal: RafGoal }) {
         {isRed && (
           <span className="flex items-center gap-1 text-red-600 font-medium">
             <AlertTriangle className="h-3.5 w-3.5" />
-            Behind pace
+            At risk
           </span>
         )}
         {isAmber && (
           <span className="flex items-center gap-1 text-amber-600 font-medium">
             <AlertTriangle className="h-3.5 w-3.5" />
-            Slightly behind
+            Behind pace
           </span>
         )}
         {!isComplete && !isRed && !isAmber && (
-          <span className="flex items-center gap-1 text-green-600 font-medium">
+          <span className="flex items-center gap-1 text-teal-600 font-medium">
             <CheckCircle className="h-3.5 w-3.5" />
             On track
           </span>
@@ -194,7 +235,10 @@ function SetGoalModal({ onClose, onSave, saving }: SetGoalModalProps) {
     >
       <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5 mx-4">
         <div className="flex items-center justify-between">
-          <h2 id="set-goal-title" className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <h2
+            id="set-goal-title"
+            className="text-lg font-semibold text-foreground flex items-center gap-2"
+          >
             <Target className="h-5 w-5 text-primary" />
             Set Quarterly Goal
           </h2>
@@ -209,7 +253,10 @@ function SetGoalModal({ onClose, onSave, saving }: SetGoalModalProps) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label htmlFor="period" className="text-sm font-medium text-foreground">
+            <label
+              htmlFor="period"
+              className="text-sm font-medium text-foreground"
+            >
               Quarter
             </label>
             <input
@@ -222,11 +269,16 @@ function SetGoalModal({ onClose, onSave, saving }: SetGoalModalProps) {
               required
               className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
-            <p className="text-xs text-muted-foreground">Format: YYYY-QN (e.g. 2026-Q2)</p>
+            <p className="text-xs text-muted-foreground">
+              Format: YYYY-QN (e.g. 2026-Q2)
+            </p>
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="metric" className="text-sm font-medium text-foreground">
+            <label
+              htmlFor="metric"
+              className="text-sm font-medium text-foreground"
+            >
               Metric
             </label>
             <select
@@ -244,7 +296,10 @@ function SetGoalModal({ onClose, onSave, saving }: SetGoalModalProps) {
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="target" className="text-sm font-medium text-foreground">
+            <label
+              htmlFor="target"
+              className="text-sm font-medium text-foreground"
+            >
               Target Value
             </label>
             <input
@@ -264,7 +319,7 @@ function SetGoalModal({ onClose, onSave, saving }: SetGoalModalProps) {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-sm font-medium border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+              className="flex-1 px-4 py-2 text-sm font-medium border border-border rounded-lg hover:bg-muted transition-colors"
             >
               Cancel
             </button>
@@ -290,7 +345,11 @@ export default function GoalsPage() {
   const [showModal, setShowModal] = useState(false);
   const qc = useQueryClient();
 
-  const { data: goals = [], isLoading, isError } = useQuery({
+  const {
+    data: goals = [],
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ["goals"],
     queryFn: () => listGoals(),
     staleTime: 60_000,
@@ -308,6 +367,20 @@ export default function GoalsPage() {
   const activeGoals = goals.filter((g) => g.period === currentPeriod);
   const pastGoals = goals.filter((g) => g.period !== currentPeriod);
 
+  const headerActions = (
+    <>
+      <button
+        onClick={() => setShowModal(true)}
+        className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+        aria-label="Set a new quarterly goal"
+      >
+        <Plus className="h-4 w-4" />
+        Set Goal
+      </button>
+      <HelpButton />
+    </>
+  );
+
   return (
     <>
       {showModal && (
@@ -319,37 +392,28 @@ export default function GoalsPage() {
       )}
 
       <div className="container mx-auto p-6 space-y-8 max-w-5xl">
-        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 max-lg:pl-14">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground flex items-center gap-2">
-              <Target className="h-6 w-6 text-primary" />
-              Quarterly Goals
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Track RAF capture targets vs actuals for the current quarter.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            <button
-              onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
-              aria-label="Set a new quarterly goal"
-            >
-              <Plus className="h-4 w-4" />
-              Set Goal
-            </button>
-            <HelpButton />
-          </div>
-        </header>
+        <PageHeader
+          title="Quarterly Goals"
+          subtitle="Track RAF capture targets vs actuals for the current quarter."
+          icon={<Target className="h-5 w-5" />}
+          actions={headerActions}
+        />
 
+        {/* Loading state */}
         {isLoading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-40 rounded-xl bg-muted animate-pulse" />
-            ))}
+          <div className="space-y-8">
+            <section className="space-y-3">
+              <div className="h-4 w-32 rounded bg-muted animate-pulse" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[1, 2, 3].map((i) => (
+                  <GoalCardSkeleton key={i} />
+                ))}
+              </div>
+            </section>
           </div>
         )}
 
+        {/* Error state */}
         {isError && (
           <div className="rounded-xl bg-red-50 border border-red-200 p-5 text-sm text-red-700 flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -357,7 +421,33 @@ export default function GoalsPage() {
           </div>
         )}
 
-        {!isLoading && !isError && (
+        {/* Empty state — no goals at all */}
+        {!isLoading && !isError && goals.length === 0 && (
+          <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-20 px-6 text-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+              <Target className="h-7 w-7" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-base font-semibold text-foreground">
+                No quarterly goals set
+              </p>
+              <p className="text-sm text-muted-foreground max-w-xs">
+                Define targets for RAF captures, revenue, or gaps closed to
+                track your team's progress each quarter.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+            >
+              <Plus className="h-4 w-4" />
+              Create your first goal
+            </button>
+          </div>
+        )}
+
+        {/* Goals list */}
+        {!isLoading && !isError && goals.length > 0 && (
           <>
             <section className="space-y-3">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">

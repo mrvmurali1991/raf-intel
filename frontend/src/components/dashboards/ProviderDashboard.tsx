@@ -34,23 +34,22 @@ function KPISkeleton() {
       role="status"
     >
       {/* Header bar skeleton */}
-      <div style={{ marginBottom: 24 }}>
+      <div className="mb-6">
         <Pulse w={220} h={26} r={8} />
-        <div style={{ height: 8 }} />
+        <div className="h-2" />
         <Pulse w={340} h={14} />
       </div>
-      <div style={{ paddingBottom: 24 }} />
       {/* 4-up KPI cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 32 }}>
+      <div className="grid grid-cols-4 gap-5 mb-8">
         {[1, 2, 3, 4].map((i) => (
           <div
             key={i}
-            className="bg-card border border-border/40 rounded-2xl p-6 shadow-sm"
-            style={{ minHeight: 160, display: "flex", flexDirection: "column", justifyContent: "space-between" }}
+            className="rounded-lg border bg-card p-6 shadow-sm flex flex-col justify-between"
+            style={{ minHeight: 160 }}
           >
             <div>
               <Pulse w={100} h={14} />
-              <div style={{ height: 12 }} />
+              <div className="h-3" />
               <Pulse w={80} h={32} />
             </div>
             <Pulse w={120} h={12} />
@@ -58,18 +57,18 @@ function KPISkeleton() {
         ))}
       </div>
       {/* "Where to start" action cards skeleton */}
-      <div style={{ marginBottom: 8 }}>
+      <div className="mb-2">
         <Pulse w={140} h={18} r={6} />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, marginTop: 16 }}>
+      <div className="grid grid-cols-3 gap-5 mt-4">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="bg-card border border-border/40 rounded-2xl p-6 shadow-sm" style={{ minHeight: 110 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <div key={i} className="rounded-lg border bg-card p-6 shadow-sm" style={{ minHeight: 110 }}>
+            <div className="flex items-center gap-2.5 mb-3">
               <Pulse w={24} h={24} r={6} />
               <Pulse w={140} h={18} />
             </div>
             <Pulse w="100%" h={14} />
-            <div style={{ height: 6 }} />
+            <div className="h-1.5" />
             <Pulse w="80%" h={14} />
           </div>
         ))}
@@ -123,63 +122,63 @@ export function ProviderDashboard() {
           subtitle="Patients you should see this week, gaps to close, and your RAF performance at a glance."
         />
 
-        <div style={{ paddingBottom: 24 }} />
-
-        <div
-          style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 32 }}
-          role="status"
-          aria-live="polite"
-        >
-          <MetricCard
-            label="Open recapture gaps"
-            value={stats?.open_recapture_gaps ?? "—"}
-            subtitle="HCCs from prior year not yet documented"
-            icon={<FileText size={20} />}
-            intent="danger"
-            href="/recapture"
-            trend={kpiTrends?.open_gaps?.length ? kpiTrends.open_gaps : undefined}
-            delta={kpiTrends?.deltas?.open_gaps != null ? -(kpiTrends.deltas.open_gaps) : undefined}
-            actionLink={{ label: "View worklist", href: "/worklist" }}
-          />
-          <MetricCard
-            label="Suspect conditions"
-            value={stats?.total_suspects_open ?? "—"}
-            subtitle="AI-flagged suggestions awaiting your review"
-            icon={<Activity size={20} />}
-            intent="warning"
-            href="/suspects"
-            trend={kpiTrends?.suspects?.length ? kpiTrends.suspects : undefined}
-            delta={kpiTrends?.deltas?.suspects ?? undefined}
-          />
-          <MetricCard
-            label="Panel patients"
-            value={stats?.total_patients ?? "—"}
-            subtitle="Under your care"
-            icon={<Users size={20} />}
-            intent="default"
-            href="/patients"
-            trend={kpiTrends?.panel_patients?.length ? kpiTrends.panel_patients : undefined}
-            delta={kpiTrends?.deltas?.panel_patients ?? undefined}
-          />
-          <MetricCard
-            label="Average RAF"
-            value={stats?.average_raf_score ? stats.average_raf_score.toFixed(3) : "—"}
-            subtitle="Across your panel"
-            icon={<CheckCircle size={20} />}
-            intent="success"
-            href="/providers"
-            trend={kpiTrends?.avg_raf?.length ? kpiTrends.avg_raf : undefined}
-            delta={kpiTrends?.deltas?.avg_raf ?? undefined}
-          />
+        <div className="mt-6">
+          <div
+            className="grid grid-cols-4 gap-5 mb-8"
+            role="status"
+            aria-live="polite"
+          >
+            <MetricCard
+              label="Open Recapture Gaps"
+              value={stats?.open_recapture_gaps ?? "—"}
+              subtitle="HCCs from prior year not yet documented"
+              icon={<FileText size={18} />}
+              intent="danger"
+              href="/recapture"
+              trend={kpiTrends?.open_gaps?.length ? kpiTrends.open_gaps : undefined}
+              delta={kpiTrends?.deltas?.open_gaps != null ? -(kpiTrends.deltas.open_gaps) : undefined}
+              actionLink={{ label: "View worklist", href: "/worklist" }}
+            />
+            <MetricCard
+              label="Suspect Conditions"
+              value={stats?.total_suspects_open ?? "—"}
+              subtitle="AI-flagged suggestions awaiting your review"
+              icon={<Activity size={18} />}
+              intent="warning"
+              href="/suspects"
+              trend={kpiTrends?.suspects?.length ? kpiTrends.suspects : undefined}
+              delta={kpiTrends?.deltas?.suspects ?? undefined}
+            />
+            <MetricCard
+              label="Panel Patients"
+              value={stats?.total_patients ?? "—"}
+              subtitle="Under your care"
+              icon={<Users size={18} />}
+              intent="default"
+              href="/patients"
+              trend={kpiTrends?.panel_patients?.length ? kpiTrends.panel_patients : undefined}
+              delta={kpiTrends?.deltas?.panel_patients ?? undefined}
+            />
+            <MetricCard
+              label="Average RAF"
+              value={stats?.average_raf_score ? stats.average_raf_score.toFixed(3) : "—"}
+              subtitle="Across your panel"
+              icon={<CheckCircle size={18} />}
+              intent="success"
+              href="/providers"
+              trend={kpiTrends?.avg_raf?.length ? kpiTrends.avg_raf : undefined}
+              delta={kpiTrends?.deltas?.avg_raf ?? undefined}
+            />
+          </div>
         </div>
 
         <SectionHeader title="Where to start" />
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, marginTop: 16 }}>
+        <div className="grid grid-cols-3 gap-5 mt-4">
           {/* primary action — teal */}
-          <Link href="/worklist" className="block p-6 bg-card border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
+          <Link href="/worklist" className="block p-6 rounded-lg border bg-card shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center gap-3 text-teal-700 dark:text-teal-400 mb-2">
-              <Stethoscope size={24} />
-              <span className="font-semibold text-lg text-foreground">Today's worklist</span>
+              <Stethoscope size={22} />
+              <span className="font-semibold text-base text-foreground">Today's worklist</span>
             </div>
             <p className="text-muted-foreground text-sm">
               Patients prioritized for you this week — open gaps, suspect
@@ -187,10 +186,10 @@ export function ProviderDashboard() {
             </p>
           </Link>
           {/* urgency / warning — amber */}
-          <Link href="/recapture" className="block p-6 bg-card border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
+          <Link href="/recapture" className="block p-6 rounded-lg border bg-card shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center gap-3 text-amber-600 dark:text-amber-400 mb-2">
-              <FileText size={24} />
-              <span className="font-semibold text-lg text-foreground">Close recapture gaps</span>
+              <FileText size={22} />
+              <span className="font-semibold text-base text-foreground">Close recapture gaps</span>
             </div>
             <p className="text-muted-foreground text-sm">
               Patients with HCCs documented last year that haven't been re-coded
@@ -198,13 +197,13 @@ export function ProviderDashboard() {
             </p>
           </Link>
           {/* info — slate */}
-          <Link href="/suspects" className="block p-6 bg-card border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
+          <Link href="/suspects" className="block p-6 rounded-lg border bg-card shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center gap-3 text-slate-600 dark:text-slate-400 mb-2">
-              <Activity size={24} />
-              <span className="font-semibold text-lg text-foreground">Review suspect conditions</span>
+              <Activity size={22} />
+              <span className="font-semibold text-base text-foreground">Review suspect conditions</span>
             </div>
             <p className="text-muted-foreground text-sm">
-              AI-suggested HCCs with KG-traced evidence chains.  Approve, reject,
+              AI-suggested HCCs with KG-traced evidence chains. Approve, reject,
               or request more documentation in one click.
             </p>
           </Link>

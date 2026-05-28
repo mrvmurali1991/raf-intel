@@ -35,7 +35,8 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
-import { PageHeader } from "@/components/healthcare-ui";
+import { PageHeader } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 import { HelpButton } from "@/components/HelpPanel";
 import { tokens } from "@/styles/tokens";
 import DataQualityBanner from "@/components/DataQualityBanner";
@@ -174,8 +175,6 @@ const ELEVATED_ROLES = new Set(["admin", "super_admin", "manager", "supervisor"]
 
 // ---------------------------------------------------------------------------
 // WT — thin wrapper: TooltipProvider + Tooltip + Trigger + Content
-// Renders children as the trigger; text is the tooltip message.
-// delay defaults to 200 ms per design spec.
 // ---------------------------------------------------------------------------
 
 function WT({
@@ -227,30 +226,12 @@ function Toast({
     <div
       role="status"
       aria-live="polite"
-      style={{
-        position: "fixed",
-        bottom: 24,
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 9999,
-        background: tokens.slate900,
-        color: tokens.white,
-        padding: "12px 20px",
-        borderRadius: 10,
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        fontSize: 13,
-        fontWeight: 500,
-        boxShadow: "0 8px 32px rgba(15,23,42,0.35)",
-        maxWidth: "90vw",
-        whiteSpace: "nowrap",
-      }}
+      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 rounded-[10px] bg-slate-900 text-white px-5 py-3 text-[13px] font-medium shadow-2xl max-w-[90vw] whitespace-nowrap"
     >
-      <CheckSquare size={16} style={{ flexShrink: 0, color: "#34d399" }} />
+      <CheckSquare size={16} className="shrink-0 text-emerald-400" />
       <span>{message}</span>
       {linkHref && linkLabel && (
-        <Link href={linkHref} style={{ color: "#67e8f9", fontWeight: 700, textDecoration: "underline" }}>
+        <Link href={linkHref} className="text-cyan-300 font-bold underline">
           {linkLabel}
         </Link>
       )}
@@ -258,7 +239,7 @@ function Toast({
         type="button"
         onClick={onDismiss}
         aria-label="Dismiss notification"
-        style={{ background: "none", border: "none", color: tokens.slate400, cursor: "pointer", padding: 0, marginLeft: 4, display: "flex", alignItems: "center" }}
+        className="flex items-center text-slate-400 cursor-pointer bg-transparent border-none p-0 ml-1"
       >
         <X size={14} />
       </button>
@@ -269,6 +250,8 @@ function Toast({
 // ---------------------------------------------------------------------------
 // WorklistBulkActionsBar
 // ---------------------------------------------------------------------------
+
+const BRAND = "#0F766E";
 
 function WorklistBulkActionsBar({
   selectedCount,
@@ -291,44 +274,47 @@ function WorklistBulkActionsBar({
   attesting: boolean;
   exporting: boolean;
 }) {
-  const brand = "#0F766E";
   if (selectedCount === 0) return null;
   return (
     <div
       role="region"
       aria-label="Bulk actions"
-      style={{
-        position: "sticky",
-        top: 0,
-        zIndex: 40,
-        display: "flex",
-        alignItems: "center",
-        flexWrap: "wrap",
-        gap: 10,
-        padding: "10px 16px",
-        borderBottom: `2px solid ${brand}`,
-        background: "rgba(15,118,110,0.08)",
-        backdropFilter: "blur(4px)",
-        WebkitBackdropFilter: "blur(4px)",
-      }}
+      className="sticky top-0 z-40 flex items-center flex-wrap gap-2.5 px-4 py-2.5 border-b-2 border-teal-600 bg-teal-600/[0.08] backdrop-blur-sm"
     >
       <span className="sr-only" aria-live="polite" aria-atomic="true">
         {selectedCount} patient{selectedCount === 1 ? "" : "s"} selected
       </span>
-      <span style={{ display: "inline-flex", alignItems: "center", background: brand, color: tokens.white, borderRadius: 999, padding: "3px 12px", fontSize: 12, fontWeight: 700 }}>
+
+      {/* Selected count badge */}
+      <span
+        className="inline-flex items-center rounded-full px-3 py-0.5 text-xs font-bold text-white"
+        style={{ background: BRAND }}
+      >
         {selectedCount} selected
       </span>
-      <button type="button" onClick={onClear} aria-label="Clear selection" style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: "hsl(var(--card))", color: tokens.slate700, fontSize: 12, cursor: "pointer" }}>
+
+      <button
+        type="button"
+        onClick={onClear}
+        aria-label="Clear selection"
+        className="px-2.5 py-1 rounded-md border border-border bg-card text-slate-700 text-xs cursor-pointer"
+      >
         Clear
       </button>
+
       {selectedCount < totalCount && (
-        <button type="button" onClick={onSelectAll} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: "hsl(var(--card))", color: tokens.slate700, fontSize: 12, cursor: "pointer" }}>
+        <button
+          type="button"
+          onClick={onSelectAll}
+          className="px-2.5 py-1 rounded-md border border-border bg-card text-slate-700 text-xs cursor-pointer"
+        >
           Select all {totalCount}
         </button>
       )}
-      <div style={{ width: 1, height: 20, background: tokens.slate200, flexShrink: 0 }} />
 
-      {/* Bulk action: Send to Attestation */}
+      <div className="w-px h-5 bg-border shrink-0" />
+
+      {/* Send to Attestation */}
       <WT
         text="Submit selected patients for HCC gap attestation. Creates a structured attestation record for each patient and sends to your coding queue."
         side="bottom"
@@ -339,14 +325,15 @@ function WorklistBulkActionsBar({
           disabled={attesting}
           aria-label={`Send ${selectedCount} patients to attestation`}
           data-testid="bulk-attest-btn"
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 6, border: "none", background: attesting ? tokens.slate300 : brand, color: tokens.white, fontSize: 12, fontWeight: 600, cursor: attesting ? "not-allowed" : "pointer" }}
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md border-none text-white text-xs font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+          style={{ background: attesting ? tokens.slate300 : BRAND, cursor: attesting ? "not-allowed" : "pointer" }}
         >
-          {attesting ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <FileText size={13} />}
+          {attesting ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
           {attesting ? "Creating…" : "Send to Attestation"}
         </button>
       </WT>
 
-      {/* Bulk action: Schedule AWV */}
+      {/* Schedule AWV */}
       <WT
         text="Open the calendar to batch-schedule Annual Wellness Visits for all selected patients before the payment year closes."
         side="bottom"
@@ -356,14 +343,15 @@ function WorklistBulkActionsBar({
           onClick={onScheduleAWV}
           aria-label={`Schedule AWV for ${selectedCount} patients`}
           data-testid="bulk-schedule-awv-btn"
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 6, border: `1px solid ${brand}`, background: "hsl(var(--card))", color: brand, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-card text-xs font-semibold cursor-pointer"
+          style={{ border: `1px solid ${BRAND}`, color: BRAND }}
         >
           <CalendarClock size={13} />
           Schedule AWV
         </button>
       </WT>
 
-      {/* Bulk action: Export CSV */}
+      {/* Export CSV */}
       <WT
         text="Download a CSV of selected patients with RAF scores, open gaps, revenue at risk, and AWV status for offline review or reporting."
         side="bottom"
@@ -374,14 +362,15 @@ function WorklistBulkActionsBar({
           disabled={exporting}
           aria-label={`Export ${selectedCount} patients to CSV`}
           data-testid="export-csv-worklist"
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: "hsl(var(--card))", color: tokens.slate700, fontSize: 12, fontWeight: 600, cursor: exporting ? "not-allowed" : "pointer" }}
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md border border-border bg-card text-slate-700 text-xs font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+          style={{ cursor: exporting ? "not-allowed" : "pointer" }}
         >
-          {exporting ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Download size={13} />}
+          {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
           {exporting ? "Exporting…" : "Export CSV"}
         </button>
       </WT>
 
-      <span aria-hidden style={{ marginLeft: "auto", fontSize: 11, color: tokens.slate500, fontStyle: "italic" }}>
+      <span aria-hidden className="ml-auto text-[11px] text-slate-500 italic">
         Shift+Click range · Cmd/Ctrl+A all · Esc clear
       </span>
     </div>
@@ -405,30 +394,43 @@ function AWVBatchModal({ selectedCount, onClose }: { selectedCount: number; onCl
       aria-modal="true"
       aria-label="Schedule AWV for selected patients"
       tabIndex={-1}
-      style={{ position: "fixed", inset: 0, zIndex: 9990, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+      className="fixed inset-0 z-[9990] flex items-center justify-center p-4 bg-black/60"
       onClick={onClose}
     >
       <div
-        style={{ background: "hsl(var(--card))", borderRadius: 12, boxShadow: "0 12px 48px rgba(15,23,42,0.25)", width: "100%", maxWidth: 480, padding: 24 }}
+        className="bg-card rounded-xl shadow-2xl w-full max-w-[480px] p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: tokens.slate900 }}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="m-0 text-base font-bold text-foreground">
             Schedule AWV — {selectedCount} patient{selectedCount === 1 ? "" : "s"}
           </h3>
-          <button type="button" onClick={onClose} aria-label="Close" style={{ background: "none", border: "none", cursor: "pointer", color: tokens.slate500, display: "flex" }}>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex items-center bg-transparent border-none cursor-pointer text-muted-foreground"
+          >
             <X size={18} />
           </button>
         </div>
-        <p style={{ fontSize: 13, color: tokens.slate600, margin: "0 0 16px" }}>
+        <p className="text-[13px] text-muted-foreground mb-4">
           Batch AWV scheduling is managed in the Calendar module. Open the calendar to assign
           appointment slots for all {selectedCount} selected patient{selectedCount === 1 ? "" : "s"}.
         </p>
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button type="button" onClick={onClose} style={{ padding: "7px 14px", borderRadius: 6, border: `1px solid ${tokens.slate300}`, background: "hsl(var(--card))", color: tokens.slate700, fontSize: 13, cursor: "pointer" }}>
+        <div className="flex gap-2 justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3.5 py-1.5 rounded-md border border-border bg-card text-muted-foreground text-[13px] cursor-pointer"
+          >
             Cancel
           </button>
-          <Link href="/appointments" style={{ padding: "7px 16px", borderRadius: 6, background: "#0F766E", color: tokens.white, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+          <Link
+            href="/appointments"
+            className="px-4 py-1.5 rounded-md text-[13px] font-semibold text-white no-underline"
+            style={{ background: BRAND }}
+          >
             Open Calendar
           </Link>
         </div>
@@ -600,11 +602,15 @@ export default function WorklistPage() {
 
   if (authLoading || (queryProviderId != null && isLoading)) {
     return (
-      <div style={{ padding: "20px 16px" }} className="rci-page-pad-desktop">
-        <PageHeader title="Today's worklist" subtitle="Loading prioritized patients…" />
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16, marginTop: 16 }}>
+      <div className="p-6">
+        <PageHeader
+          title="Today's worklist"
+          subtitle="Loading prioritized patients…"
+          icon={<Stethoscope size={20} />}
+        />
+        <div className="grid gap-4 mt-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
           {[1, 2, 3].map((i) => (
-            <div key={i} className="premium-card shimmer" style={{ height: 140, borderRadius: 10 }} />
+            <div key={i} className="premium-card shimmer h-[140px] rounded-lg" />
           ))}
         </div>
       </div>
@@ -613,9 +619,9 @@ export default function WorklistPage() {
 
   if (queryProviderId == null) {
     return (
-      <div style={{ padding: "20px 16px" }} className="rci-page-pad-desktop">
-        <PageHeader title="Today's worklist" />
-        <div style={{ marginTop: 16, padding: 16, borderRadius: 10, background: tokens.warningSoft, border: `1px solid ${tokens.warningBorder}`, color: tokens.warningText, fontSize: 14 }}>
+      <div className="p-6">
+        <PageHeader title="Today's worklist" icon={<Stethoscope size={20} />} />
+        <div className="mt-4 p-4 rounded-lg border text-sm" style={{ background: tokens.warningSoft, borderColor: tokens.warningBorder, color: tokens.warningText }}>
           Sign in to view your worklist.
         </div>
       </div>
@@ -624,18 +630,23 @@ export default function WorklistPage() {
 
   if (isError || !data) {
     return (
-      <div style={{ padding: "20px 16px" }} className="rci-page-pad-desktop">
-        <PageHeader title="Today's worklist" />
-        <div role="alert" style={{ marginTop: 16, padding: 14, borderRadius: 10, background: tokens.dangerSoft, border: `1px solid ${tokens.dangerBorder}`, color: tokens.danger, display: "flex", alignItems: "center", gap: 10, fontSize: 14 }}>
-          <AlertTriangle size={18} />
-          <span style={{ flex: 1 }}>
+      <div className="p-6">
+        <PageHeader title="Today's worklist" icon={<Stethoscope size={20} />} />
+        <div
+          role="alert"
+          className="mt-4 p-4 rounded-lg border flex items-center gap-2.5 text-sm"
+          style={{ background: tokens.dangerSoft, borderColor: tokens.dangerBorder, color: tokens.danger }}
+        >
+          <AlertTriangle size={18} className="shrink-0" />
+          <span className="flex-1">
             Couldn't load your worklist{error instanceof Error ? `: ${error.message}` : ""}
           </span>
           <button
             type="button"
             onClick={() => refetch()}
             aria-label="Retry loading worklist"
-            style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${tokens.dangerBorder}`, background: "hsl(var(--card))", color: tokens.danger, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            className="px-3 py-1.5 rounded-lg border text-[13px] font-semibold cursor-pointer bg-card"
+            style={{ borderColor: tokens.dangerBorder, color: tokens.danger }}
           >
             Retry
           </button>
@@ -644,21 +655,30 @@ export default function WorklistPage() {
     );
   }
 
+  // Empty state — no items and not elevated (elevated users may still use
+  // provider filter, so they see the full layout with an inline empty notice)
   if (data.items.length === 0 && !isElevated) {
     return (
-      <div style={{ padding: "20px 16px" }} className="rci-page-pad-desktop">
-        <PageHeader title="Today's worklist" subtitle={`Measurement year ${measurementYear}`} />
-        <div style={{ marginTop: 24, padding: "32px 20px", borderRadius: 10, background: tokens.successSoft, border: `1px solid ${tokens.success}`, color: tokens.successDark, textAlign: "center" }}>
-          <Stethoscope size={28} style={{ marginBottom: 8 }} />
-          <h2 style={{ margin: "0 0 6px", fontSize: 18, fontWeight: 700 }}>You're caught up</h2>
-          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>
-            No prioritized patients to see this week.
-          </p>
-          <div style={{ marginTop: 16, display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-            <Link href="/patients" style={{ padding: "8px 16px", borderRadius: 8, background: "hsl(var(--card))", color: tokens.successDark, border: `1px solid ${tokens.success}`, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
-              View full panel
-            </Link>
-            <Link href="/recapture" style={{ padding: "8px 16px", borderRadius: 8, background: tokens.successDark, color: tokens.white, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+      <div className="p-6">
+        <PageHeader
+          title="Today's worklist"
+          subtitle={`Measurement year ${measurementYear}`}
+          icon={<Stethoscope size={20} />}
+        />
+        <div className="mt-6">
+          <EmptyState
+            state="complete"
+            icon={<Stethoscope size={24} />}
+            title="No items in your worklist today"
+            description="All open gaps and AWV actions are up to date. Check back as new gaps are identified."
+            cta={{ label: "View full panel", href: "/patients" }}
+          />
+          <div className="flex gap-3 justify-center mt-4">
+            <Link
+              href="/recapture"
+              className="px-4 py-2 rounded-lg text-[13px] font-semibold text-white no-underline"
+              style={{ background: tokens.successDark }}
+            >
               Open recapture report
             </Link>
           </div>
@@ -682,26 +702,28 @@ export default function WorklistPage() {
         exporting={exporting}
       />
 
-      <div style={{ padding: "20px 16px", maxWidth: 1280, margin: "0 auto" }} className="rci-page-pad-desktop">
+      <div className="p-6 max-w-[1280px] mx-auto">
         <DataQualityBanner />
+
         <PageHeader
           title="Today's worklist"
           subtitle={`${summary.patients} patient${summary.patients === 1 ? "" : "s"} prioritized for ${measurementYear}`}
+          icon={<Stethoscope size={20} />}
           actions={<HelpButton />}
         />
 
         {/* Provider Workload Heatmap — elevated roles only */}
         {isElevated && (
           <section
-            style={{ marginTop: 20, borderRadius: 10, border: `1px solid ${tokens.slate200}`, background: "hsl(var(--card))", overflow: "hidden" }}
+            className="mt-5 rounded-lg border border-border bg-card overflow-hidden"
             aria-label="Provider workload heatmap"
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: heatmapOpen ? `1px solid ${tokens.slate100}` : "none", background: "hsl(var(--muted))" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Users size={16} color={tokens.slate600} />
-                <span style={{ fontWeight: 700, fontSize: 14, color: tokens.slate800 }}>Provider Workload</span>
+            <div className={`flex items-center justify-between px-4 py-3 bg-muted${heatmapOpen ? " border-b border-border" : ""}`}>
+              <div className="flex items-center gap-2">
+                <Users size={16} className="text-muted-foreground" />
+                <span className="font-bold text-sm text-foreground">Provider Workload</span>
                 {workloadData && (
-                  <span style={{ fontSize: 12, color: tokens.slate500, fontWeight: 400 }}>
+                  <span className="text-xs text-muted-foreground font-normal">
                     — Total open: {workloadData.total_open_gaps} gaps
                   </span>
                 )}
@@ -711,26 +733,28 @@ export default function WorklistPage() {
                 aria-expanded={heatmapOpen}
                 aria-label={heatmapOpen ? "Collapse workload heatmap" : "Expand workload heatmap"}
                 onClick={() => setHeatmapOpen((v) => !v)}
-                style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: `1px solid ${tokens.slate200}`, background: "hsl(var(--card))", color: tokens.slate600, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-border bg-card text-muted-foreground text-xs font-semibold cursor-pointer"
               >
                 {heatmapOpen ? <><ChevronUp size={13} /> Collapse</> : <><ChevronDown size={13} /> Expand</>}
               </button>
             </div>
 
             {heatmapOpen && (
-              <div style={{ padding: "12px 16px 16px" }}>
+              <div className="px-4 pt-3 pb-4">
                 {workloadLoading && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {[1, 2, 3].map((i) => <div key={i} className="shimmer" style={{ height: 36, borderRadius: 6 }} />)}
+                  <div className="flex flex-col gap-2">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="shimmer h-9 rounded-md" />
+                    ))}
                   </div>
                 )}
                 {!workloadLoading && (!workloadData || workloadData.providers.length === 0) && (
-                  <p style={{ margin: 0, fontSize: 13, color: tokens.slate500 }}>
+                  <p className="m-0 text-[13px] text-muted-foreground">
                     No provider data available for {measurementYear}.
                   </p>
                 )}
                 {!workloadLoading && workloadData && workloadData.providers.length > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div className="flex flex-col gap-1.5">
                     {workloadData.providers.map((prov) => (
                       <HeatmapRow
                         key={prov.provider_id}
@@ -747,8 +771,11 @@ export default function WorklistPage() {
           </section>
         )}
 
-        {/* Summary strip — 4 tiles incl. AWV (CMS G0136 2026 lever) */}
-        <div style={{ marginTop: 16, marginBottom: isElevated ? 8 : 24, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+        {/* Summary tiles — 4 KPI cards */}
+        <div
+          className={`grid gap-3 mt-4 ${isElevated ? "mb-2" : "mb-6"}`}
+          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}
+        >
           <WT
             text={`${summary.patients} patient${summary.patients === 1 ? "" : "s"} in your panel have open HCC gaps or AWV actions due this measurement year.`}
             side="bottom"
@@ -766,7 +793,7 @@ export default function WorklistPage() {
             </div>
           </WT>
           <WT
-            text={`Estimated incremental revenue at risk if open HCC gaps are not recaptured this measurement year. Calculated at the MA rate of ~$9,000 per RAF point.`}
+            text="Estimated incremental revenue at risk if open HCC gaps are not recaptured this measurement year. Calculated at the MA rate of ~$9,000 per RAF point."
             side="bottom"
           >
             <div data-testid="tile-revenue-at-risk">
@@ -790,7 +817,11 @@ export default function WorklistPage() {
 
         {/* Provider filter pills — elevated only */}
         {isElevated && providerPills.length > 0 && (
-          <div role="group" aria-label="Filter by provider" style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12, marginBottom: 20 }}>
+          <div
+            role="group"
+            aria-label="Filter by provider"
+            className="flex flex-wrap gap-1.5 mt-3 mb-5"
+          >
             <WT text="Show worklist across all providers in your organization.">
               <span>
                 <ProviderPill label="All providers" count={null} active={filterProviderId === null} onClick={() => setFilterProviderId(null)} />
@@ -814,14 +845,21 @@ export default function WorklistPage() {
           </div>
         )}
 
-        {/* Patient cards */}
+        {/* Patient cards grid — or inline empty state for elevated users with no filtered results */}
         {visibleItems.length === 0 ? (
-          <div style={{ marginTop: 8, padding: "28px 20px", borderRadius: 10, background: tokens.successSoft, border: `1px solid ${tokens.success}`, color: tokens.successDark, textAlign: "center" }}>
-            <Stethoscope size={24} style={{ marginBottom: 6 }} />
-            <p style={{ margin: 0, fontSize: 14 }}>No patients for the selected provider.</p>
+          <div className="mt-2">
+            <EmptyState
+              state="filtered-out"
+              icon={<Stethoscope size={24} />}
+              title="No items in your worklist today"
+              description="No patients match the selected provider filter."
+            />
           </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
+          <div
+            className="grid gap-4"
+            style={{ gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}
+          >
             {visibleItems.map((item, index) => (
               <PatientCard
                 key={item.patient_id}
@@ -848,8 +886,6 @@ export default function WorklistPage() {
           onDismiss={() => setBulkToast(null)}
         />
       )}
-
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </>
   );
 }
@@ -882,16 +918,25 @@ function HeatmapRow({
         aria-pressed={isSelected}
         aria-label={`${prov.provider_name}: ${prov.capacity_pct}% capacity. Click to filter.`}
         data-testid={`heatmap-row-${prov.provider_id}`}
-        style={{ display: "grid", gridTemplateColumns: "180px 1fr 120px", alignItems: "center", gap: 12, padding: "6px 8px", borderRadius: 8, border: isSelected ? `1.5px solid ${barColor}` : `1px solid ${tokens.slate100}`, background: isSelected ? `${barColor}0D` : "transparent", cursor: "pointer", textAlign: "left", width: "100%" }}
+        className="grid items-center gap-3 px-2 py-1.5 rounded-lg cursor-pointer text-left w-full transition-colors"
+        style={{
+          gridTemplateColumns: "180px 1fr 120px",
+          border: isSelected ? `1.5px solid ${barColor}` : `1px solid ${tokens.slate100}`,
+          background: isSelected ? `${barColor}0D` : "transparent",
+        }}
       >
-        <span style={{ fontSize: 13, fontWeight: 600, color: tokens.slate800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span className="text-[13px] font-semibold text-foreground overflow-hidden text-ellipsis whitespace-nowrap">
           {prov.provider_name}
         </span>
-        <div style={{ height: 10, borderRadius: 999, background: tokens.slate100, overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${barPct}%`, background: barColor, borderRadius: 999, transition: "width 300ms ease" }} />
+        <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+          <div
+            className="h-full rounded-full transition-[width] duration-300"
+            style={{ width: `${barPct}%`, background: barColor }}
+          />
         </div>
-        <span style={{ fontSize: 12, color: tokens.slate500, whiteSpace: "nowrap", textAlign: "right" }}>
-          <span style={{ fontWeight: 700, color: barColor }}>{prov.capacity_pct}%</span>{" · "}{prov.total_workload} tasks
+        <span className="text-xs text-muted-foreground whitespace-nowrap text-right">
+          <span className="font-bold" style={{ color: barColor }}>{prov.capacity_pct}%</span>
+          {" · "}{prov.total_workload} tasks
         </span>
       </button>
     </WT>
@@ -908,11 +953,22 @@ function ProviderPill({ label, count, active, onClick }: { label: string; count:
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 12px", borderRadius: 999, border: `1.5px solid ${active ? tokens.primary : tokens.slate200}`, background: active ? tokens.primarySoft : "hsl(var(--card))", color: active ? tokens.primary : tokens.slate600, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 100ms ease", whiteSpace: "nowrap" }}
+      className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold cursor-pointer transition-all duration-100 whitespace-nowrap border"
+      style={{
+        borderColor: active ? tokens.primary : tokens.slate200,
+        background: active ? tokens.primarySoft : "hsl(var(--card))",
+        color: active ? tokens.primary : tokens.slate600,
+      }}
     >
       {label}
       {count !== null && (
-        <span style={{ padding: "1px 6px", borderRadius: 999, background: active ? tokens.primary : tokens.slate200, color: active ? tokens.white : tokens.slate600, fontSize: 11 }}>
+        <span
+          className="px-1.5 py-px rounded-full text-[11px]"
+          style={{
+            background: active ? tokens.primary : tokens.slate200,
+            color: active ? tokens.white : tokens.slate600,
+          }}
+        >
           {count}
         </span>
       )}
@@ -926,13 +982,16 @@ function ProviderPill({ label, count, active, onClick }: { label: string; count:
 
 function SummaryTile({ label, value, icon, color }: { label: string; value: string | number; icon: React.ReactNode; color: string }) {
   return (
-    <div style={{ padding: "14px 16px", borderRadius: 10, background: "hsl(var(--card))", border: `1px solid ${tokens.slate200}`, display: "flex", alignItems: "center", gap: 12, cursor: "default" }}>
-      <div style={{ width: 36, height: 36, borderRadius: 10, background: `${color}1A`, color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+    <div className="flex items-center gap-3 px-4 py-3.5 rounded-lg bg-card border border-border cursor-default">
+      <div
+        className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+        style={{ background: `${color}1A`, color }}
+      >
         {icon}
       </div>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: tokens.slate500, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
-        <div className="tabular-nums" style={{ fontSize: 22, fontWeight: 700, color: tokens.slate900, lineHeight: 1.1 }}>{value}</div>
+      <div className="min-w-0">
+        <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{label}</div>
+        <div className="tabular-nums text-[22px] font-bold text-foreground leading-tight">{value}</div>
       </div>
     </div>
   );
@@ -952,7 +1011,6 @@ function PatientCard({
   onSelect: (shiftKey: boolean) => void;
 }) {
   const band = priorityBand(item.priority_score);
-  const brand = "#0F766E";
 
   const handleCheckboxClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -961,7 +1019,6 @@ function PatientCard({
   };
 
   const handleCardClick = (e: React.MouseEvent) => {
-    // When a selection is already active or shift is held, toggle instead of navigating
     if (isSelected || e.shiftKey) {
       e.preventDefault();
       onSelect(e.shiftKey);
@@ -969,7 +1026,7 @@ function PatientCard({
   };
 
   return (
-    <div style={{ position: "relative" }}>
+    <div className="relative">
       {/* 16px checkbox — always visible, positioned top-left */}
       <WT
         text="Select this patient for a bulk action (Send to Attestation, Schedule AWV, or Export CSV). Shift+Click to select a range."
@@ -983,22 +1040,10 @@ function PatientCard({
           aria-label={`Select ${item.patient_name}`}
           onClick={handleCheckboxClick}
           data-testid={`card-checkbox-${item.patient_id}`}
+          className="absolute top-2.5 left-2.5 z-10 w-4 h-4 rounded flex items-center justify-center p-0 transition-colors duration-100 cursor-pointer"
           style={{
-            position: "absolute",
-            top: 10,
-            left: 10,
-            zIndex: 10,
-            width: 16,
-            height: 16,
-            borderRadius: 4,
-            border: isSelected ? `2px solid ${brand}` : `2px solid ${tokens.slate300}`,
-            background: isSelected ? brand : "hsl(var(--card))",
-            cursor: "pointer",
-            padding: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            transition: "background 100ms, border-color 100ms",
+            border: isSelected ? `2px solid ${BRAND}` : `2px solid ${tokens.slate300}`,
+            background: isSelected ? BRAND : "hsl(var(--card))",
             boxShadow: isSelected ? `0 0 0 3px rgba(15,118,110,0.18)` : undefined,
           }}
         >
@@ -1013,67 +1058,68 @@ function PatientCard({
       <Link
         href={`/patients/${item.patient_id}`}
         onClick={handleCardClick}
+        className="block pl-[34px] pr-4 py-4 rounded-lg no-underline text-inherit transition-[box-shadow,border-color,background] duration-[120ms] hover-lift"
         style={{
-          display: "block",
-          padding: "16px 16px 16px 34px",
-          borderRadius: 10,
           background: isSelected ? "rgba(15,118,110,0.06)" : "hsl(var(--card))",
-          border: isSelected ? `1.5px solid ${brand}` : `1px solid ${tokens.slate200}`,
-          textDecoration: "none",
-          color: "inherit",
-          transition: "box-shadow 120ms ease, border-color 120ms, background 120ms",
+          border: isSelected ? `1.5px solid ${BRAND}` : `1px solid ${tokens.slate200}`,
         }}
-        className="hover-lift"
       >
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: tokens.slate900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.patient_name}</div>
-            <div style={{ fontSize: 12, color: tokens.slate500, marginTop: 2 }}>
+        {/* Header row: name + priority pill */}
+        <div className="flex items-start justify-between gap-3 mb-2.5">
+          <div className="min-w-0 flex-1">
+            <div className="text-[15px] font-bold text-foreground overflow-hidden text-ellipsis whitespace-nowrap">
+              {item.patient_name}
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">
               {item.dob ? `DOB ${item.dob}` : "DOB unknown"}
               {item.last_visit_date ? ` · last visit ${item.last_visit_date}` : ""}
             </div>
           </div>
-          {/* Priority pill */}
           <WT
             text="Computed from RAF lift × confidence × days outstanding. High = score ≥ 70, Medium = 40–69, Low = below 40."
             side="top"
           >
             <span
               data-testid={`priority-pill-${item.patient_id}`}
-              style={{ flexShrink: 0, padding: "3px 10px", borderRadius: 999, background: band.bg, color: band.color, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", cursor: "default" }}
+              className="shrink-0 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wide cursor-default"
+              style={{ background: band.bg, color: band.color }}
             >
               {band.label}
             </span>
           </WT>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+
+        {/* Stats row */}
+        <div className="grid grid-cols-2 gap-2 mb-2.5">
           <Stat label="Open gaps" value={item.open_recapture_gaps?.length ?? 0} tone={(item.open_recapture_gaps?.length ?? 0) > 0 ? tokens.riskHigh : tokens.slate500} />
           <Stat label="Revenue at risk" value={fmtCurrency(item.estimated_revenue_at_risk ?? 0)} tone={tokens.slate900} />
         </div>
+
+        {/* HCC gap chips */}
         {item.open_recapture_gaps && item.open_recapture_gaps.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+          <div className="flex flex-wrap gap-1.5 mb-2">
             {item.open_recapture_gaps.slice(0, 4).map((g, i) => (
               <HccGapChip key={`${g.hcc_code}-${i}`} gap={g} patientId={item.patient_id} />
             ))}
             {item.open_recapture_gaps.length > 4 && (
-              <span style={{ fontSize: 11, color: tokens.slate500, alignSelf: "center" }}>+{item.open_recapture_gaps.length - 4} more</span>
+              <span className="text-[11px] text-muted-foreground self-center">
+                +{item.open_recapture_gaps.length - 4} more
+              </span>
             )}
           </div>
         )}
+
         {/* AWV status row — hidden for "future" to keep cards compact */}
         {item.awv_status && item.awv_status !== "future" && awvDaysLabel(item) && (
-          <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
-            <CalendarClock size={12} color={awvPill(item.awv_status).color} />
+          <div className="mt-1.5 flex items-center gap-1.5 text-[11px]">
+            <CalendarClock size={12} style={{ color: awvPill(item.awv_status).color }} />
             <WT text={awvTooltip(item)} side="top">
               <span
                 data-testid={`awv-pill-${item.patient_id}`}
+                className="px-2 py-0.5 rounded-full font-semibold cursor-default"
                 style={{
-                  padding: "2px 8px",
-                  borderRadius: 999,
                   background: awvPill(item.awv_status).bg,
                   color: awvPill(item.awv_status).color,
-                  fontWeight: 600,
-                  cursor: "default",
                 }}
               >
                 {awvDaysLabel(item)}
@@ -1081,16 +1127,17 @@ function PatientCard({
             </WT>
           </div>
         )}
-        <div style={{ marginTop: 8, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: tokens.primary, fontWeight: 600 }}>
+
+        {/* Footer row: priority score + open chart CTA */}
+        <div className="mt-2 flex items-center justify-between text-xs font-semibold" style={{ color: tokens.primary }}>
           <span>Priority score · {item.priority_score}</span>
-          {/* Open chart CTA */}
           <WT
             text="Opens full patient detail with RAF breakdown, HCC evidence, encounter history, and documentation support tools."
             side="top"
           >
             <span
               data-testid={`open-chart-${item.patient_id}`}
-              style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}
+              className="flex items-center gap-1 cursor-pointer"
             >
               Open chart <ChevronRight size={14} />
             </span>
@@ -1109,17 +1156,8 @@ function HccGapChip({ gap, patientId }: { gap: WorklistGap; patientId: number })
   return (
     <span
       data-testid={`hcc-chip-${patientId}-${gap.hcc_code}`}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-        padding: "2px 6px 2px 8px",
-        borderRadius: 999,
-        background: tokens.dangerSoft,
-        color: tokens.danger,
-        fontSize: 11,
-        fontWeight: 600,
-      }}
+      className="inline-flex items-center gap-1 pl-2 pr-1.5 py-0.5 rounded-full text-[11px] font-semibold"
+      style={{ background: tokens.dangerSoft, color: tokens.danger }}
     >
       HCC {gap.hcc_code}
       <WT
@@ -1136,22 +1174,8 @@ function HccGapChip({ gap, patientId }: { gap: WorklistGap; patientId: number })
             e.stopPropagation();
             // Rejection logic lives in the patient detail page; navigate or open modal there
           }}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 14,
-            height: 14,
-            borderRadius: "50%",
-            border: "none",
-            background: "transparent",
-            color: tokens.danger,
-            cursor: "pointer",
-            padding: 0,
-            opacity: 0.7,
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.7"; }}
+          className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border-none bg-transparent cursor-pointer p-0 opacity-70 hover:opacity-100 transition-opacity"
+          style={{ color: tokens.danger }}
         >
           <X size={10} aria-hidden />
         </button>
@@ -1166,9 +1190,9 @@ function HccGapChip({ gap, patientId }: { gap: WorklistGap; patientId: number })
 
 function Stat({ label, value, tone }: { label: string; value: string | number; tone: string }) {
   return (
-    <div style={{ padding: "8px 10px", borderRadius: 8, background: tokens.slate50, border: `1px solid ${tokens.slate100}` }}>
-      <div style={{ fontSize: 10, fontWeight: 600, color: tokens.slate500, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
-      <div className="tabular-nums" style={{ fontSize: 16, fontWeight: 700, color: tone }}>{value}</div>
+    <div className="px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-100">
+      <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{label}</div>
+      <div className="tabular-nums text-base font-bold" style={{ color: tone }}>{value}</div>
     </div>
   );
 }

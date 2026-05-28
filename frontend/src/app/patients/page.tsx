@@ -46,6 +46,8 @@ import { BulkActionsBar } from "./components/BulkActionsBar";
 import { KPIStrip } from "@/components/dashboards/admin/KPIStrip";
 import { RiskFilterChips } from "./components/RiskFilterChips";
 import { HelpButton } from "@/components/HelpPanel";
+import { PageHeader } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 
 // ---------------------------------------------------------------------------
 // Constants & Types
@@ -57,26 +59,6 @@ type SortKey = "name" | "age" | "raf_score" | "hcc_count";
 type SortDir = "asc" | "desc";
 type RiskFilter = "all" | "high" | "medium" | "low" | "unscored";
 
-// Worklist grid template — single source of truth so header, body rows,
-// skeleton, column-filter row and group super-header all stay perfectly aligned.
-// 7 cells: Patient | Risk Level | RAF Score | Risk Factors | HCCs | Status | >
-const WORKLIST_GRID =
-  "minmax(240px, 2.2fr) 100px 100px minmax(200px, 2fr) 100px 110px 32px";
-// Tablet variant — matches desktop (6 tracks + chevron) so Status is always visible.
-const WORKLIST_GRID_TABLET =
-  "minmax(180px, 2fr) 100px 90px 90px 110px 32px";
-const WORKLIST_GAP = 0;
-const WORKLIST_PAD_X = 24;
-const ROW_HEIGHT = 64;
-
-// CSS variables consumed by the `.worklist-grid` class (see globals.css).
-// Applied via inline style on every row container so a single media query
-// can switch desktop ↔ tablet templates without per-row JS.
-const WORKLIST_GRID_VARS = {
-  ["--gt-desktop" as string]: WORKLIST_GRID,
-  ["--gt-tablet" as string]: WORKLIST_GRID_TABLET,
-} as React.CSSProperties;
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -86,7 +68,7 @@ function formatLocation(p: Patient): string {
   if (p.city) parts.push(p.city);
   if (p.state) parts.push(p.state);
   if (parts.length === 0 && p.postal_code) return p.postal_code;
-  return parts.join(", ") || "\u2014";
+  return parts.join(", ") || "—";
 }
 
 // ---------------------------------------------------------------------------
@@ -107,10 +89,6 @@ function SortLabel({
   align?: "left" | "right";
 }) {
   const active = sort.key === col;
-  // `aria-sort` is only allowed on elements with role="columnheader" or
-  // role="rowheader". The worklist wrapper is now a plain region (not a
-  // role="table"/"grid"), so we communicate sort state via aria-label
-  // suffix instead, and let assistive tech announce the updated label.
   const sortSuffix = active
     ? sort.dir === "asc" ? ", sorted ascending" : ", sorted descending"
     : "";
@@ -118,18 +96,19 @@ function SortLabel({
     <button
       aria-label={`Sort by ${label}${sortSuffix}`}
       onClick={() => onSort(col)}
-      className="inline-flex items-center gap-1 bg-transparent border-none p-0 m-0 cursor-pointer font-sans text-[11.5px] font-bold uppercase tracking-[0.08em] whitespace-nowrap transition-colors duration-150"
-      style={{
-        color: active ? tokens.slate900 : tokens.slate500,
-        justifySelf: align === "right" ? "end" : "start",
-      }}
+      className={[
+        "inline-flex items-center gap-1 bg-transparent border-none p-0 m-0 cursor-pointer",
+        "font-sans text-[11.5px] font-bold uppercase tracking-[0.08em] whitespace-nowrap transition-colors duration-150",
+        active ? "text-slate-900" : "text-slate-500",
+        align === "right" ? "justify-self-end" : "justify-self-start",
+      ].join(" ")}
     >
       {label}
       {active && (
         <span className="inline-flex ml-0.5">
           {sort.dir === "asc"
-            ? <ChevronUp size={11} color={tokens.slate900} />
-            : <ChevronDown size={11} color={tokens.slate900} />
+            ? <ChevronUp size={11} className="text-slate-900" />
+            : <ChevronDown size={11} className="text-slate-900" />
           }
         </span>
       )}
@@ -140,17 +119,7 @@ function SortLabel({
 // ---------------------------------------------------------------------------
 // WorklistRowHoverActivity
 // ---------------------------------------------------------------------------
-// Lazily fetches the last 3 audit_log rows for the row's patient when
-// the user dwells on a row for >600ms. Renders an absolutely-positioned
-// tooltip anchored to the row (the row sets `position: relative`).
-// Degrades to nothing on 404 so the worklist doesn't flicker an empty
-// card while the backend endpoint (built by agent A4) lands.
-//
-// Implementation:
-//   - A single setTimeout (per hover-enter) flips `dwelled` to true.
-//   - `usePatientActivity` is invoked with `enabled: dwelled`, so React
-//     Query starts the request after the dwell threshold and dedupes
-//     across rows/cells. The same cache entry is reused by the panel.
+
 const HOVER_DWELL_MS = 600;
 
 function WorklistRowHoverActivity({
@@ -163,10 +132,6 @@ function WorklistRowHoverActivity({
   const [dwelled, setDwelled] = useState(false);
   useEffect(() => {
     if (!isHovered || patientId == null) {
-      // Hover-out — reset dwell flag so the next hover restarts the timer.
-      // setDwelled(false) here is the only setState in this effect body
-      // and it is the documented "reset on input change" use-case for
-      // the react-hooks/set-state-in-effect rule.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setDwelled(false);
       return;
@@ -182,8 +147,6 @@ function WorklistRowHoverActivity({
   );
 
   if (!dwelled) return null;
-  // Endpoint not deployed yet — render nothing rather than flash an
-  // empty tooltip the user will quickly learn to ignore.
   if (isError && error instanceof ActivityEndpointMissingError) return null;
 
   return (
@@ -228,6 +191,72 @@ function WorklistRowHoverActivity({
 }
 
 // ---------------------------------------------------------------------------
+// Worklist column-filter input helpers — shared style via className
+// ---------------------------------------------------------------------------
+
+const colFilterInputCls = (active: boolean) =>
+  [
+    "w-full h-8 text-[11px] rounded-[4px] px-1 text-center tabular-nums",
+    "border outline-none transition-colors",
+    active
+      ? "border-teal-600 bg-teal-50"
+      : "border-slate-200 bg-white",
+  ].join(" ");
+
+const colFilterSelectCls = (active: boolean) =>
+  [
+    "h-8 text-[11px] rounded-[6px] px-1 cursor-pointer",
+    "border outline-none transition-colors",
+    active
+      ? "border-teal-600 bg-teal-50 text-teal-700"
+      : "border-slate-200 bg-white text-slate-500",
+  ].join(" ");
+
+// ---------------------------------------------------------------------------
+// Worklist grid column template — single source of truth consumed by
+// header row, filter row, skeleton rows, and data rows so all columns align.
+// ---------------------------------------------------------------------------
+const WORKLIST_COLS = "minmax(240px,2.2fr) 100px 100px minmax(200px,2fr) 100px 110px 32px";
+
+// ---------------------------------------------------------------------------
+// Worklist skeleton row
+// ---------------------------------------------------------------------------
+
+function SkeletonRow() {
+  return (
+    <div
+      aria-hidden="true"
+      className="grid items-center h-16 px-6 border-b border-slate-100 border-l-[3px] border-l-slate-200 animate-pulse"
+      style={{ gridTemplateColumns: WORKLIST_COLS }}
+    >
+      {/* Patient */}
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-full bg-slate-100 shrink-0" />
+        <div className="flex flex-col gap-1.5">
+          <div className="w-36 h-3 rounded bg-slate-100" />
+          <div className="w-20 h-2.5 rounded bg-slate-100" />
+        </div>
+      </div>
+      {/* Risk Level */}
+      <div className="w-16 h-[22px] rounded-full bg-slate-100" />
+      {/* RAF */}
+      <div className="w-14 h-[18px] rounded bg-slate-100" />
+      {/* Risk Factors */}
+      <div className="flex gap-1.5">
+        <div className="w-14 h-5 rounded-md bg-slate-100" />
+        <div className="w-14 h-5 rounded-md bg-slate-100" />
+      </div>
+      {/* HCCs */}
+      <div className="w-10 h-[18px] rounded bg-slate-100 justify-self-end" />
+      {/* Status */}
+      <div className="w-[86px] h-6 rounded-full bg-slate-100" />
+      {/* Chevron placeholder */}
+      <div />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main page component
 // ---------------------------------------------------------------------------
 
@@ -242,11 +271,7 @@ export default function PatientsPage() {
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "raf_score", dir: "desc" });
   const [page, setPage] = useState(0);
   const [hoveredRow, setHoveredRow] = useState<string | number | null>(null);
-  // Bulk-select: chip bar at the top once at least one patient is selected.
-  // PatternFly-style multi-select on the worklist so a coder can re-route
-  // 50 patients to another reviewer or kick off a batch RAF recalc
-  // without 50 separate page visits. Selection survives sort + filter
-  // changes (we key by pid not row position) but resets on page refresh.
+
   const [selectedPids, setSelectedPids] = useState<Set<number>>(new Set());
   const togglePid = (pid: number) => {
     setSelectedPids((prev) => {
@@ -257,11 +282,7 @@ export default function PatientsPage() {
     });
   };
   const clearSelection = () => setSelectedPids(new Set());
-  // Bulk "Request docs" → fires a clinical-query against every selected
-  // patient in one POST loop. The backend endpoint accepts patient_id +
-  // free-text query_text; we prompt for the text once and fan it out so
-  // the coder doesn't retype it per patient. PCP review #5 / Cotiviti
-  // batch-action pattern.
+
   const [bulkRequestText, setBulkRequestText] = useState("");
   const [bulkRequestOpen, setBulkRequestOpen] = useState(false);
   const [bulkRequestSubmitting, setBulkRequestSubmitting] = useState(false);
@@ -289,9 +310,6 @@ export default function PatientsPage() {
       const msg = failed === 0
         ? `Sent ${ok} documentation request${ok === 1 ? "" : "s"} — PCPs notified.`
         : `Sent ${ok}, ${failed} failed — retry the failed patients individually.`;
-      // Reuse the existing sync-toast surface rather than wiring a new
-      // toast lib — the patient worklist already shows transient banners
-      // via setSyncToast.
       setSyncToast({ msg, id: Date.now() });
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
       toastTimerRef.current = setTimeout(() => setSyncToast(null), 8000);
@@ -304,21 +322,7 @@ export default function PatientsPage() {
       setBulkRequestSubmitting(false);
     }
   };
-  // ---------------------------------------------------------------------------
-  // Bulk actions wired to /api/bulk-actions/* (agent A1 is shipping these
-  // endpoints in parallel). We probe each endpoint with a HEAD-style preflight
-  // (an OPTIONS would be cleaner but server has no CORS handler for it, so we
-  // use a dry-run POST with an empty body and watch for 404 specifically) the
-  // first time a button is clicked. If the endpoint returns 404, the button
-  // becomes disabled and shows the "Endpoint not yet deployed" title. Any
-  // other status is treated as "endpoint exists" — the per-action handler will
-  // surface the real success / partial-failure / error result.
-  //
-  // Why three separate dialogs instead of a polymorphic one: the copy + form
-  // fields differ enough (user-id picker vs. confirm-only vs. note textarea)
-  // that branching inside one component obscures the per-action review the
-  // user has to do. Each dialog re-uses the same shell (overlay, FocusTrap,
-  // Esc-close, "this will affect N patients" warning, Confirm/Cancel pair).
+
   type EndpointStatus = "unknown" | "available" | "missing";
   const [reassignEndpointStatus, setReassignEndpointStatus] =
     useState<EndpointStatus>("unknown");
@@ -341,9 +345,6 @@ export default function PatientsPage() {
   const [bulkReviewedNote, setBulkReviewedNote] = useState("");
   const [bulkReviewedSubmitting, setBulkReviewedSubmitting] = useState(false);
 
-  // Shared helper — POST to a bulk-actions endpoint and normalise the result
-  // into { ok, failed, total, missing }. `missing` flips true on a 404 so the
-  // caller can mark the endpoint as not-yet-deployed and disable the button.
   const callBulkAction = useCallback(
     async (
       path: string,
@@ -359,9 +360,6 @@ export default function PatientsPage() {
         if (res.status === 404) {
           return { ok: 0, failed: 0, total: 0, missing: true };
         }
-        // Backend contract (agent A1): returns
-        //   { ok: number, failed: number, total: number, errors?: string[] }
-        // We tolerate older / partial shapes too.
         let json: { ok?: number; succeeded?: number; failed?: number; total?: number; error?: string; message?: string } | null = null;
         try { json = await res.json(); } catch { /* tolerate empty body */ }
         if (!res.ok) {
@@ -394,14 +392,8 @@ export default function PatientsPage() {
     [],
   );
 
-  // Show a toast: green/teal for full success, amber for partial failure,
-  // red-ish for total failure. We re-use setSyncToast (single toast slot) so
-  // we don't compete with the auto-sync banners for screen real-estate.
   const showBulkToast = useCallback(
     (variant: "ok" | "warn" | "error", msg: string) => {
-      // The sync-toast surface itself is colour-neutral, so we prefix the
-      // message with a glyph + label so screen-readers and sighted users
-      // both get the severity without a second toast component.
       const prefix =
         variant === "ok" ? "" :
         variant === "warn" ? "Partial: " :
@@ -416,9 +408,6 @@ export default function PatientsPage() {
     [],
   );
 
-  // Lazy-load the user list when the reassign dialog opens for the first
-  // time. /api/auth/users is the canonical roster (see app/users/page.tsx);
-  // we accept failure silently and fall back to the free-text user-id input.
   useEffect(() => {
     if (!bulkReassignOpen) return;
     if (bulkReassignUsers !== null || bulkReassignUsersError !== null) return;
@@ -451,8 +440,6 @@ export default function PatientsPage() {
     if (!assignee) return;
     setBulkReassignSubmitting(true);
     const ids = Array.from(selectedPids);
-    // Agent A1 contract: POST { patient_ids, assignee_user_id }. The
-    // assignee_user_id may be numeric or a string id; backend coerces.
     const assigneeNumeric = Number(assignee);
     const result = await callBulkAction("/api/bulk-actions/patients/reassign", {
       patient_ids: ids,
@@ -505,7 +492,6 @@ export default function PatientsPage() {
     }
     setBulkRecalcOpen(false);
     clearSelection();
-    // Refresh the worklist so updated scores surface immediately.
     queryClient.invalidateQueries({ queryKey: ["patients"] });
   };
 
@@ -580,7 +566,6 @@ export default function PatientsPage() {
         const ticketRes = await api.get<{ ticket: string }>("/api/notifications/sse-ticket");
         if (cancelled) return;
         const ticket = ticketRes.data.ticket;
-        // withCredentials is NOT needed — auth is in the ticket URL param
         es = new EventSource(`${API_BASE}/api/notifications/stream?ticket=${ticket}`);
 
         es.onopen = () => { if (!cancelled) setAutoSyncActive(true); };
@@ -591,16 +576,7 @@ export default function PatientsPage() {
             const payload = JSON.parse(e.data) as Record<string, unknown>;
             const evType = payload.event_type as string | undefined;
             if (evType === "patient.synced" || evType === "patient.scored") {
-              // Invalidate the patients list so the table re-fetches
               queryClient.invalidateQueries({ queryKey: ["patients"] });
-
-              // Build toast message.
-              // PHI-minimization: the toast appears in the top-right corner
-              // for 15 seconds and is visible to anyone glancing at the
-              // screen. We surface initials + last-4 of the PID rather than
-              // the full first/last name to satisfy HIPAA "minimum
-              // necessary" — UX-review #1 / round-2 #G1. Clinicians who
-              // need the full name can click the row to open the chart.
               const fname = (payload.fname as string | undefined) ?? "";
               const lname = (payload.lname as string | undefined) ?? "";
               const raf = payload.raf_score != null ? Number(payload.raf_score).toFixed(2) : null;
@@ -611,10 +587,8 @@ export default function PatientsPage() {
               const msg = evType === "patient.synced"
                 ? `New patient synced: ${identity}${raf ? ` (RAF ${raf})` : ""}`
                 : `Patient scored: ${identity}${raf ? ` (RAF ${raf})` : ""}`;
-
               setSyncToast({ msg, id: Date.now() });
               if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-              // 15s dismiss — long enough to be seen during demos
               toastTimerRef.current = setTimeout(() => setSyncToast(null), 15000);
             }
           } catch {}
@@ -623,20 +597,15 @@ export default function PatientsPage() {
         es.onerror = () => {
           if (cancelled) return;
           setAutoSyncActive(false);
-          // Close the dead stream and schedule a reconnect rather than
-          // staying silent. Do NOT call es.close() when readyState is
-          // CONNECTING — that prevents the native auto-reconnect.
           if (es && es.readyState === EventSource.OPEN) {
             es.close();
             es = null;
           }
-          // Re-fetch a fresh ticket and reconnect after a short delay
           if (!cancelled) {
             reconnectTimer = setTimeout(connect, 5000);
           }
         };
       } catch {
-        // SSE ticket endpoint unavailable — retry after delay
         if (!cancelled) {
           reconnectTimer = setTimeout(connect, 10000);
         }
@@ -786,7 +755,6 @@ export default function PatientsPage() {
 
   const totalPatients = apiResult?.total ?? 0;
 
-  // Risk + summary stats from currently loaded data
   const stats = useMemo(() => {
     const all = apiResult?.patients ?? [];
     let high = 0, medium = 0, low = 0, unscored = 0;
@@ -840,7 +808,7 @@ export default function PatientsPage() {
     return (
       <div role="status" className="flex flex-col items-center justify-center h-[60vh] gap-4 font-sans">
         <div className="rounded-2xl bg-amber-50 p-5">
-          <AlertTriangle size={40} color={tokens.riskMedium} />
+          <AlertTriangle size={40} className="text-amber-500" />
         </div>
         <h2 className="text-lg font-bold text-slate-900 m-0">No patient data available</h2>
         <p className="text-sm text-slate-600 m-0 max-w-[440px] text-center">
@@ -871,7 +839,7 @@ export default function PatientsPage() {
     return (
       <div role="alert" className="flex flex-col items-center justify-center h-[60vh] gap-4 font-sans">
         <div className="rounded-2xl bg-red-50 p-5">
-          <AlertTriangle size={40} color={tokens.dangerMedium} />
+          <AlertTriangle size={40} className="text-red-500" />
         </div>
         <h2 className="text-lg font-bold text-slate-900 m-0">Failed to load patients</h2>
         <p className="text-sm text-slate-600 m-0">Check that the server is running and try again.</p>
@@ -887,1071 +855,773 @@ export default function PatientsPage() {
 
   return (
     <ErrorBoundary fallbackTitle="Patients page failed to load">
-    <>
-    {/* ============================================================ */}
-    {/* Auto-sync toast notification                                 */}
-    {/* ============================================================ */}
-    {syncToast && (
-      <div
-        role="status"
-        aria-live="polite"
-        aria-label={syncToast.msg}
-        className="fixed top-5 right-5 z-[9999] flex items-center gap-2.5 bg-slate-900 text-slate-50 py-3 px-4 rounded-[10px] shadow-[0_8px_24px_rgba(0,0,0,0.25)] text-sm font-medium font-sans max-w-[380px] [animation:slideInRight_0.25s_ease]"
-      >
-        <span className="text-lg shrink-0">🆕</span>
-        <span style={{ flex: 1 }}>{syncToast.msg}</span>
-        <button
-          onClick={() => setSyncToast(null)}
-          aria-label="Dismiss notification"
-          className="bg-transparent border-none text-slate-500 cursor-pointer p-0.5 flex"
-        >
-          <X size={14} />
-        </button>
-      </div>
-    )}
-    <div
-      style={{
-        display: "flex", flexDirection: "column", gap: 0,
-        background: tokens.bgSubtle,
-        minHeight: "100vh",
-        // Mobile: 16px gutter; restored to 40px desktop padding via the
-        // ``rci-page-pad-desktop`` className declared in globals.css.
-        padding: "20px 16px",
-        overflowX: "hidden",
-      }}
-      className="rci-page-pad-desktop font-sans text-slate-900"
-    >
-      {/* ============================================================ */}
-      {/* Page header                                                  */}
-      {/* ============================================================ */}
-      <div style={{
-        display: "flex", alignItems: "flex-start", justifyContent: "space-between",
-        gap: 16, marginBottom: 24, flexWrap: "wrap",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0 }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <h1 className="m-0 text-xl font-bold text-slate-900 tracking-[-0.02em] leading-[1.15]">
-                Worklist
-              </h1>
-              {/* Auto-sync live indicator. role="status" both permits the
-                  `aria-label` (axe disallows it on a plain <div>) and lets
-                  assistive tech announce sync state changes politely. */}
-              <div
-                role="status"
-                title={autoSyncActive ? "Auto-sync active" : "Auto-sync connecting…"}
-                aria-label={autoSyncActive ? "Auto-sync active" : "Auto-sync connecting"}
-                style={{
-                  width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
-                  backgroundColor: autoSyncActive ? "#22c55e" : "#94a3b8",
-                  boxShadow: autoSyncActive ? "0 0 0 3px rgba(34,197,94,0.25)" : "none",
-                  transition: "background-color 0.3s, box-shadow 0.3s",
-                }}
-              />
-              <div style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                height: 26, padding: "0 4px 0 10px",
-                borderRadius: 8,
-                backgroundColor: C.brandSoft,
-                border: `1px solid ${C.brandRing}`,
-                color: C.brand,
-                fontSize: 11, fontWeight: 600,
-                letterSpacing: "0.02em",
-                fontVariantNumeric: "tabular-nums",
-              }}>
-                <span>MY</span>
-                <select
-                  value={measurementYear}
-                  onChange={(e) => { setMeasurementYear(Number(e.target.value)); setPage(0); }}
-                  aria-label="Measurement year"
-                  style={{
-                    appearance: "none",
-                    WebkitAppearance: "none",
-                    MozAppearance: "none",
-                    background: "transparent",
-                    border: "none",
-                    color: C.brand,
-                    fontSize: 12,
-                    fontWeight: 700,
-                    fontVariantNumeric: "tabular-nums",
-                    letterSpacing: "0.01em",
-                    cursor: "pointer",
-                    padding: "0 18px 0 2px",
-                    backgroundImage:
-                      "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 20 20' fill='%230F766E'><path d='M5 8l5 5 5-5H5z'/></svg>\")",
-                    backgroundRepeat: "no-repeat",
-                    backgroundPosition: "right 2px center",
-                  }}
-                >
-                  {[2024, 2025, 2026].map((y) => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <p className="mt-1 mb-0 text-[13px] text-slate-600 tabular-nums">
-              {isLoading
-                ? "Loading registry…"
-                : `${totalPatients.toLocaleString()} patients in registry \u00B7 CMS-HCC V28 \u00B7 MY ${measurementYear}`}
-            </p>
-          </div>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <div style={{ position: "relative" }}>
-            <Search
-              size={16}
-              style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: C.label, pointerEvents: "none" }}
-            />
-            <input
-              type="text"
-              title="Search patients by name or PID"
-              placeholder="Search patients…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              aria-label="Search patients"
-              style={{
-                height: 40, width: "min(320px, calc(100vw - 180px))", borderRadius: 10,
-                border: `1px solid ${C.border}`,
-                backgroundColor: tokens.white,
-                paddingLeft: 38, paddingRight: 14,
-                fontSize: 13, color: C.text,
-                transition: "border-color 0.15s, box-shadow 0.15s",
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = C.brand;
-                e.currentTarget.style.boxShadow = `0 0 0 3px ${C.brandSoft}`;
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = C.border;
-                e.currentTarget.style.boxShadow = "none";
-              }}
-            />
-          </div>
-          {/* Import button hidden from worklist toolbar — data ingestion is handled elsewhere */}
-          <button
-            onClick={() => setShowImportModal(true)}
-            aria-label="Import patients from CSV"
-            style={{ display: "none" }}
+      <>
+        {/* ============================================================ */}
+        {/* Auto-sync toast notification                                 */}
+        {/* ============================================================ */}
+        {syncToast && (
+          <div
+            role="status"
+            aria-live="polite"
+            aria-label={syncToast.msg}
+            className="fixed top-5 right-5 z-[9999] flex items-center gap-2.5 bg-slate-900 text-slate-50 py-3 px-4 rounded-[10px] shadow-[0_8px_24px_rgba(0,0,0,0.25)] text-sm font-medium font-sans max-w-[380px] [animation:slideInRight_0.25s_ease]"
           >
-            <FileUp size={14} />
-            Import
-          </button>
-          <button
-            onClick={exportPatientsCSV}
-            aria-label="Export patients as CSV"
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 7,
-              height: 40, padding: "0 16px", borderRadius: 10,
-              border: "none", backgroundColor: C.brand,
-              color: tokens.white, fontSize: 13, fontWeight: 600,
-              cursor: "pointer", flexShrink: 0,
-              boxShadow: "0 1px 2px rgba(15, 118, 110, 0.25), 0 4px 12px rgba(15, 118, 110, 0.18)",
-              transition: "all 0.15s ease",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = tokens.teal900; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = C.brand; }}
-          >
-            <FileDown size={14} />
-            Export
-          </button>
-          <HelpButton />
-        </div>
-      </div>
-
-
-      {/* ============================================================ */}
-      {/* Population Overview — hero block with risk distribution bar  */}
-      {/* ============================================================ */}
-
-      {/* ---- Compact KPI strip (≤1280px) ---- */}
-      <div className="kpi-compact-strip" aria-label="Key performance indicators">
-        {/* Need Review */}
-        <div
-          className={`kpi-compact-item kpi-compact-item--alert${stats.high > 0 ? " kpi-compact-item--clickable" : ""}`}
-          onClick={() => { if (stats.high > 0) { setRiskFilter("high"); setPage(0); } }}
-          role={stats.high > 0 ? "button" : undefined}
-          tabIndex={stats.high > 0 ? 0 : undefined}
-          aria-label={stats.high > 0 ? `Show ${stats.high} high-risk patients` : "No high-risk patients"}
-          onKeyDown={(e) => { if (stats.high > 0 && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setRiskFilter("high"); setPage(0); } }}
-        >
-          <TrendingUp size={14} color={tokens.riskHigh} style={{ flexShrink: 0 }} />
-          <span className="kpi-compact-label">Need Review</span>
-          <span className="kpi-compact-value" style={{ color: stats.high > 0 ? tokens.riskHigh : C.text }}>{stats.high}</span>
-        </div>
-        {/* Unscored */}
-        <div
-          className={`kpi-compact-item${stats.unscored > 0 ? " kpi-compact-item--clickable" : ""}`}
-          onClick={() => { if (stats.unscored > 0) { setRiskFilter("unscored"); setPage(0); } }}
-          role={stats.unscored > 0 ? "button" : undefined}
-          tabIndex={stats.unscored > 0 ? 0 : undefined}
-          aria-label={stats.unscored > 0 ? `Show ${stats.unscored} unscored patients` : "No unscored patients"}
-          onKeyDown={(e) => { if (stats.unscored > 0 && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setRiskFilter("unscored"); setPage(0); } }}
-        >
-          <Users size={14} color={tokens.slate400} style={{ flexShrink: 0 }} />
-          <span className="kpi-compact-label">Unscored</span>
-          <span className="kpi-compact-value" style={{ color: C.text }}>{stats.unscored}</span>
-        </div>
-        {/* Average RAF */}
-        <div className="kpi-compact-item">
-          <Activity size={14} color={tokens.success} style={{ flexShrink: 0 }} />
-          <span className="kpi-compact-label">Avg RAF</span>
-          <span className="kpi-compact-value" style={{ color: C.text }}>
-            {stats.avgRaf > 0 ? stats.avgRaf.toFixed(2) : "—"}
-          </span>
-        </div>
-        {/* HCCs Captured */}
-        <div className="kpi-compact-item">
-          <ShieldCheck size={14} color={tokens.infoBlue} style={{ flexShrink: 0 }} />
-          <span className="kpi-compact-label">HCCs</span>
-          <span className="kpi-compact-value" style={{ color: C.text }}>{stats.hccTotal.toLocaleString()}</span>
-        </div>
-      </div>
-
-      {/* ---- Full 4-card KPI grid (>1280px only) ---- */}
-      <KPIStrip
-        stats={stats}
-        onHighClick={() => { setRiskFilter('high'); setPage(0); }}
-        onUnscoredClick={() => { setRiskFilter('unscored'); setPage(0); }}
-      />
-
-
-      {/* ============================================================ */}
-      {/* Filter tabs / chip bar */}
-      <RiskFilterChips
-        stats={stats}
-        riskFilter={riskFilter}
-        onRiskFilterChange={(key) => startTransition(() => { setRiskFilter(key); setPage(0); })}
-        showColumnFilters={showColumnFilters}
-        onToggleColumnFilters={() => setShowColumnFilters((v) => !v)}
-        hasActiveColFilters={!!hasActiveColFilters}
-        colFilters={colFilters}
-        onClearColFilters={() => { clearColFilters(); setPage(0); }}
-        onColFiltersChange={(patch) => { setColFilters((f) => ({ ...f, ...patch })); setPage(0); }}
-        isLoading={isLoading}
-        page={page}
-        total={total}
-        totalPatients={totalPatients}
-        PAGE_SIZE={PAGE_SIZE}
-      />
-
-
-      {/* ============================================================ */}
-      {/* Worklist                                                     */}
-      {/* ============================================================ */}
-      <div
-        // Was role="table" but the wrapper also contains pagination
-        // controls — axe flagged those as disallowed children of a
-        // role="table" (only role="row" is permitted). Using role="region"
-        // keeps the labelled landmark intact without imposing table
-        // child-role requirements.
-        role="region"
-        aria-label="Patient worklist"
-        aria-busy={isLoading}
-        aria-live="polite"
-        className="bg-white rounded-2xl overflow-x-auto border border-[#EEF2F6] shadow-[0_1px_3px_rgba(15,23,42,0.04),0_4px_16px_rgba(15,23,42,0.04)]"
-      >
-        {/* Bulk-select chip bar — PatternFly-style action affordance.
-            Surfaces once at least one patient is selected (Cmd/Shift+click
-            or the per-row checkbox). Contains the selected count, a
-            de-select-all action, and the available batch actions. We keep
-            the action set deliberately narrow until the matching backend
-        {/* BulkActionsBar handles selection chip bar + all three bulk dialogs */}
-        <BulkActionsBar
-          selectedCount={selectedPids.size}
-          onClearSelection={clearSelection}
-          onRequestDocs={() => setBulkRequestOpen(true)}
-          reassignEndpointStatus={reassignEndpointStatus}
-          onOpenReassign={() => setBulkReassignOpen(true)}
-          bulkReassignOpen={bulkReassignOpen}
-          onCloseReassign={() => setBulkReassignOpen(false)}
-          bulkReassignUsers={bulkReassignUsers}
-          bulkReassignUsersError={bulkReassignUsersError}
-          bulkReassignUserId={bulkReassignUserId}
-          onReassignUserChange={setBulkReassignUserId}
-          bulkReassignSubmitting={bulkReassignSubmitting}
-          onConfirmReassign={runBulkReassign}
-          recalcEndpointStatus={recalcEndpointStatus}
-          onOpenRecalc={() => setBulkRecalcOpen(true)}
-          bulkRecalcOpen={bulkRecalcOpen}
-          onCloseRecalc={() => setBulkRecalcOpen(false)}
-          bulkRecalcSubmitting={bulkRecalcSubmitting}
-          onConfirmRecalc={runBulkRecalc}
-          reviewedEndpointStatus={reviewedEndpointStatus}
-          onOpenReviewed={() => setBulkReviewedOpen(true)}
-          bulkReviewedOpen={bulkReviewedOpen}
-          onCloseReviewed={() => setBulkReviewedOpen(false)}
-          bulkReviewedNote={bulkReviewedNote}
-          onReviewedNoteChange={setBulkReviewedNote}
-          bulkReviewedSubmitting={bulkReviewedSubmitting}
-          onConfirmReviewed={runBulkMarkReviewed}
-          bulkRequestOpen={bulkRequestOpen}
-          onCloseRequestDocs={() => setBulkRequestOpen(false)}
-          bulkRequestText={bulkRequestText}
-          onRequestTextChange={setBulkRequestText}
-          bulkRequestSubmitting={bulkRequestSubmitting}
-          onConfirmRequestDocs={runBulkRequestDocs}
-        />
-        {/* Column header (presentational — the parent wrapper is now
-            role="region", so ARIA-table child roles no longer apply). */}
-        <div className="worklist-grid worklist-header-row" style={{
-          display: "grid",
-          ...WORKLIST_GRID_VARS,
-          alignItems: "center",
-          padding: `12px ${WORKLIST_PAD_X}px 12px`,
-          backgroundColor: tokens.bgFaintCard,
-          borderBottom: `1px solid ${C.border}`,
-          gap: WORKLIST_GAP,
-        }}>
-          <SortLabel col="name" label="Patient" sort={sort} onSort={handleSort} />
-          <span className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-slate-500">Risk Level</span>
-          <span title="Risk Adjustment Factor (RAF): CMS-HCC V28 score. 1.0 = average cost. Higher = more complex patient.">
-            <SortLabel col="raf_score" label="RAF Score" sort={sort} onSort={handleSort} />
-          </span>
-          <span className="risk-factors-cell text-[11.5px] font-bold uppercase tracking-[0.08em] text-slate-500">Risk Factors</span>
-          <SortLabel col="hcc_count" label="HCCs" sort={sort} onSort={handleSort} align="right" />
-          <span className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-slate-500 pl-2">HCC Status</span>
-          <span aria-hidden="true" />
-        </div>
-
-        {/* ---- Column Filter Row ---- */}
-        {showColumnFilters && (
-          <div className="worklist-grid worklist-filter-row" style={{
-            display: "grid",
-            ...WORKLIST_GRID_VARS,
-            alignItems: "center",
-            padding: `10px ${WORKLIST_PAD_X}px`,
-            backgroundColor: tokens.slate50,
-            borderBottom: `1px solid ${C.border}`,
-            gap: WORKLIST_GAP,
-          }}>
-            {/* Patient col: sex + age range */}
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <select
-                title="Filter by sex"
-                aria-label="Filter by sex"
-                value={colFilters.sex}
-                onChange={(e) => { setColFilters((f) => ({ ...f, sex: e.target.value as typeof f.sex })); setPage(0); }}
-                style={{
-                  width: 52, height: 32, fontSize: 11, borderRadius: 6,
-                  border: colFilters.sex !== "all" ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
-                  backgroundColor: colFilters.sex !== "all" ? C.brandSoft : "#fff",
-                  color: C.textMuted, padding: "0 4px", cursor: "pointer",
-                }}
-              >
-                <option value="all">Sex</option>
-                <option value="Male">M</option>
-                <option value="Female">F</option>
-              </select>
-              <input
-                title="Minimum age" placeholder="Age≥"
-                aria-label="Minimum age"
-                value={colFilters.ageMin}
-                onChange={(e) => { setColFilters((f) => ({ ...f, ageMin: e.target.value })); setPage(0); }}
-                style={{
-                  width: 44, height: 32, fontSize: 11, borderRadius: 6,
-                  border: colFilters.ageMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
-                  padding: "0 4px", textAlign: "center",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-                type="number"
-              />
-              <input
-                title="Maximum age" placeholder="Age≤"
-                aria-label="Maximum age"
-                value={colFilters.ageMax}
-                onChange={(e) => { setColFilters((f) => ({ ...f, ageMax: e.target.value })); setPage(0); }}
-                style={{
-                  width: 44, height: 32, fontSize: 11, borderRadius: 6,
-                  border: colFilters.ageMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
-                  padding: "0 4px", textAlign: "center",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-                type="number"
-              />
-            </div>
-
-            {/* Risk Level col — no filter (derived from RAF) */}
-            <span className="text-[10px] text-slate-600 italic">auto</span>
-
-            {/* RAF Score col */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <input
-                title="Minimum RAF score" placeholder="Min"
-                aria-label="Minimum RAF score"
-                value={colFilters.rafMin}
-                onChange={(e) => { setColFilters((f) => ({ ...f, rafMin: e.target.value })); setPage(0); }}
-                style={{
-                  width: "100%", height: 32, fontSize: 11, borderRadius: 4,
-                  border: colFilters.rafMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
-                  padding: "0 4px", textAlign: "center",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-                type="number" step="0.1"
-              />
-              <input
-                title="Maximum RAF score" placeholder="Max"
-                aria-label="Maximum RAF score"
-                value={colFilters.rafMax}
-                onChange={(e) => { setColFilters((f) => ({ ...f, rafMax: e.target.value })); setPage(0); }}
-                style={{
-                  width: "100%", height: 32, fontSize: 11, borderRadius: 4,
-                  border: colFilters.rafMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
-                  padding: "0 4px", textAlign: "center",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-                type="number" step="0.1"
-              />
-            </div>
-
-            {/* Risk Factors col — demo/disease/interact filters */}
-            <div className="risk-factors-cell" style={{ display: "flex", gap: 4 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
-                <input title="Min demographic score" aria-label="Min demographic score" placeholder="Demo≥" value={colFilters.demoMin} onChange={(e) => { setColFilters((f) => ({ ...f, demoMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 32, fontSize: 10, borderRadius: 4, border: colFilters.demoMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
-                <input title="Max demographic score" aria-label="Max demographic score" placeholder="Demo≤" value={colFilters.demoMax} onChange={(e) => { setColFilters((f) => ({ ...f, demoMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 32, fontSize: 10, borderRadius: 4, border: colFilters.demoMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
-                <input title="Min disease score" aria-label="Min disease score" placeholder="Dis≥" value={colFilters.diseaseMin} onChange={(e) => { setColFilters((f) => ({ ...f, diseaseMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 32, fontSize: 10, borderRadius: 4, border: colFilters.diseaseMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
-                <input title="Max disease score" aria-label="Max disease score" placeholder="Dis≤" value={colFilters.diseaseMax} onChange={(e) => { setColFilters((f) => ({ ...f, diseaseMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 32, fontSize: 10, borderRadius: 4, border: colFilters.diseaseMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
-                <input title="Min interaction score" aria-label="Min interaction score" placeholder="Int≥" value={colFilters.interactMin} onChange={(e) => { setColFilters((f) => ({ ...f, interactMin: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 32, fontSize: 10, borderRadius: 4, border: colFilters.interactMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
-                <input title="Max interaction score" aria-label="Max interaction score" placeholder="Int≤" value={colFilters.interactMax} onChange={(e) => { setColFilters((f) => ({ ...f, interactMax: e.target.value })); setPage(0); }} type="number" step="0.01" style={{ width: "100%", height: 32, fontSize: 10, borderRadius: 4, border: colFilters.interactMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`, padding: "0 3px", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
-              </div>
-            </div>
-
-            {/* HCCs col */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <input
-                title="Minimum HCC count" placeholder="Min"
-                aria-label="Minimum HCC count"
-                value={colFilters.hccMin}
-                onChange={(e) => { setColFilters((f) => ({ ...f, hccMin: e.target.value })); setPage(0); }}
-                style={{
-                  width: "100%", height: 32, fontSize: 11, borderRadius: 4,
-                  border: colFilters.hccMin ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
-                  padding: "0 4px", textAlign: "center",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-                type="number"
-              />
-              <input
-                title="Maximum HCC count" placeholder="Max"
-                aria-label="Maximum HCC count"
-                value={colFilters.hccMax}
-                onChange={(e) => { setColFilters((f) => ({ ...f, hccMax: e.target.value })); setPage(0); }}
-                style={{
-                  width: "100%", height: 32, fontSize: 11, borderRadius: 4,
-                  border: colFilters.hccMax ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
-                  padding: "0 4px", textAlign: "center",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-                type="number"
-              />
-            </div>
-
-            {/* Status col */}
-            <select
-              title="Filter by analysis status"
-              aria-label="Filter by analysis status"
-              value={colFilters.status}
-              onChange={(e) => { setColFilters((f) => ({ ...f, status: e.target.value as typeof f.status })); setPage(0); }}
-              style={{
-                width: "100%", height: 32, fontSize: 11, borderRadius: 6,
-                border: colFilters.status !== "all" ? `1px solid ${C.brand}` : `1px solid ${C.border}`,
-                backgroundColor: colFilters.status !== "all" ? C.brandSoft : "#fff",
-                color: C.textMuted, padding: "0 4px", cursor: "pointer",
-              }}
+            <span className="text-lg shrink-0">🆕</span>
+            <span className="flex-1">{syncToast.msg}</span>
+            <button
+              onClick={() => setSyncToast(null)}
+              aria-label="Dismiss notification"
+              className="bg-transparent border-none text-slate-500 cursor-pointer p-0.5 flex"
             >
-              <option value="all">All</option>
-              <option value="analyzed">Analyzed</option>
-              <option value="pending">Pending</option>
-            </select>
-
-            <span />
+              <X size={14} />
+            </button>
           </div>
         )}
 
-        {/* ---- Loading Skeleton ---- */}
-        {isLoading && Array.from({ length: 8 }).map((_, i) => (
-          <div
-            key={`skeleton-${i}`}
-            aria-hidden="true"
-            className="worklist-grid"
-            style={{
-              display: "grid",
-              ...WORKLIST_GRID_VARS,
-              alignItems: "center",
-              padding: `0 ${WORKLIST_PAD_X}px 0 ${WORKLIST_PAD_X - 3}px`,
-              height: ROW_HEIGHT,
-              borderBottom: `1px solid ${C.rowDivider}`,
-              borderLeft: `3px solid ${C.borderSoft}`,
-              gap: WORKLIST_GAP,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <div style={{ width: 140, height: 12, borderRadius: 4, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
-                <div style={{ width: 80, height: 10, borderRadius: 4, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
-              </div>
-            </div>
-            <div style={{ width: 64, height: 22, borderRadius: 999, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
-            <div style={{ width: 56, height: 18, borderRadius: 4, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
-            <div className="risk-factors-cell" style={{ display: "flex", gap: 6 }}>
-              <div style={{ width: 60, height: 20, borderRadius: 6, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
-              <div style={{ width: 60, height: 20, borderRadius: 6, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
-            </div>
-            <div style={{ width: 40, height: 18, borderRadius: 4, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite", justifySelf: "end" }} />
-            <div style={{ width: 86, height: 24, borderRadius: 999, backgroundColor: tokens.slate100, animation: "pulse 1.5s ease-in-out infinite" }} />
-            <div />
-          </div>
-        ))}
+        {/* ============================================================ */}
+        {/* Page shell                                                   */}
+        {/* ============================================================ */}
+        <div className="flex flex-col gap-0 bg-slate-50 min-h-screen p-4 md:p-6 overflow-x-hidden font-sans text-slate-900">
 
-        {/* ---- Empty State ---- */}
-        {!isLoading && rows.length === 0 && (
-          <div className="py-[72px] px-6 text-center">
-            <div className="w-[72px] h-[72px] rounded-xl mx-auto mb-[18px] bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center border border-dashed border-slate-200">
-              <Users size={28} color={C.label} strokeWidth={1.75} />
+          {/* ============================================================ */}
+          {/* Page header                                                  */}
+          {/* ============================================================ */}
+          <PageHeader
+            icon={<Users size={20} />}
+            title={
+              <span className="flex items-center gap-2.5">
+                Worklist
+                {/* Auto-sync live indicator */}
+                <span
+                  role="status"
+                  title={autoSyncActive ? "Auto-sync active" : "Auto-sync connecting…"}
+                  aria-label={autoSyncActive ? "Auto-sync active" : "Auto-sync connecting"}
+                  className={[
+                    "inline-block w-2.5 h-2.5 rounded-full shrink-0 transition-all duration-300",
+                    autoSyncActive
+                      ? "bg-green-500 shadow-[0_0_0_3px_rgba(34,197,94,0.25)]"
+                      : "bg-slate-400",
+                  ].join(" ")}
+                />
+                {/* Measurement year picker */}
+                <span className="inline-flex items-center gap-1.5 h-[26px] pl-2.5 pr-1 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 text-[11px] font-semibold tracking-wide tabular-nums">
+                  <span>MY</span>
+                  <select
+                    value={measurementYear}
+                    onChange={(e) => { setMeasurementYear(Number(e.target.value)); setPage(0); }}
+                    aria-label="Measurement year"
+                    className="appearance-none bg-transparent border-none text-teal-700 text-xs font-bold tabular-nums cursor-pointer pr-4 focus:outline-none"
+                    style={{
+                      backgroundImage:
+                        "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 20 20' fill='%230F766E'><path d='M5 8l5 5 5-5H5z'/></svg>\")",
+                      backgroundRepeat: "no-repeat",
+                      backgroundPosition: "right 2px center",
+                    }}
+                  >
+                    {[2024, 2025, 2026].map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </span>
+              </span>
+            }
+            subtitle={
+              isLoading
+                ? "Loading registry…"
+                : `${totalPatients.toLocaleString()} patients in registry · CMS-HCC V28 · MY ${measurementYear}`
+            }
+            actions={
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {/* Search */}
+                <div className="relative">
+                  <Search
+                    size={16}
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                  />
+                  <input
+                    type="text"
+                    title="Search patients by name or PID"
+                    placeholder="Search patients…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    aria-label="Search patients"
+                    className="h-10 w-[min(320px,calc(100vw-180px))] rounded-[10px] border border-slate-200 bg-white pl-9 pr-3.5 text-[13px] text-slate-900 outline-none transition-all focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+                  />
+                </div>
+
+                {/* Import (hidden — data ingestion handled elsewhere) */}
+                <button
+                  onClick={() => setShowImportModal(true)}
+                  aria-label="Import patients from CSV"
+                  className="hidden"
+                >
+                  <FileUp size={14} />
+                  Import
+                </button>
+
+                {/* Export */}
+                <button
+                  onClick={exportPatientsCSV}
+                  aria-label="Export patients as CSV"
+                  className="inline-flex items-center gap-1.5 h-10 px-4 rounded-[10px] bg-teal-700 text-white text-[13px] font-semibold cursor-pointer shrink-0 shadow-[0_1px_2px_rgba(15,118,110,0.25),0_4px_12px_rgba(15,118,110,0.18)] hover:bg-teal-800 transition-colors border-none"
+                >
+                  <FileDown size={14} />
+                  Export
+                </button>
+
+                <HelpButton />
+              </div>
+            }
+          />
+
+          {/* ============================================================ */}
+          {/* KPI strip (compact ≤1280px)                                  */}
+          {/* ============================================================ */}
+          <div className="kpi-compact-strip" aria-label="Key performance indicators">
+            {/* Need Review */}
+            <div
+              className={`kpi-compact-item kpi-compact-item--alert${stats.high > 0 ? " kpi-compact-item--clickable" : ""}`}
+              onClick={() => { if (stats.high > 0) { setRiskFilter("high"); setPage(0); } }}
+              role={stats.high > 0 ? "button" : undefined}
+              tabIndex={stats.high > 0 ? 0 : undefined}
+              aria-label={stats.high > 0 ? `Show ${stats.high} high-risk patients` : "No high-risk patients"}
+              onKeyDown={(e) => { if (stats.high > 0 && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setRiskFilter("high"); setPage(0); } }}
+            >
+              <TrendingUp size={14} className="text-red-600 shrink-0" />
+              <span className="kpi-compact-label">Need Review</span>
+              <span className={`kpi-compact-value ${stats.high > 0 ? "text-red-600" : "text-slate-700"}`}>{stats.high}</span>
             </div>
-            <h3 className="text-base font-semibold text-slate-900 mt-0 mb-1.5 tracking-[-0.01em]">
-              {riskFilter === "high" ? "No high-risk patients right now" :
-               riskFilter === "unscored" ? "No unscored patients" :
-               "No patients match your criteria"}
-            </h3>
-            <p className="text-[13px] text-slate-600 mx-auto mb-[18px] mt-0 max-w-[380px]">
-              {riskFilter === "high"
-                ? "Check Unscored patients for pending analysis — they may need a risk calculation."
-                : "Try broadening your search or adjusting the risk filter to see more results."}
-            </p>
-            {(riskFilter !== "all" || debouncedSearch || hasActiveColFilters) && (
-              <button
-                onClick={() => { setRiskFilter("all"); setSearch(""); clearColFilters(); setPage(0); }}
-                className="py-2 px-[18px] rounded-[10px] border border-slate-200 bg-white text-teal-700 text-[13px] font-semibold cursor-pointer font-sans transition-all duration-150"
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.brand; e.currentTarget.style.backgroundColor = C.brandSoft; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = ""; e.currentTarget.style.backgroundColor = ""; }}
+            {/* Unscored */}
+            <div
+              className={`kpi-compact-item${stats.unscored > 0 ? " kpi-compact-item--clickable" : ""}`}
+              onClick={() => { if (stats.unscored > 0) { setRiskFilter("unscored"); setPage(0); } }}
+              role={stats.unscored > 0 ? "button" : undefined}
+              tabIndex={stats.unscored > 0 ? 0 : undefined}
+              aria-label={stats.unscored > 0 ? `Show ${stats.unscored} unscored patients` : "No unscored patients"}
+              onKeyDown={(e) => { if (stats.unscored > 0 && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setRiskFilter("unscored"); setPage(0); } }}
+            >
+              <Users size={14} className="text-slate-400 shrink-0" />
+              <span className="kpi-compact-label">Unscored</span>
+              <span className="kpi-compact-value text-slate-700">{stats.unscored}</span>
+            </div>
+            {/* Average RAF */}
+            <div className="kpi-compact-item">
+              <Activity size={14} className="text-emerald-600 shrink-0" />
+              <span className="kpi-compact-label">Avg RAF</span>
+              <span className="kpi-compact-value text-slate-700">
+                {stats.avgRaf > 0 ? stats.avgRaf.toFixed(2) : "—"}
+              </span>
+            </div>
+            {/* HCCs Captured */}
+            <div className="kpi-compact-item">
+              <ShieldCheck size={14} className="text-blue-500 shrink-0" />
+              <span className="kpi-compact-label">HCCs</span>
+              <span className="kpi-compact-value text-slate-700">{stats.hccTotal.toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* ---- Full 4-card KPI grid (>1280px only) ---- */}
+          <KPIStrip
+            stats={stats}
+            onHighClick={() => { setRiskFilter("high"); setPage(0); }}
+            onUnscoredClick={() => { setRiskFilter("unscored"); setPage(0); }}
+          />
+
+          {/* ============================================================ */}
+          {/* Filter chips / column filter toggle                          */}
+          {/* ============================================================ */}
+          <RiskFilterChips
+            stats={stats}
+            riskFilter={riskFilter}
+            onRiskFilterChange={(key) => startTransition(() => { setRiskFilter(key); setPage(0); })}
+            showColumnFilters={showColumnFilters}
+            onToggleColumnFilters={() => setShowColumnFilters((v) => !v)}
+            hasActiveColFilters={!!hasActiveColFilters}
+            colFilters={colFilters}
+            onClearColFilters={() => { clearColFilters(); setPage(0); }}
+            onColFiltersChange={(patch) => { setColFilters((f) => ({ ...f, ...patch })); setPage(0); }}
+            isLoading={isLoading}
+            page={page}
+            total={total}
+            totalPatients={totalPatients}
+            PAGE_SIZE={PAGE_SIZE}
+          />
+
+          {/* ============================================================ */}
+          {/* Worklist table                                               */}
+          {/* ============================================================ */}
+          <div
+            role="region"
+            aria-label="Patient worklist"
+            aria-busy={isLoading}
+            aria-live="polite"
+            className="bg-white rounded-2xl overflow-x-auto border border-slate-100 shadow-[0_1px_3px_rgba(15,23,42,0.04),0_4px_16px_rgba(15,23,42,0.04)]"
+          >
+            {/* Bulk actions bar */}
+            <BulkActionsBar
+              selectedCount={selectedPids.size}
+              onClearSelection={clearSelection}
+              onRequestDocs={() => setBulkRequestOpen(true)}
+              reassignEndpointStatus={reassignEndpointStatus}
+              onOpenReassign={() => setBulkReassignOpen(true)}
+              bulkReassignOpen={bulkReassignOpen}
+              onCloseReassign={() => setBulkReassignOpen(false)}
+              bulkReassignUsers={bulkReassignUsers}
+              bulkReassignUsersError={bulkReassignUsersError}
+              bulkReassignUserId={bulkReassignUserId}
+              onReassignUserChange={setBulkReassignUserId}
+              bulkReassignSubmitting={bulkReassignSubmitting}
+              onConfirmReassign={runBulkReassign}
+              recalcEndpointStatus={recalcEndpointStatus}
+              onOpenRecalc={() => setBulkRecalcOpen(true)}
+              bulkRecalcOpen={bulkRecalcOpen}
+              onCloseRecalc={() => setBulkRecalcOpen(false)}
+              bulkRecalcSubmitting={bulkRecalcSubmitting}
+              onConfirmRecalc={runBulkRecalc}
+              reviewedEndpointStatus={reviewedEndpointStatus}
+              onOpenReviewed={() => setBulkReviewedOpen(true)}
+              bulkReviewedOpen={bulkReviewedOpen}
+              onCloseReviewed={() => setBulkReviewedOpen(false)}
+              bulkReviewedNote={bulkReviewedNote}
+              onReviewedNoteChange={setBulkReviewedNote}
+              bulkReviewedSubmitting={bulkReviewedSubmitting}
+              onConfirmReviewed={runBulkMarkReviewed}
+              bulkRequestOpen={bulkRequestOpen}
+              onCloseRequestDocs={() => setBulkRequestOpen(false)}
+              bulkRequestText={bulkRequestText}
+              onRequestTextChange={setBulkRequestText}
+              bulkRequestSubmitting={bulkRequestSubmitting}
+              onConfirmRequestDocs={runBulkRequestDocs}
+            />
+
+            {/* ---- Column header row ---- */}
+            <div
+              className="worklist-grid worklist-header-row grid items-center px-6 py-3 bg-slate-50 border-b border-slate-100"
+              style={{ gridTemplateColumns: WORKLIST_COLS }}
+            >
+              <SortLabel col="name" label="Patient" sort={sort} onSort={handleSort} />
+              <span className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                Risk Level
+              </span>
+              <span title="Risk Adjustment Factor (RAF): CMS-HCC V28 score. 1.0 = average cost. Higher = more complex patient.">
+                <SortLabel col="raf_score" label="RAF Score" sort={sort} onSort={handleSort} />
+              </span>
+              <span className="risk-factors-cell text-[11.5px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                Risk Factors
+              </span>
+              <SortLabel col="hcc_count" label="HCCs" sort={sort} onSort={handleSort} align="right" />
+              <span className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-slate-500 pl-2">
+                HCC Status
+              </span>
+              <span aria-hidden="true" />
+            </div>
+
+            {/* ---- Column filter row ---- */}
+            {showColumnFilters && (
+              <div
+                className="worklist-grid worklist-filter-row grid items-center px-6 py-2.5 bg-slate-50 border-b border-slate-100"
+                style={{ gridTemplateColumns: WORKLIST_COLS }}
               >
-                Clear all filters
-              </button>
+                {/* Patient col: sex + age range */}
+                <div className="flex gap-1.5 items-center">
+                  <select
+                    title="Filter by sex"
+                    aria-label="Filter by sex"
+                    value={colFilters.sex}
+                    onChange={(e) => { setColFilters((f) => ({ ...f, sex: e.target.value as typeof f.sex })); setPage(0); }}
+                    className={colFilterSelectCls(colFilters.sex !== "all") + " w-[52px]"}
+                  >
+                    <option value="all">Sex</option>
+                    <option value="Male">M</option>
+                    <option value="Female">F</option>
+                  </select>
+                  <input
+                    title="Minimum age" placeholder="Age≥"
+                    aria-label="Minimum age"
+                    value={colFilters.ageMin}
+                    onChange={(e) => { setColFilters((f) => ({ ...f, ageMin: e.target.value })); setPage(0); }}
+                    className={colFilterInputCls(!!colFilters.ageMin) + " w-11"}
+                    type="number"
+                  />
+                  <input
+                    title="Maximum age" placeholder="Age≤"
+                    aria-label="Maximum age"
+                    value={colFilters.ageMax}
+                    onChange={(e) => { setColFilters((f) => ({ ...f, ageMax: e.target.value })); setPage(0); }}
+                    className={colFilterInputCls(!!colFilters.ageMax) + " w-11"}
+                    type="number"
+                  />
+                </div>
+
+                {/* Risk Level col — derived from RAF, no direct filter */}
+                <span className="text-[10px] text-slate-500 italic">auto</span>
+
+                {/* RAF Score col */}
+                <div className="flex flex-col gap-0.5">
+                  <input
+                    title="Minimum RAF score" placeholder="Min"
+                    aria-label="Minimum RAF score"
+                    value={colFilters.rafMin}
+                    onChange={(e) => { setColFilters((f) => ({ ...f, rafMin: e.target.value })); setPage(0); }}
+                    className={colFilterInputCls(!!colFilters.rafMin)}
+                    type="number" step="0.1"
+                  />
+                  <input
+                    title="Maximum RAF score" placeholder="Max"
+                    aria-label="Maximum RAF score"
+                    value={colFilters.rafMax}
+                    onChange={(e) => { setColFilters((f) => ({ ...f, rafMax: e.target.value })); setPage(0); }}
+                    className={colFilterInputCls(!!colFilters.rafMax)}
+                    type="number" step="0.1"
+                  />
+                </div>
+
+                {/* Risk Factors col — demo/disease/interact */}
+                <div className="risk-factors-cell flex gap-1">
+                  <div className="flex flex-col gap-0.5 flex-1">
+                    <input title="Min demographic score" aria-label="Min demographic score" placeholder="Demo≥" value={colFilters.demoMin} onChange={(e) => { setColFilters((f) => ({ ...f, demoMin: e.target.value })); setPage(0); }} type="number" step="0.01" className={colFilterInputCls(!!colFilters.demoMin) + " !text-[10px]"} />
+                    <input title="Max demographic score" aria-label="Max demographic score" placeholder="Demo≤" value={colFilters.demoMax} onChange={(e) => { setColFilters((f) => ({ ...f, demoMax: e.target.value })); setPage(0); }} type="number" step="0.01" className={colFilterInputCls(!!colFilters.demoMax) + " !text-[10px]"} />
+                  </div>
+                  <div className="flex flex-col gap-0.5 flex-1">
+                    <input title="Min disease score" aria-label="Min disease score" placeholder="Dis≥" value={colFilters.diseaseMin} onChange={(e) => { setColFilters((f) => ({ ...f, diseaseMin: e.target.value })); setPage(0); }} type="number" step="0.01" className={colFilterInputCls(!!colFilters.diseaseMin) + " !text-[10px]"} />
+                    <input title="Max disease score" aria-label="Max disease score" placeholder="Dis≤" value={colFilters.diseaseMax} onChange={(e) => { setColFilters((f) => ({ ...f, diseaseMax: e.target.value })); setPage(0); }} type="number" step="0.01" className={colFilterInputCls(!!colFilters.diseaseMax) + " !text-[10px]"} />
+                  </div>
+                  <div className="flex flex-col gap-0.5 flex-1">
+                    <input title="Min interaction score" aria-label="Min interaction score" placeholder="Int≥" value={colFilters.interactMin} onChange={(e) => { setColFilters((f) => ({ ...f, interactMin: e.target.value })); setPage(0); }} type="number" step="0.01" className={colFilterInputCls(!!colFilters.interactMin) + " !text-[10px]"} />
+                    <input title="Max interaction score" aria-label="Max interaction score" placeholder="Int≤" value={colFilters.interactMax} onChange={(e) => { setColFilters((f) => ({ ...f, interactMax: e.target.value })); setPage(0); }} type="number" step="0.01" className={colFilterInputCls(!!colFilters.interactMax) + " !text-[10px]"} />
+                  </div>
+                </div>
+
+                {/* HCCs col */}
+                <div className="flex flex-col gap-0.5">
+                  <input
+                    title="Minimum HCC count" placeholder="Min"
+                    aria-label="Minimum HCC count"
+                    value={colFilters.hccMin}
+                    onChange={(e) => { setColFilters((f) => ({ ...f, hccMin: e.target.value })); setPage(0); }}
+                    className={colFilterInputCls(!!colFilters.hccMin)}
+                    type="number"
+                  />
+                  <input
+                    title="Maximum HCC count" placeholder="Max"
+                    aria-label="Maximum HCC count"
+                    value={colFilters.hccMax}
+                    onChange={(e) => { setColFilters((f) => ({ ...f, hccMax: e.target.value })); setPage(0); }}
+                    className={colFilterInputCls(!!colFilters.hccMax)}
+                    type="number"
+                  />
+                </div>
+
+                {/* Status col */}
+                <select
+                  title="Filter by analysis status"
+                  aria-label="Filter by analysis status"
+                  value={colFilters.status}
+                  onChange={(e) => { setColFilters((f) => ({ ...f, status: e.target.value as typeof f.status })); setPage(0); }}
+                  className={colFilterSelectCls(colFilters.status !== "all") + " w-full"}
+                >
+                  <option value="all">All</option>
+                  <option value="analyzed">Analyzed</option>
+                  <option value="pending">Pending</option>
+                </select>
+
+                <span />
+              </div>
+            )}
+
+            {/* ---- Loading skeleton ---- */}
+            {isLoading && Array.from({ length: 8 }).map((_, i) => (
+              <SkeletonRow key={`skeleton-${i}`} />
+            ))}
+
+            {/* ---- Empty state ---- */}
+            {!isLoading && rows.length === 0 && (
+              <div className="py-16 px-6">
+                <EmptyState
+                  state="filtered-out"
+                  icon={<Users size={28} strokeWidth={1.75} />}
+                  title={
+                    riskFilter === "high" ? "No high-risk patients right now" :
+                    riskFilter === "unscored" ? "No unscored patients" :
+                    "No patients found"
+                  }
+                  description={
+                    riskFilter === "high"
+                      ? "Check Unscored patients for pending analysis — they may need a risk calculation."
+                      : "Try broadening your search or adjusting the risk filter to see more results."
+                  }
+                  cta={
+                    (riskFilter !== "all" || debouncedSearch || hasActiveColFilters)
+                      ? {
+                          label: "Clear all filters",
+                          onClick: () => { setRiskFilter("all"); setSearch(""); clearColFilters(); setPage(0); },
+                        }
+                      : undefined
+                  }
+                />
+              </div>
+            )}
+
+            {/* ---- Patient rows ---- */}
+            {rows.map((p, rowIndex) => {
+              const pid = p.pid;
+              const age = p.DOB ? calculateAge(p.DOB) : null;
+              const score = p.raf_score ?? 0;
+              const hccCount = p.hcc_count ?? 0;
+              const scored = score > 0;
+              const fullName = `${p.lname || ""}, ${p.fname || ""}`.trim().replace(/^,\s*/, "").replace(/,\s*$/, "") || "•";
+              const initials = deriveInitials(p.fname, p.lname, pid);
+              const sexLabel =
+                p.sex === "Female" ? "F" :
+                p.sex === "Male" ? "M" :
+                p.sex ? p.sex[0] : "—";
+              const avatarColor = initialsColor(fullName);
+              const isHovered = hoveredRow === pid;
+              const accent = riskAccentColor(scored ? score : null);
+              const tone = riskTone(scored ? score : null);
+              const toneFgAA =
+                tone.label === "High" ? "#B91C1C" :
+                tone.label === "Medium" ? "#B45309" :
+                tone.label === "Low" ? "#047857" :
+                tone.fg;
+              const location = formatLocation(p);
+
+              return (
+                <tr
+                  key={p.pid != null ? `pid-${p.pid}` : `row-${rowIndex}`}
+                  role="row"
+                  aria-label={`${fullName}, ${age !== null ? `age ${age}` : "age unknown"}, RAF ${scored ? Number(score).toFixed(2) : "not calculated"}, ${tone.label} risk, ${hccCount} HCC${hccCount === 1 ? "" : "s"}`}
+                  onMouseEnter={() => setHoveredRow(pid)}
+                  onMouseLeave={() => setHoveredRow(null)}
+                  data-selected={selectedPids.has(Number(pid)) ? "true" : undefined}
+                  className="flex relative overflow-visible border-b border-slate-100 transition-colors duration-150"
+                  style={{
+                    height: 64,
+                    minHeight: 64,
+                    maxHeight: 64,
+                    borderLeft: `3px solid ${accent}`,
+                    backgroundColor: isHovered
+                      ? tokens.slate50
+                      : tone.label === "High"
+                        ? tokens.riskHighSoft
+                        : "#ffffff",
+                    animation: `fadeSlideIn 0.25s ease-out ${Math.min(rowIndex, 12) * 0.025}s both`,
+                  }}
+                >
+                  {/* Checkbox cell */}
+                  <td
+                    role="gridcell"
+                    className="flex items-center justify-center shrink-0 p-0"
+                    style={{ width: 21 }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={typeof pid === "number" && selectedPids.has(pid)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        if (typeof pid === "number") togglePid(pid);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`Select ${fullName} for bulk actions`}
+                      className="w-3.5 h-3.5 shrink-0 cursor-pointer accent-teal-700 transition-opacity"
+                      style={{
+                        opacity:
+                          isHovered || (typeof pid === "number" && selectedPids.has(pid))
+                            ? 1
+                            : 0,
+                      }}
+                      onFocus={(e) => { e.currentTarget.style.opacity = "1"; }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.opacity =
+                          isHovered || (typeof pid === "number" && selectedPids.has(pid)) ? "1" : "0";
+                      }}
+                    />
+                  </td>
+
+                  {/* Content cell — Link is the sole navigation target */}
+                  <td role="gridcell" className="flex-1 min-w-0 p-0">
+                    <Link
+                      href={`/patients/${pid}`}
+                      className="worklist-grid worklist-row-anchor grid items-center overflow-visible pl-2 pr-6 gap-0 cursor-pointer no-underline text-inherit outline-none focus:shadow-[inset_0_0_0_2px_rgba(13,148,136,0.15)]"
+                      style={{
+                        gridTemplateColumns: WORKLIST_COLS,
+                        height: 64,
+                      }}
+                    >
+                      {/* Patient: avatar + name + subtitle */}
+                      <div
+                        title={`${fullName} · PID ${pid}`}
+                        className="flex items-center gap-2 min-w-0"
+                      >
+                        <div
+                          className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold tracking-wide border"
+                          style={{
+                            background: `linear-gradient(135deg, ${avatarColor}1F 0%, ${avatarColor}0F 100%)`,
+                            color: avatarColor,
+                            borderColor: `${avatarColor}26`,
+                          }}
+                        >
+                          {initials}
+                        </div>
+                        <div className="min-w-0 flex flex-col gap-0.5">
+                          <span className="text-[14px] font-semibold text-slate-900 truncate leading-[1.2] tracking-[-0.005em]">
+                            {fullName}
+                          </span>
+                          <span
+                            className="text-[11px] text-slate-400 whitespace-nowrap tabular-nums tracking-wide"
+                            style={{ fontFamily: FONT_MONO }}
+                          >
+                            {age !== null ? `${age}${sexLabel !== "—" ? sexLabel : ""}` : ""}
+                            {age !== null && <span className="mx-1 text-slate-200">&middot;</span>}
+                            {pid}
+                            {location !== "—" && (
+                              <>
+                                <span className="mx-1 text-slate-200">&middot;</span>
+                                {location}
+                              </>
+                            )}
+                            {p.data_source === "upload" && (
+                              <>
+                                <span className="mx-1 text-slate-200">&middot;</span>
+                                <span className="text-[9px] font-semibold tracking-[0.04em] px-[5px] py-px rounded bg-sky-50 text-blue-500 border border-sky-200 uppercase">
+                                  CSV
+                                </span>
+                              </>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Risk Level badge */}
+                      <div>
+                        {scored ? (
+                          <span
+                            className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[11.5px] font-bold whitespace-nowrap"
+                            style={{ backgroundColor: tone.bg, color: toneFgAA }}
+                          >
+                            {tone.label === "High" ? "▲" : tone.label === "Medium" ? "●" : "▼"}{" "}
+                            {tone.label}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-slate-100 text-slate-500 text-[11.5px] font-semibold">
+                            Unscored
+                          </span>
+                        )}
+                      </div>
+
+                      {/* RAF Score */}
+                      <div title={`Total CMS-HCC RAF Score: ${scored ? Number(score).toFixed(4) : "Not yet calculated"}`}>
+                        {scored ? (
+                          <span className="text-[20px] font-bold text-slate-900 tabular-nums leading-none tracking-[-0.025em]">
+                            {Number(score).toFixed(2)}
+                          </span>
+                        ) : (
+                          <span className="text-[18px] text-slate-200 font-normal tabular-nums">&mdash;</span>
+                        )}
+                      </div>
+
+                      {/* Risk Factors chips */}
+                      <div className="risk-factors-cell flex flex-wrap gap-1 items-center">
+                        {scored && (
+                          (p.demographic_score != null && p.demographic_score > 0) ||
+                          (p.disease_score != null && p.disease_score > 0) ||
+                          (p.interaction_score != null && p.interaction_score > 0)
+                        ) ? (
+                          <>
+                            {p.demographic_score != null && p.demographic_score > 0 && (
+                              <span
+                                title={`Demographic RAF component — age/sex/disability adjustment: ${Number(p.demographic_score).toFixed(4)}`}
+                                className="inline-flex items-center gap-0.5 h-[22px] px-[7px] rounded-md bg-slate-100 border border-slate-200 text-[10.5px] font-semibold tabular-nums whitespace-nowrap cursor-default"
+                              >
+                                <span className="text-slate-500">Demo</span>
+                                <span className="text-slate-900">{Number(p.demographic_score).toFixed(3)}</span>
+                              </span>
+                            )}
+                            {p.disease_score != null && p.disease_score > 0 && (
+                              <span
+                                title={`Disease RAF component — HCC condition category contributions: ${Number(p.disease_score).toFixed(4)}`}
+                                className="inline-flex items-center gap-0.5 h-[22px] px-[7px] rounded-md bg-slate-100 border border-slate-200 text-[10.5px] font-semibold tabular-nums whitespace-nowrap cursor-default"
+                              >
+                                <span className="text-slate-500">Disease</span>
+                                <span className="text-slate-900">{Number(p.disease_score).toFixed(3)}</span>
+                              </span>
+                            )}
+                            {p.interaction_score != null && p.interaction_score > 0 && (
+                              <span
+                                title={`Interaction RAF component — disease-disease interaction adjustments: ${Number(p.interaction_score).toFixed(4)}`}
+                                className="inline-flex items-center gap-0.5 h-[22px] px-[7px] rounded-md bg-slate-100 border border-slate-200 text-[10.5px] font-semibold tabular-nums whitespace-nowrap cursor-default"
+                              >
+                                <span className="text-slate-500">Interact</span>
+                                <span className="text-slate-900">{Number(p.interaction_score).toFixed(3)}</span>
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-[12px] text-slate-200">&mdash;</span>
+                        )}
+                      </div>
+
+                      {/* HCC Count */}
+                      <div
+                        title={`${hccCount} Hierarchical Condition Categories identified`}
+                        className="flex flex-col items-end gap-px"
+                      >
+                        {hccCount > 0 ? (
+                          <>
+                            <span className="text-[17px] font-bold text-slate-900 tabular-nums leading-none tracking-[-0.015em]">
+                              {hccCount}
+                            </span>
+                            <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-[0.08em]">
+                              {hccCount === 1 ? "HCC" : "HCCs"}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-[17px] text-slate-200 font-normal">&mdash;</span>
+                        )}
+                      </div>
+
+                      {/* Status pill */}
+                      <div title={scored ? (tone.label === "High" ? "High risk — needs review" : "RAF score has been calculated") : "RAF score pending — patient needs analysis"}>
+                        <span
+                          className="inline-flex items-center gap-1.5 h-6 pl-2.5 pr-3 rounded-full text-[11.5px] font-semibold whitespace-nowrap tracking-[-0.005em] border"
+                          style={{
+                            backgroundColor:
+                              !scored ? tokens.slate50 :
+                              tone.label === "High" ? C.highSoft :
+                              C.lowSoft,
+                            borderColor:
+                              !scored ? C.border :
+                              tone.label === "High" ? tokens.dangerBorder :
+                              tokens.emerald100,
+                            color:
+                              !scored ? tokens.slate600 :
+                              tone.label === "High" ? "#B91C1C" :
+                              tokens.successDark,
+                          }}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full"
+                            style={{
+                              backgroundColor:
+                                !scored ? tokens.slate300 :
+                                tone.label === "High" ? tokens.dangerMedium :
+                                tokens.success,
+                              boxShadow:
+                                !scored ? "none" :
+                                tone.label === "High" ? "0 0 0 2px rgba(239,68,68,0.18)" :
+                                "0 0 0 2px rgba(16,185,129,0.18)",
+                            }}
+                          />
+                          {!scored ? "Pending" : tone.label === "High" ? "Needs Review" : "Analyzed"}
+                        </span>
+                      </div>
+
+                      {/* Chevron */}
+                      <ChevronRight
+                        size={16}
+                        className={[
+                          "transition-all duration-150",
+                          isHovered ? "text-teal-700 translate-x-0.5" : "text-slate-300",
+                        ].join(" ")}
+                      />
+
+                      {/* Recent-activity hover card */}
+                      {typeof pid === "number" && (
+                        <WorklistRowHoverActivity patientId={pid} isHovered={isHovered} />
+                      )}
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
+
+            {/* ---- Pagination ---- */}
+            {!isLoading && totalPages > 1 && (
+              <div className="flex items-center justify-between gap-2 py-3.5 px-5 border-t border-slate-200 bg-slate-50/80">
+                <span className="text-xs text-slate-600 tabular-nums">
+                  Showing{" "}
+                  <strong className="text-slate-900 font-semibold">
+                    {Math.min(page * PAGE_SIZE + 1, total)}&ndash;{Math.min((page + 1) * PAGE_SIZE, total)}
+                  </strong>{" "}
+                  of <strong className="text-slate-900 font-semibold">{total.toLocaleString()}</strong>
+                </span>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    disabled={page === 0}
+                    onClick={() => setPage((p) => p - 1)}
+                    aria-label="Previous page"
+                    className="inline-flex items-center gap-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-500 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed transition-colors hover:enabled:bg-slate-50"
+                  >
+                    <ChevronLeft size={13} /> Prev
+                  </button>
+
+                  {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                    let pageNum: number;
+                    if (totalPages <= 7) {
+                      pageNum = i;
+                    } else if (page < 3) {
+                      pageNum = i;
+                    } else if (page > totalPages - 4) {
+                      pageNum = totalPages - 7 + i;
+                    } else {
+                      pageNum = page - 3 + i;
+                    }
+                    const isActive = pageNum === page;
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setPage(pageNum)}
+                        className={[
+                          "w-8 h-8 rounded-lg inline-flex items-center justify-center text-xs tabular-nums transition-colors cursor-pointer border-none",
+                          isActive
+                            ? "bg-teal-700 text-white font-semibold shadow-[0_2px_6px_rgba(15,118,110,0.25)]"
+                            : "bg-transparent text-slate-500 font-medium hover:bg-slate-100",
+                        ].join(" ")}
+                        aria-current={isActive ? "page" : undefined}
+                        aria-label={`Page ${pageNum + 1}`}
+                      >
+                        {pageNum + 1}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    disabled={page >= totalPages - 1}
+                    onClick={() => setPage((p) => p + 1)}
+                    aria-label="Next page"
+                    className="inline-flex items-center gap-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-500 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed transition-colors hover:enabled:bg-slate-50"
+                  >
+                    Next <ChevronRight size={13} />
+                  </button>
+                </div>
+              </div>
             )}
           </div>
-        )}
 
-        {/* ---- Patient Rows ---- */}
-        {rows.map((p, rowIndex) => {
-          const pid = p.pid;
-          const age = p.DOB ? calculateAge(p.DOB) : null;
-          const score = p.raf_score ?? 0;
-          const hccCount = p.hcc_count ?? 0;
-          const scored = score > 0;
-          const fullName = `${p.lname || ""}, ${p.fname || ""}`.trim().replace(/^,\s*/, "").replace(/,\s*$/, "") || "\u2022";
-          const initials = deriveInitials(p.fname, p.lname, pid);
-          const sexLabel =
-            p.sex === "Female" ? "F" :
-            p.sex === "Male" ? "M" :
-            p.sex ? p.sex[0] : "\u2014";
-          const avatarColor = initialsColor(fullName);
-          const isHovered = hoveredRow === pid;
-          const accent = riskAccentColor(scored ? score : null);
-          const tone = riskTone(scored ? score : null);
-          // AA-compliant darker foreground for the risk-tone badges.
-          // The base tone.fg colours (riskHigh #DC2626, riskMedium #D97706,
-          // riskLow #059669) only hit 3.07–4.41:1 on their soft backgrounds,
-          // which axe flags as serious contrast violations. The 700-step
-          // tints clear 4.5:1 on the same soft backgrounds.
-          const toneFgAA =
-            tone.label === "High" ? "#B91C1C" :
-            tone.label === "Medium" ? "#B45309" :
-            tone.label === "Low" ? "#047857" :
-            tone.fg;
-          const location = formatLocation(p);
+          <style>{`
+            @keyframes fadeSlideIn {
+              from { opacity: 0; transform: translateY(6px); }
+              to { opacity: 1; transform: translateY(0); }
+            }
+            /* WCAG 2.5.5 — touch targets ≥44px on mobile */
+            @media (max-width: 768px) {
+              .rci-filter-pill {
+                min-height: 44px !important;
+                padding-top: 5px !important;
+                padding-bottom: 5px !important;
+              }
+            }
+          `}</style>
 
-          return (
-            // Semantic <tr role="row"> replaces <div role="button">.
-            // Checkbox owns its own <td> so screen readers announce:
-            //   "Checkbox, Smith John, link, row 3 of 14"
-            // not the broken "button, row 3, Smith John, Checkbox".
-            <tr
-              key={p.pid != null ? `pid-${p.pid}` : `row-${rowIndex}`}
-              role="row"
-              aria-label={`${fullName}, ${age !== null ? `age ${age}` : "age unknown"}, RAF ${scored ? Number(score).toFixed(2) : "not calculated"}, ${tone.label} risk, ${hccCount} HCC${hccCount === 1 ? "" : "s"}`}
-              onMouseEnter={() => setHoveredRow(pid)}
-              onMouseLeave={() => setHoveredRow(null)}
-              data-selected={selectedPids.has(Number(pid)) ? "true" : undefined}
-              style={{
-                display: "flex",
-                position: "relative",
-                height: ROW_HEIGHT,
-                minHeight: ROW_HEIGHT,
-                maxHeight: ROW_HEIGHT,
-                overflow: "visible",
-                borderBottom: `1px solid ${C.rowDivider}`,
-                borderLeft: `3px solid ${accent}`,
-                backgroundColor: isHovered
-                  ? tokens.slate50
-                  : tone.label === "High"
-                    ? tokens.riskHighSoft
-                    : C.bgCard,
-                transition: "background-color 0.15s ease",
-                animation: `fadeSlideIn 0.25s ease-out ${Math.min(rowIndex, 12) * 0.025}s both`,
-              }}
-            >
-              {/* ── Checkbox cell — own focus stop, no row navigation ── */}
-              <td
-                role="gridcell"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                  width: WORKLIST_PAD_X - 3,
-                  padding: 0,
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={typeof pid === "number" && selectedPids.has(pid)}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    if (typeof pid === "number") togglePid(pid);
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label={`Select ${fullName} for bulk actions`}
-                  // opacity instead of visibility keeps it in the focus order
-                  style={{
-                    width: 14,
-                    height: 14,
-                    flexShrink: 0,
-                    cursor: "pointer",
-                    accentColor: C.brand,
-                    opacity:
-                      isHovered || (typeof pid === "number" && selectedPids.has(pid))
-                        ? 1
-                        : 0,
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.opacity = "1";
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.opacity =
-                      isHovered || (typeof pid === "number" && selectedPids.has(pid))
-                        ? "1"
-                        : "0";
-                  }}
-                />
-              </td>
-
-              {/* ── Content cell — Link is the sole navigation target ── */}
-              <td
-                role="gridcell"
-                style={{ flex: 1, minWidth: 0, padding: 0 }}
-              >
-                <Link
-                  href={`/patients/${pid}`}
-                  className="worklist-grid worklist-row-anchor"
-                  style={{
-                    display: "grid",
-                    ...WORKLIST_GRID_VARS,
-                    alignItems: "center",
-                    height: ROW_HEIGHT,
-                    // overflow: visible so the hover-card can extend below the row
-                    overflow: "visible",
-                    padding: `0 ${WORKLIST_PAD_X}px 0 8px`,
-                    gap: WORKLIST_GAP,
-                    cursor: "pointer",
-                    textDecoration: "none",
-                    color: "inherit",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.boxShadow = `inset 0 0 0 2px ${C.brandSoft}`;
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.boxShadow = "none";
-                  }}
-                >
-              {/* Patient: avatar + name + subtitle */}
-              <div title={`${fullName} \u00B7 PID ${pid}`} style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                <div style={{
-                  width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
-                  background: `linear-gradient(135deg, ${avatarColor}1F 0%, ${avatarColor}0F 100%)`,
-                  color: avatarColor,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 11, fontWeight: 700,
-                  letterSpacing: "0.02em",
-                  border: `1px solid ${avatarColor}26`,
-                }}>
-                  {initials}
-                </div>
-                <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-                  <span style={{
-                    fontSize: 14, fontWeight: 600, color: C.text,
-                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                    letterSpacing: "-0.005em",
-                    lineHeight: 1.2,
-                  }}>
-                    {fullName}
-                  </span>
-                  <span style={{
-                    fontSize: 11,
-                    color: C.textMuted,
-                    fontFamily: FONT_MONO,
-                    fontVariantNumeric: "tabular-nums",
-                    whiteSpace: "nowrap",
-                    letterSpacing: "0.02em",
-                  }}>
-                    {age !== null ? `${age}${sexLabel !== "\u2014" ? sexLabel : ""}` : ""}
-                    {age !== null && <span style={{ margin: "0 4px", color: tokens.slate300 }}>&middot;</span>}
-                    {pid}
-                    {location !== "\u2014" && (
-                      <>
-                        <span style={{ margin: "0 4px", color: tokens.slate300 }}>&middot;</span>
-                        {location}
-                      </>
-                    )}
-                    {p.data_source === "upload" && (
-                      <>
-                        <span style={{ margin: "0 4px", color: tokens.slate300 }}>&middot;</span>
-                        <span style={{
-                          fontSize: 9, fontWeight: 600, letterSpacing: "0.04em",
-                          padding: "1px 5px", borderRadius: 4,
-                          background: tokens.skyBg, color: tokens.infoBlue, border: `1px solid ${tokens.skyBorder}`,
-                          textTransform: "uppercase",
-                        }}>CSV</span>
-                      </>
-                    )}
-                  </span>
-                </div>
-              </div>
-
-              {/* Risk Level — colored badge pill */}
-              <div>
-                {scored ? (
-                  <span style={{
-                    display: "inline-flex", alignItems: "center", gap: 4,
-                    height: 24, padding: "0 10px",
-                    borderRadius: 999,
-                    backgroundColor: tone.bg,
-                    color: toneFgAA,
-                    fontSize: 11.5, fontWeight: 700,
-                    whiteSpace: "nowrap",
-                  }}>
-                    {tone.label === "High" ? "\u25B2" : tone.label === "Medium" ? "\u25CF" : "\u25BC"} {tone.label}
-                  </span>
-                ) : (
-                  <span style={{
-                    display: "inline-flex", alignItems: "center",
-                    height: 24, padding: "0 10px",
-                    borderRadius: 999,
-                    backgroundColor: tokens.slate100,
-                    color: C.label,
-                    fontSize: 11.5, fontWeight: 600,
-                  }}>
-                    Unscored
-                  </span>
-                )}
-              </div>
-
-              {/* RAF Score — large bold */}
-              <div title={`Total CMS-HCC RAF Score: ${scored ? Number(score).toFixed(4) : "Not yet calculated"}`}>
-                {scored ? (
-                  <span style={{
-                    fontSize: 20,
-                    fontWeight: 700,
-                    color: C.text,
-                    fontVariantNumeric: "tabular-nums",
-                    lineHeight: 1,
-                    letterSpacing: "-0.025em",
-                  }}>
-                    {Number(score).toFixed(2)}
-                  </span>
-                ) : (
-                  <span style={{
-                    fontSize: 18, color: tokens.slate300, fontWeight: 400,
-                    fontVariantNumeric: "tabular-nums",
-                  }}>{"\u2014"}</span>
-                )}
-              </div>
-
-              {/* Risk Factors — individual chips per component with descriptive tooltips */}
-              <div className="risk-factors-cell" style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
-                {scored && (
-                  (p.demographic_score != null && p.demographic_score > 0) ||
-                  (p.disease_score != null && p.disease_score > 0) ||
-                  (p.interaction_score != null && p.interaction_score > 0)
-                ) ? (
-                  <>
-                    {p.demographic_score != null && p.demographic_score > 0 && (
-                      <span
-                        title={`Demographic RAF component — age/sex/disability adjustment: ${Number(p.demographic_score).toFixed(4)}`}
-                        style={{
-                          display: "inline-flex", alignItems: "center", gap: 2,
-                          height: 22, padding: "0 7px",
-                          borderRadius: 6,
-                          backgroundColor: tokens.slate100,
-                          border: `1px solid ${tokens.slate200}`,
-                          fontSize: 10.5, fontWeight: 600,
-                          fontVariantNumeric: "tabular-nums",
-                          whiteSpace: "nowrap",
-                          cursor: "default",
-                        }}
-                      >
-                        <span style={{ color: tokens.slate500 }}>Demo</span>
-                        <span style={{ color: tokens.slate900 }}>{Number(p.demographic_score).toFixed(3)}</span>
-                      </span>
-                    )}
-                    {p.disease_score != null && p.disease_score > 0 && (
-                      <span
-                        title={`Disease RAF component — HCC condition category contributions: ${Number(p.disease_score).toFixed(4)}`}
-                        style={{
-                          display: "inline-flex", alignItems: "center", gap: 2,
-                          height: 22, padding: "0 7px",
-                          borderRadius: 6,
-                          backgroundColor: tokens.slate100,
-                          border: `1px solid ${tokens.slate200}`,
-                          fontSize: 10.5, fontWeight: 600,
-                          fontVariantNumeric: "tabular-nums",
-                          whiteSpace: "nowrap",
-                          cursor: "default",
-                        }}
-                      >
-                        <span style={{ color: tokens.slate500 }}>Disease</span>
-                        <span style={{ color: tokens.slate900 }}>{Number(p.disease_score).toFixed(3)}</span>
-                      </span>
-                    )}
-                    {p.interaction_score != null && p.interaction_score > 0 && (
-                      <span
-                        title={`Interaction RAF component — disease-disease interaction adjustments: ${Number(p.interaction_score).toFixed(4)}`}
-                        style={{
-                          display: "inline-flex", alignItems: "center", gap: 2,
-                          height: 22, padding: "0 7px",
-                          borderRadius: 6,
-                          backgroundColor: tokens.slate100,
-                          border: `1px solid ${tokens.slate200}`,
-                          fontSize: 10.5, fontWeight: 600,
-                          fontVariantNumeric: "tabular-nums",
-                          whiteSpace: "nowrap",
-                          cursor: "default",
-                        }}
-                      >
-                        <span style={{ color: tokens.slate500 }}>Interact</span>
-                        <span style={{ color: tokens.slate900 }}>{Number(p.interaction_score).toFixed(3)}</span>
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  <span style={{ fontSize: 12, color: tokens.slate300 }}>{"—"}</span>
-                )}
-              </div>
-
-              {/* HCC Count */}
-              <div
-                title={`${hccCount} Hierarchical Condition Categories identified`}
-                style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}
-              >
-                {hccCount > 0 ? (
-                  <>
-                    <span style={{
-                      fontSize: 17, fontWeight: 700, color: C.text,
-                      fontVariantNumeric: "tabular-nums",
-                      lineHeight: 1,
-                      letterSpacing: "-0.015em",
-                    }}>
-                      {hccCount}
-                    </span>
-                    <span style={{
-                      fontSize: 9, fontWeight: 600,
-                      color: C.textSubtle,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.08em",
-                    }}>
-                      {hccCount === 1 ? "HCC" : "HCCs"}
-                    </span>
-                  </>
-                ) : (
-                  <span style={{ fontSize: 17, color: tokens.slate300, fontWeight: 400 }}>{"\u2014"}</span>
-                )}
-              </div>
-
-              {/* Status pill */}
-              <div title={scored ? (tone.label === "High" ? "High risk — needs review" : "RAF score has been calculated") : "RAF score pending — patient needs analysis"}>
-                <span style={{
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  height: 24, padding: "0 12px 0 10px",
-                  borderRadius: 999,
-                  backgroundColor:
-                    !scored ? tokens.slate50 :
-                    tone.label === "High" ? C.highSoft :
-                    C.lowSoft,
-                  border: `1px solid ${
-                    !scored ? C.border :
-                    tone.label === "High" ? tokens.dangerBorder :
-                    tokens.emerald100
-                  }`,
-                  fontSize: 11.5, fontWeight: 600,
-                  color:
-                    // dangerStrong (#DC2626) on highSoft (#FEF2F2) hits only
-                    // 4.41:1 — below WCAG AA 4.5:1. red-700 (#B91C1C) clears
-                    // 6.0:1 on the same background.
-                    !scored ? tokens.slate600 :
-                    tone.label === "High" ? "#B91C1C" :
-                    tokens.successDark,
-                  whiteSpace: "nowrap",
-                  letterSpacing: "-0.005em",
-                }}>
-                  <span style={{
-                    width: 6, height: 6, borderRadius: 3,
-                    backgroundColor:
-                      !scored ? tokens.slate300 :
-                      tone.label === "High" ? tokens.dangerMedium :
-                      tokens.success,
-                    boxShadow:
-                      !scored ? "none" :
-                      tone.label === "High" ? "0 0 0 2px rgba(239,68,68,0.18)" :
-                      "0 0 0 2px rgba(16,185,129,0.18)",
-                  }} />
-                  {!scored ? "Pending" : tone.label === "High" ? "Needs Review" : "Analyzed"}
-                </span>
-              </div>
-
-              {/* Chevron */}
-              <ChevronRight
-                size={16}
-                color={isHovered ? C.brand : tokens.slate300}
-                style={{
-                  transform: isHovered ? "translateX(2px)" : "translateX(0)",
-                  transition: "transform 0.15s ease, color 0.15s ease",
-                }}
-              />
-
-              {/* Recent-activity hover card — appears after 600ms dwell */}
-              {typeof pid === "number" && (
-                <WorklistRowHoverActivity patientId={pid} isHovered={isHovered} />
-              )}
-                </Link>
-              </td>
-            </tr>
-          );
-        })}
-
-        {/* ---- Pagination ---- */}
-        {!isLoading && totalPages > 1 && (
-          <div className="flex items-center justify-between gap-2 py-3.5 px-5 border-t border-slate-200 bg-[#FAFBFC]">
-            <span className="text-xs text-slate-600 tabular-nums">
-              Showing{" "}
-              <strong className="text-slate-900 font-semibold">
-                {Math.min(page * PAGE_SIZE + 1, total)}&ndash;{Math.min((page + 1) * PAGE_SIZE, total)}
-              </strong>{" "}
-              of <strong className="text-slate-900 font-semibold">{total.toLocaleString()}</strong>
-            </span>
-
-            <div className="flex items-center gap-1.5">
-              <button
-                disabled={page === 0}
-                onClick={() => setPage((p) => p - 1)}
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: 4,
-                  height: 32, padding: "0 12px", borderRadius: 8,
-                  border: `1px solid ${C.border}`, backgroundColor: tokens.white,
-                  fontSize: 12, fontWeight: 500,
-                  color: page === 0 ? tokens.slate300 : C.textMuted,
-                  cursor: page === 0 ? "not-allowed" : "pointer",
-                  opacity: page === 0 ? 0.6 : 1,
-                  fontFamily: "inherit",
-                  transition: "all 0.15s ease",
-                }}
-                aria-label="Previous page"
-              >
-                <ChevronLeft size={13} /> Prev
-              </button>
-
-              {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                let pageNum: number;
-                if (totalPages <= 7) {
-                  pageNum = i;
-                } else if (page < 3) {
-                  pageNum = i;
-                } else if (page > totalPages - 4) {
-                  pageNum = totalPages - 7 + i;
-                } else {
-                  pageNum = page - 3 + i;
-                }
-                const isActive = pageNum === page;
-                return (
-                  <button
-                    key={pageNum}
-                    onClick={() => setPage(pageNum)}
-                    style={{
-                      width: 32, height: 32, borderRadius: 8,
-                      display: "inline-flex", alignItems: "center", justifyContent: "center",
-                      border: isActive ? "none" : `1px solid transparent`,
-                      backgroundColor: isActive ? C.brand : "transparent",
-                      color: isActive ? tokens.white : C.textSubtle,
-                      fontSize: 12, fontWeight: isActive ? 600 : 500,
-                      fontVariantNumeric: "tabular-nums",
-                      cursor: "pointer",
-                      transition: "all 0.15s ease",
-                      boxShadow: isActive ? "0 2px 6px rgba(15, 118, 110, 0.25)" : "none",
-                    }}
-                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = tokens.slate100; }}
-                    onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = "transparent"; }}
-                  >
-                    {pageNum + 1}
-                  </button>
-                );
-              })}
-
-              <button
-                disabled={page >= totalPages - 1}
-                onClick={() => setPage((p) => p + 1)}
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: 4,
-                  height: 32, padding: "0 12px", borderRadius: 8,
-                  border: `1px solid ${C.border}`, backgroundColor: tokens.white,
-                  fontSize: 12, fontWeight: 500,
-                  color: page >= totalPages - 1 ? tokens.slate300 : C.textMuted,
-                  cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
-                  opacity: page >= totalPages - 1 ? 0.6 : 1,
-                  fontFamily: "inherit",
-                  transition: "all 0.15s ease",
-                }}
-                aria-label="Next page"
-              >
-                Next <ChevronRight size={13} />
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeSlideIn {
-          from { opacity: 0; transform: translateY(6px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-        /* WCAG 2.5.5 — touch targets ≥44px on mobile */
-        @media (max-width: 768px) {
-          .rci-filter-pill {
-            min-height: 44px !important;
-            padding-top: 5px !important;
-            padding-bottom: 5px !important;
-          }
-        }
-      `}</style>
-
-      {showImportModal && (
-        <ImportCSVModal
-          onClose={() => setShowImportModal(false)}
-          onImported={() => refetch()}
-        />
-      )}
-    </div>
-    </>
+          {showImportModal && (
+            <ImportCSVModal
+              onClose={() => setShowImportModal(false)}
+              onImported={() => refetch()}
+            />
+          )}
+        </div>
+      </>
     </ErrorBoundary>
   );
 }

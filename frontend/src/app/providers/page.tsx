@@ -4,12 +4,9 @@ import React, {
   useState,
   useMemo,
   useCallback,
-  useRef,
-  useEffect,
 } from "react";
 import dynamic from "next/dynamic";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 
 // Lazy-load heavy modal + detail-panel code — excluded from initial paint.
 const ProvidersModals = dynamic(() => import("./ProvidersModals"), {
@@ -17,17 +14,21 @@ const ProvidersModals = dynamic(() => import("./ProvidersModals"), {
   loading: () => null,
 });
 const LazyProviderDetailPanel = dynamic(
-  () => import("./ProvidersModals").then((m) => ({ default: m.ProviderDetailPanel })),
+  () =>
+    import("./ProvidersModals").then((m) => ({
+      default: m.ProviderDetailPanel,
+    })),
   {
     ssr: false,
     loading: () => (
-      <div style={{ padding: 32, textAlign: "center", fontSize: 13, color: "#64748B" }}>
-        <div style={{ width: 28, height: 28, borderRadius: "50%", border: "3px solid #E2E8F0", borderTopColor: "#2563EB", animation: "spin 0.8s linear infinite", margin: "0 auto 10px" }} />
+      <div className="p-8 text-center text-[13px] text-muted-foreground">
+        <div className="w-7 h-7 rounded-full border-2 border-border border-t-primary animate-spin mx-auto mb-2.5" />
         Loading scorecard...
       </div>
     ),
-  }
+  },
 );
+
 import api from "@/lib/api";
 import {
   Stethoscope,
@@ -39,12 +40,7 @@ import {
   Search,
   ChevronDown,
   ChevronUp,
-  RefreshCw,
-  X,
-  AlertCircle,
   CheckCircle,
-  Bell,
-  BellOff,
   Zap,
   Filter,
   ArrowUpDown,
@@ -54,29 +50,10 @@ import {
 import { downloadCSV } from "@/lib/csv-export";
 import { initialsColor } from "@/lib/ui-utils";
 import { fmtCurrencySmart } from "@/lib/format";
-import { tokens } from "@/styles/tokens";
-import { PageHeader, SectionHeader } from "@/components/healthcare-ui";
+import { PageHeader } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 import { MetricCard } from "@/components/ui/metric-card";
-import FeatureFlag from "@/components/FeatureFlag";
-import { HccChipWithPopover } from "@/components/kg/HccExplainCard";
-import ProviderSuspectHotlist from "@/components/ProviderSuspectHotlist";
 import ProviderFeaturesSettings from "@/components/ProviderFeaturesSettings";
-import TopHccOpportunities from "@/components/TopHccOpportunities";
-// Defer Recharts-heavy revenue breakdown — saves ~98 kB gz on first paint.
-const ProviderRevenueBreakdown = dynamic(
-  () => import("@/components/ProviderRevenueBreakdown"),
-  {
-    ssr: false,
-    loading: () => <div className="h-64 animate-pulse bg-muted rounded-md" />,
-  }
-);
-import ProviderTrendCard from "@/components/ProviderTrendCard";
-import PeerPercentileRibbon from "@/components/PeerPercentileRibbon";
-import MeatAuditRiskBadge from "@/components/MeatAuditRiskBadge";
-import PreVisitBriefingPanel from "@/components/PreVisitBriefingPanel";
-import ProviderReportButton from "@/components/ProviderReportButton";
-
-// ── API base ──────────────────────────────────────────────────────────────────
 
 // ── API functions ─────────────────────────────────────────────────────────────
 async function getProviderSummary() {
@@ -95,11 +72,6 @@ async function getProviderLeaderboard() {
   return data as ProviderRow[];
 }
 
-async function getProviderDetail(providerId: number) {
-  const { data } = await api.get(`/api/providers/${providerId}/scorecard`);
-  return data as ProviderDetail;
-}
-
 async function createProvider(body: ProviderForm) {
   const { data } = await api.post("/api/providers", body);
   return data;
@@ -111,51 +83,13 @@ async function discoverProviders() {
 }
 
 async function importProviders(ids: number[]) {
-  // Import each discovered provider individually via their specific import endpoint
   const results = await Promise.all(
-    ids.map((id) => api.post(`/api/providers/${id}/import`).then((r) => r.data))
+    ids.map((id) =>
+      api.post(`/api/providers/${id}/import`).then((r) => r.data),
+    ),
   );
   return results;
 }
-
-async function acknowledgeAlert(payload: { providerId: number; alertId: number }) {
-  const { data } = await api.put(
-    `/api/providers/${payload.providerId}/alerts/${payload.alertId}/acknowledge`
-  );
-  return data;
-}
-
-// ── Design Tokens (single source of truth: tokens.ts) ─────────────────────────
-const C = {
-  bg: tokens.slate50,
-  card: tokens.white,
-  border: tokens.slate200,
-  borderLight: tokens.slate100,
-  text: tokens.slate900,
-  textMuted: tokens.slate500,
-  textSub: tokens.slate400,
-  primary: tokens.primary,
-  primaryLight: "rgba(37,99,235,0.10)",
-  primaryDark: tokens.primaryDark,
-  emerald: tokens.success,
-  emeraldLight: tokens.successSoft,
-  emeraldDark: tokens.emerald800,
-  amber: tokens.warningStrong,
-  amberLight: tokens.warningSoft,
-  amberDark: tokens.warningText,
-  red: tokens.riskHigh,
-  redLight: tokens.riskHighSoft,
-  redDark: tokens.danger,
-  violet: tokens.accentPurple,
-  violetLight: "rgba(139,92,246,0.10)",
-  gray50: tokens.slate50,
-  gray100: tokens.slate100,
-  gray200: tokens.slate200,
-  gray300: tokens.slate300,
-  gray400: tokens.slate400,
-  gray600: tokens.slate600,
-  white: tokens.white,
-};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ProviderRow = {
@@ -173,47 +107,6 @@ type ProviderRow = {
   recapture_rate: number | null;
   meat_score: number | null;
   revenue_opportunity: number | null;
-};
-
-type HccPerformance = {
-  hcc_code: string;
-  description: string;
-  patients_at_risk: number;
-  coded: number;
-  uncoded: number;
-  capture_pct: number;
-  revenue_at_stake: number;
-};
-
-type ProviderAlert = {
-  alert_id: number;
-  type: string;
-  message: string;
-  severity: "high" | "medium" | "low";
-  acknowledged: boolean;
-  created_at: string;
-};
-
-type ProviderDetail = {
-  provider_id: number;
-  first_name: string;
-  last_name: string;
-  credential: string;
-  specialty: string;
-  specialty_category: string;
-  practice_name: string | null;
-  npi: string | null;
-  email: string | null;
-  patient_count: number;
-  scorecard: {
-    capture_rate: number;
-    recapture_rate: number;
-    meat_score: number;
-    documentation_quality: number;
-    revenue_capture: number;
-  };
-  hcc_performance: HccPerformance[];
-  alerts: ProviderAlert[];
 };
 
 type ProviderForm = {
@@ -265,117 +158,168 @@ function fmtN(v: number | null | undefined, d = 2): string {
   return Number(v).toFixed(d);
 }
 
-function providerName(p: { first_name: string; last_name: string; credential: string }) {
+function providerName(p: {
+  first_name: string;
+  last_name: string;
+  credential: string;
+}) {
   return `${p.first_name} ${p.last_name}${p.credential ? `, ${p.credential}` : ""}`;
 }
 
-function captureColor(rate: number | null): string {
-  if (rate == null) return C.gray400;
-  if (rate >= 0.85) return C.emerald;
-  if (rate >= 0.70) return C.amber;
-  return C.red;
+// ── Capture Rate colour helpers (Tailwind class-based) ────────────────────────
+function captureTextClass(rate: number | null): string {
+  if (rate == null) return "text-muted-foreground";
+  if (rate >= 0.85) return "text-emerald-600 dark:text-emerald-400";
+  if (rate >= 0.7) return "text-amber-600 dark:text-amber-400";
+  return "text-red-600 dark:text-red-400";
 }
 
-function captureBg(rate: number | null): string {
-  if (rate == null) return C.gray100;
-  if (rate >= 0.85) return C.emeraldLight;
-  if (rate >= 0.70) return C.amberLight;
-  return C.redLight;
+function captureBgClass(rate: number | null): string {
+  if (rate == null) return "bg-muted text-muted-foreground";
+  if (rate >= 0.85)
+    return "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300";
+  if (rate >= 0.7)
+    return "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
+  return "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300";
+}
+
+function captureBarClass(rate: number | null): string {
+  if (rate == null) return "bg-muted-foreground/30";
+  if (rate >= 0.85) return "bg-emerald-500";
+  if (rate >= 0.7) return "bg-amber-500";
+  return "bg-red-500";
 }
 
 // ── Capture Rate Badge ────────────────────────────────────────────────────────
 function CaptureBadge({ rate }: { rate: number | null }) {
-  if (rate == null) return <span className="text-gray-400 text-xs">--</span>;
+  if (rate == null)
+    return <span className="text-muted-foreground text-xs">--</span>;
   return (
     <span
-      style={{
-        display: "inline-block",
-        padding: "3px 10px",
-        borderRadius: 9999,
-        fontSize: 12,
-        fontWeight: 600,
-        background: captureBg(rate),
-        color: captureColor(rate),
-      }}
+      className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${captureBgClass(rate)}`}
     >
       {fmtPct(rate)}
     </span>
   );
 }
 
+// ── Mini progress bar ─────────────────────────────────────────────────────────
+function MiniBar({ rate }: { rate: number | null }) {
+  if (rate == null) return null;
+  return (
+    <div className="h-1 rounded-full bg-muted overflow-hidden w-[60px]">
+      <div
+        className={`h-full rounded-full transition-[width] duration-300 ${captureBarClass(rate)}`}
+        style={{ width: `${Math.round(rate * 100)}%` }}
+      />
+    </div>
+  );
+}
+
 // ── Rank Medal ────────────────────────────────────────────────────────────────
 function RankBadge({ rank }: { rank: number }) {
-  const colors: Record<number, { bg: string; fg: string }> = {
-    1: { bg: tokens.warningSoft, fg: tokens.warningText },
-    2: { bg: tokens.slate100, fg: tokens.slate600 },
-    3: { bg: tokens.warningSoft, fg: tokens.riskMedium },
+  const medalClass: Record<number, string> = {
+    1: "bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+    2: "bg-muted text-muted-foreground",
+    3: "bg-orange-50 text-orange-600 dark:bg-orange-900/30 dark:text-orange-300",
   };
-  const style = colors[rank] ?? { bg: C.gray100, fg: C.gray600 };
+  const cls =
+    medalClass[rank] ?? "bg-muted/50 text-muted-foreground";
   return (
     <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 26,
-        height: 26,
-        borderRadius: 6,
-        background: style.bg,
-        color: style.fg,
-        fontSize: 12,
-        fontWeight: 700,
-      }}
+      className={`inline-flex items-center justify-center w-[26px] h-[26px] rounded-md text-xs font-bold ${cls}`}
     >
-      {rank <= 3 ? ["#1", "#2", "#3"][rank - 1] : rank}
+      {rank <= 3 ? `#${rank}` : rank}
     </span>
   );
 }
 
 // ── Specialty Tag ─────────────────────────────────────────────────────────────
 function SpecialtyTag({ cat }: { cat: string }) {
-  const map: Record<string, { bg: string; fg: string }> = {
-    PCP: { bg: C.primaryLight, fg: C.primary },
-    Specialist: { bg: C.violetLight, fg: C.violet },
-    Hospitalist: { bg: C.amberLight, fg: C.amberDark },
+  const cls: Record<string, string> = {
+    PCP: "bg-primary/10 text-primary",
+    Specialist:
+      "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300",
+    Hospitalist:
+      "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
   };
-  const s = map[cat] ?? { bg: C.gray100, fg: C.gray600 };
   return (
     <span
-      style={{
-        display: "inline-block",
-        padding: "2px 8px",
-        borderRadius: 6,
-        fontSize: 11,
-        fontWeight: 600,
-        background: s.bg,
-        color: s.fg,
-      }}
+      className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-semibold ${cls[cat] ?? "bg-muted text-muted-foreground"}`}
     >
       {cat}
     </span>
   );
 }
 
-// ── Sort Icon (standalone to avoid recreating during render) ──────────────────
-function SortIcon({ field, activeField, activeDir }: { field: SortField; activeField: SortField; activeDir: SortDir }) {
-  if (activeField !== field) return <ArrowUpDown size={12} style={{ opacity: 0.4 }} />;
-  return activeDir === "asc"
-    ? <ChevronUp size={13} color={C.primary} />
-    : <ChevronDown size={13} color={C.primary} />;
+// ── Sort icon ─────────────────────────────────────────────────────────────────
+function SortIcon({
+  field,
+  activeField,
+  activeDir,
+}: {
+  field: SortField;
+  activeField: SortField;
+  activeDir: SortDir;
+}) {
+  if (activeField !== field)
+    return <ArrowUpDown size={12} className="opacity-40" />;
+  return activeDir === "asc" ? (
+    <ChevronUp size={13} className="text-primary" />
+  ) : (
+    <ChevronDown size={13} className="text-primary" />
+  );
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// ── Sortable TH ───────────────────────────────────────────────────────────────
+function SortTh({
+  field,
+  label,
+  sortField,
+  sortDir,
+  onSort,
+}: {
+  field: SortField;
+  label: string;
+  sortField: SortField;
+  sortDir: SortDir;
+  onSort: (f: SortField) => void;
+}) {
+  const active = sortField === field;
+  return (
+    <th
+      onClick={() => onSort(field)}
+      className={`px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap cursor-pointer select-none transition-colors hover:text-foreground ${active ? "bg-primary/8 text-primary" : ""}`}
+    >
+      <div className="flex items-center gap-1.5">
+        {label}
+        <SortIcon field={field} activeField={sortField} activeDir={sortDir} />
+      </div>
+    </th>
+  );
+}
+
+// ── Static TH ─────────────────────────────────────────────────────────────────
+function StaticTh({ label }: { label: string }) {
+  return (
+    <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+      {label}
+    </th>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // Page Component
-// ═════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 export default function ProvidersPage() {
   const [search, setSearch] = useState("");
-  const [specialtyFilter, setSpecialtyFilter] = useState<SpecialtyFilter>("all");
+  const [specialtyFilter, setSpecialtyFilter] =
+    useState<SpecialtyFilter>("all");
   const [sortField, setSortField] = useState<SortField>("hcc_capture_rate");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showDiscoverDialog, setShowDiscoverDialog] = useState(false);
-  const [hoveredRow, setHoveredRow] = useState<number | null>(null);
   const [showFeatureSettings, setShowFeatureSettings] = useState(false);
 
   const { data: summary, isLoading: sumLoading } = useQuery({
@@ -399,7 +343,7 @@ export default function ProvidersPage() {
         (r) =>
           `${r.first_name} ${r.last_name}`.toLowerCase().includes(q) ||
           r.specialty.toLowerCase().includes(q) ||
-          (r.npi ?? "").includes(q)
+          (r.npi ?? "").includes(q),
       );
     }
     if (specialtyFilter !== "all") {
@@ -410,8 +354,12 @@ export default function ProvidersPage() {
       switch (sortField) {
         case "name":
           return sortDir === "asc"
-            ? `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`)
-            : `${b.last_name} ${b.first_name}`.localeCompare(`${a.last_name} ${a.first_name}`);
+            ? `${a.last_name} ${a.first_name}`.localeCompare(
+                `${b.last_name} ${b.first_name}`,
+              )
+            : `${b.last_name} ${b.first_name}`.localeCompare(
+                `${a.last_name} ${a.first_name}`,
+              );
         case "patient_count":
           av = a.patient_count;
           bv = b.patient_count;
@@ -448,76 +396,40 @@ export default function ProvidersPage() {
   const handleSort = useCallback(
     (field: SortField) => {
       if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-      else { setSortField(field); setSortDir("desc"); }
+      else {
+        setSortField(field);
+        setSortDir("desc");
+      }
     },
-    [sortField]
+    [sortField],
   );
 
   function exportProvidersCSV() {
     if (!filtered.length) return;
-    downloadCSV(filtered.map((p) => ({
-      "NPI": p.npi ?? "",
-      "Name": providerName(p),
-      "Specialty": p.specialty,
-      "Patient Count": p.patient_count,
-      "Avg RAF": p.average_raf_score != null ? Number(p.average_raf_score).toFixed(2) : "",
-      "Capture Rate": p.hcc_capture_rate != null ? `${Math.round(p.hcc_capture_rate * 100)}%` : "",
-    })), "providers");
+    downloadCSV(
+      filtered.map((p) => ({
+        NPI: p.npi ?? "",
+        Name: providerName(p),
+        Specialty: p.specialty,
+        "Patient Count": p.patient_count,
+        "Avg RAF":
+          p.average_raf_score != null
+            ? Number(p.average_raf_score).toFixed(2)
+            : "",
+        "Capture Rate":
+          p.hcc_capture_rate != null
+            ? `${Math.round(p.hcc_capture_rate * 100)}%`
+            : "",
+      })),
+      "providers",
+    );
   }
-
-  const thStyleStatic: React.CSSProperties = {
-    padding: "10px 12px",
-    fontWeight: 600,
-    color: C.textMuted,
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    whiteSpace: "nowrap",
-    textAlign: "left",
-  };
-
-  const thStyle = (field: string): React.CSSProperties => ({
-    ...thStyleStatic,
-    cursor: "pointer",
-    userSelect: "none",
-    background: sortField === field ? `${C.primary}15` : undefined,
-  });
 
   const isLoading = sumLoading || lbLoading;
 
   return (
-    <div className="providers-page-wrap" style={{ padding: "20px 16px", background: C.bg, minHeight: "100vh" }}>
-      <style>{`
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(12px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .provider-row-animate {
-          animation: fadeInUp 0.4s ease-out both;
-        }
-        .provider-avatar {
-          background-size: 200% 200%;
-          animation: avatarShimmer 3s ease infinite;
-        }
-        @keyframes avatarShimmer {
-          0%, 100% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-        }
-        @media (min-width: 640px) {
-          .providers-page-wrap { padding: 32px 40px !important; }
-        }
-        /* Bug 2: drilldown inline row — no phantom height when collapsed */
-        .provider-detail-td { height: auto !important; min-height: 0 !important; }
-        /* Bug 1 radar: cap height and clip overflow on mobile to kill phantom gap */
-        @media (max-width: 768px) {
-          .provider-radar-wrap { overflow: hidden; width: 100%; display: flex; justify-content: center; max-height: 280px; }
-          .provider-detail-td { padding-bottom: 12px !important; }
-        }
-      `}</style>
-
-      {/* ── Page Header ───────────────────────────────────────────────────── */}
+    <div className="p-6 min-h-screen bg-background">
+      {/* ── Page Header ──────────────────────────────────────────────────── */}
       <PageHeader
         title="Provider Scorecards"
         subtitle="Provider-level RAF capture rates, HCC coding performance, and revenue metrics"
@@ -527,222 +439,105 @@ export default function ProvidersPage() {
             <button
               onClick={() => setShowFeatureSettings(true)}
               title="Page features (add/hide sections)"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 7,
-                padding: "9px 12px",
-                border: `1px solid ${C.border}`,
-                borderRadius: 8,
-                background: C.white,
-                color: C.textMuted,
-                fontSize: 13,
-                fontWeight: 500,
-                cursor: "pointer",
-              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card text-muted-foreground text-[13px] font-medium hover:bg-muted/60 transition-colors"
             >
-              <Settings size={15} />
+              <Settings size={15} aria-hidden />
               Page Features
             </button>
             <button
               onClick={() => setShowDiscoverDialog(true)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 7,
-                padding: "9px 16px",
-                border: `1px solid ${C.border}`,
-                borderRadius: 8,
-                background: C.white,
-                color: C.textMuted,
-                fontSize: 13,
-                fontWeight: 500,
-                cursor: "pointer",
-              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-border bg-card text-muted-foreground text-[13px] font-medium hover:bg-muted/60 transition-colors"
             >
-              <Zap size={15} />
+              <Zap size={15} aria-hidden />
               Auto-Discover from EMR
             </button>
             <button
               onClick={() => setShowAddDialog(true)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 7,
-                padding: "9px 18px",
-                border: "none",
-                borderRadius: 8,
-                background: C.primary,
-                color: C.white,
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-0 bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 transition-colors"
             >
-              <Plus size={15} />
+              <Plus size={15} aria-hidden />
               Add Provider
             </button>
           </>
         }
       />
 
-      {/* ── Stats Row ─────────────────────────────────────────────────────── */}
-      {isLoading ? (
-        <div
-          className="providers-stats"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: 16,
-            marginBottom: 28,
-          }}
-        >
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div
-              key={i}
-              className="premium-card shimmer"
-              style={{
-                borderRadius: 14,
-                padding: 20,
-                height: 100,
-              }}
+      {/* ── KPI Strip ────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-7">
+        {isLoading ? (
+          Array.from({ length: 5 }).map((_, i) => (
+            <MetricCard key={i} label="" value="" loading />
+          ))
+        ) : (
+          <>
+            <MetricCard
+              label="Total Providers"
+              value={summary?.total_providers?.toLocaleString() ?? "—"}
+              subtitle="In this system"
+              icon={<Users size={18} />}
             />
-          ))}
-        </div>
-      ) : (
-        <div
-          className="providers-stats"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: 16,
-            marginBottom: 28,
-          }}
-        >
-          <div style={{ animation: "fadeInUp 0.4s ease-out both", animationDelay: "0ms" }}>
-          <MetricCard
-            label="Total Providers"
-            value={summary?.total_providers?.toLocaleString() ?? "—"}
-            subtitle="In this system"
-            icon={<Users size={18} />}
-          />
-          </div>
-          <div style={{ animation: "fadeInUp 0.4s ease-out both", animationDelay: "60ms" }}>
-          <MetricCard
-            label="Avg Capture Rate"
-            value={summary ? fmtPct(summary.avg_capture_rate) : "—"}
-            subtitle={
-              summary?.avg_capture_rate != null
-                ? summary.avg_capture_rate >= 0.85
-                  ? "Above target"
-                  : "Below 85% target"
-                : undefined
-            }
-            icon={<CheckCircle size={18} />}
-            intent={summary?.avg_capture_rate != null && summary.avg_capture_rate >= 0.85 ? "success" : "warning"}
-          />
-          </div>
-          <div style={{ animation: "fadeInUp 0.4s ease-out both", animationDelay: "120ms" }}>
-          <MetricCard
-            label="Avg RAF Score"
-            value={summary ? fmtN(summary.average_raf_score, 3) : "—"}
-            subtitle="Population average"
-            icon={<TrendingUp size={18} />}
-            intent="warning"
-          />
-          </div>
-          <div style={{ animation: "fadeInUp 0.4s ease-out both", animationDelay: "180ms" }}>
-          <MetricCard
-            label="Revenue Opportunity"
-            value={summary ? fmt$(summary.total_revenue_opportunity) : "—"}
-            subtitle="Across all providers"
-            icon={<DollarSign size={18} />}
-            intent="success"
-          />
-          </div>
-          <div style={{ animation: "fadeInUp 0.4s ease-out both", animationDelay: "240ms" }}>
-          <MetricCard
-            label="Avg MEAT Score"
-            value={summary ? fmtPct(summary.avg_meat_completeness) : "—"}
-            subtitle="Documentation quality"
-            icon={<Award size={18} />}
-          />
-          </div>
-        </div>
-      )}
+            <MetricCard
+              label="Avg Capture Rate"
+              value={summary ? fmtPct(summary.avg_capture_rate) : "—"}
+              subtitle={
+                summary?.avg_capture_rate != null
+                  ? summary.avg_capture_rate >= 0.85
+                    ? "Above target"
+                    : "Below 85% target"
+                  : undefined
+              }
+              icon={<CheckCircle size={18} />}
+              intent={
+                summary?.avg_capture_rate != null &&
+                summary.avg_capture_rate >= 0.85
+                  ? "success"
+                  : "warning"
+              }
+            />
+            <MetricCard
+              label="Avg RAF Score"
+              value={summary ? fmtN(summary.average_raf_score, 3) : "—"}
+              subtitle="Population average"
+              icon={<TrendingUp size={18} />}
+              intent="warning"
+            />
+            <MetricCard
+              label="Revenue Opportunity"
+              value={summary ? fmt$(summary.total_revenue_opportunity) : "—"}
+              subtitle="Across all providers"
+              icon={<DollarSign size={18} />}
+              intent="success"
+            />
+            <MetricCard
+              label="Avg MEAT Score"
+              value={summary ? fmtPct(summary.avg_meat_completeness) : "—"}
+              subtitle="Documentation quality"
+              icon={<Award size={18} />}
+            />
+          </>
+        )}
+      </div>
 
-      {/* ── Leaderboard Table ──────────────────────────────────────────────── */}
-      <div
-        className="premium-card premium-shadow gradient-border"
-        style={{
-          background: C.card,
-          borderRadius: 14,
-          /* overflow:hidden clips border-radius; use clip so inline scroll still works on mobile */
-          overflow: "clip",
-          animation: "fadeInUp 0.5s ease-out both",
-          animationDelay: "300ms",
-        }}
-      >
-        {/* Table toolbar */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "16px 20px",
-            borderBottom: `1px solid ${C.border}`,
-            flexWrap: "wrap",
-            gap: 12,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <h2
-              style={{
-                margin: 0,
-                fontSize: 16,
-                fontWeight: 700,
-                color: C.text,
-              }}
-            >
+      {/* ── Leaderboard Table ────────────────────────────────────────────── */}
+      <div className="bg-card border border-border rounded-[14px] overflow-clip">
+        {/* Toolbar */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-wrap gap-3">
+          <div className="flex items-center gap-2.5">
+            <h2 className="m-0 text-base font-bold text-foreground">
               Provider Leaderboard
             </h2>
-            <span
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: C.primary,
-                background: C.primaryLight,
-                padding: "2px 8px",
-                borderRadius: 999,
-              }}
-            >
+            <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
               {filtered.length}
             </span>
           </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              flexWrap: "wrap",
-            }}
-          >
+
+          <div className="flex items-center gap-2.5 flex-wrap">
             {/* Search */}
-            <div
-              style={{
-                position: "relative",
-                display: "flex",
-                alignItems: "center",
-              }}
-            >
+            <div className="relative flex items-center">
               <Search
                 size={14}
-                style={{
-                  position: "absolute",
-                  left: 10,
-                  color: C.textSub,
-                  pointerEvents: "none",
-                }}
+                className="absolute left-2.5 text-muted-foreground/60 pointer-events-none"
+                aria-hidden
               />
               <input
                 type="text"
@@ -750,49 +545,24 @@ export default function ProvidersPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 aria-label="Search providers"
-                style={{
-                  padding: "8px 14px 8px 32px",
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 8,
-                  fontSize: 13,
-                  width: 220,
-                  color: C.text,
-                  background: C.white,
-                }}
+                className="pl-8 pr-3.5 py-2 border border-border rounded-lg text-[13px] w-[220px] bg-card text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
+
             {/* Specialty filter */}
-            <div
-              style={{
-                position: "relative",
-                display: "flex",
-                alignItems: "center",
-              }}
-            >
+            <div className="relative flex items-center">
               <Filter
                 size={13}
-                style={{
-                  position: "absolute",
-                  left: 10,
-                  color: C.textSub,
-                  pointerEvents: "none",
-                }}
+                className="absolute left-2.5 text-muted-foreground/60 pointer-events-none"
+                aria-hidden
               />
               <select
                 value={specialtyFilter}
-                onChange={(e) => setSpecialtyFilter(e.target.value as SpecialtyFilter)}
+                onChange={(e) =>
+                  setSpecialtyFilter(e.target.value as SpecialtyFilter)
+                }
                 aria-label="Filter by specialty category"
-                style={{
-                  padding: "8px 14px 8px 30px",
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 8,
-                  fontSize: 13,
-                  color: C.text,
-                  background: C.white,
-                  cursor: "pointer",
-                  appearance: "none",
-                  paddingRight: 32,
-                }}
+                className="pl-7 pr-8 py-2 border border-border rounded-lg text-[13px] bg-card text-foreground cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="all">All Categories</option>
                 <option value="PCP">PCP</option>
@@ -801,423 +571,294 @@ export default function ProvidersPage() {
               </select>
               <ChevronDown
                 size={13}
-                style={{
-                  position: "absolute",
-                  right: 10,
-                  color: C.textSub,
-                  pointerEvents: "none",
-                }}
+                className="absolute right-2.5 text-muted-foreground/60 pointer-events-none"
+                aria-hidden
               />
             </div>
+
             <button
               onClick={exportProvidersCSV}
               aria-label="Export providers as CSV"
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "8px 14px", borderRadius: 8,
-                border: "none", background: C.primary,
-                color: C.white, fontSize: 13, fontWeight: 600,
-                cursor: "pointer", flexShrink: 0,
-              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 transition-colors flex-shrink-0"
             >
-              <FileDown size={14} />
+              <FileDown size={14} aria-hidden />
               Export CSV
             </button>
           </div>
         </div>
 
         {/* Table */}
-        <div style={{ overflowX: "auto" }}>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: 13,
-            }}
-          >
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-[13px]">
             <thead>
-              <tr style={{ borderBottom: `2px solid ${C.border}`, background: C.gray50 }}>
-                <th style={thStyleStatic}>Rank</th>
-                <th
-                  style={thStyle("name")}
-                  onClick={() => handleSort("name")}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    Provider <SortIcon field="name" activeField={sortField} activeDir={sortDir} />
-                  </div>
-                </th>
-                <th style={thStyleStatic}>Specialty</th>
-                <th
-                  style={thStyle("patient_count")}
-                  onClick={() => handleSort("patient_count")}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    Patients <SortIcon field="patient_count" activeField={sortField} activeDir={sortDir} />
-                  </div>
-                </th>
-                <th
-                  style={thStyle("average_raf_score")}
-                  onClick={() => handleSort("average_raf_score")}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    Avg RAF <SortIcon field="average_raf_score" activeField={sortField} activeDir={sortDir} />
-                  </div>
-                </th>
-                <th
-                  style={thStyle("hcc_capture_rate")}
-                  onClick={() => handleSort("hcc_capture_rate")}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    HCC Capture <SortIcon field="hcc_capture_rate" activeField={sortField} activeDir={sortDir} />
-                  </div>
-                </th>
-                <th
-                  style={thStyle("recapture_rate")}
-                  onClick={() => handleSort("recapture_rate")}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    Recapture <SortIcon field="recapture_rate" activeField={sortField} activeDir={sortDir} />
-                  </div>
-                </th>
-                <th
-                  style={thStyle("meat_score")}
-                  onClick={() => handleSort("meat_score")}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    MEAT Score <SortIcon field="meat_score" activeField={sortField} activeDir={sortDir} />
-                  </div>
-                </th>
-                <th
-                  style={thStyle("revenue_opportunity")}
-                  onClick={() => handleSort("revenue_opportunity")}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    Revenue Opp. <SortIcon field="revenue_opportunity" activeField={sortField} activeDir={sortDir} />
-                  </div>
-                </th>
-                <th style={thStyleStatic}>Actions</th>
+              <tr className="border-b-2 border-border bg-muted/30">
+                <StaticTh label="Rank" />
+                <SortTh
+                  field="name"
+                  label="Provider"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                />
+                <StaticTh label="Specialty" />
+                <SortTh
+                  field="patient_count"
+                  label="Patients"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                />
+                <SortTh
+                  field="average_raf_score"
+                  label="Avg RAF"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                />
+                <SortTh
+                  field="hcc_capture_rate"
+                  label="HCC Capture"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                />
+                <SortTh
+                  field="recapture_rate"
+                  label="Recapture"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                />
+                <SortTh
+                  field="meat_score"
+                  label="MEAT Score"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                />
+                <SortTh
+                  field="revenue_opportunity"
+                  label="Revenue Opp."
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                />
+                <StaticTh label="Actions" />
               </tr>
             </thead>
+
             <tbody>
-              {lbLoading ? (
+              {/* ── Loading skeleton ── */}
+              {lbLoading &&
                 Array.from({ length: 6 }).map((_, i) => (
-                  <tr key={i} style={{ borderBottom: `1px solid ${C.borderLight}` }}>
+                  <tr key={i} className="border-b border-border/50">
                     {Array.from({ length: 10 }).map((__, j) => (
-                      <td key={j} style={{ padding: "14px 12px" }}>
+                      <td key={j} className="px-3 py-3.5">
                         <div
-                          style={{
-                            height: 14,
-                            borderRadius: 4,
-                            background: C.gray200,
-                            animation: "pulse 1.5s ease-in-out infinite",
-                            width: j === 1 ? "80%" : j === 2 ? "60%" : "50%",
-                          }}
+                          className={`h-3.5 rounded animate-pulse bg-muted ${j === 1 ? "w-4/5" : j === 2 ? "w-3/5" : "w-1/2"}`}
                         />
                       </td>
                     ))}
                   </tr>
-                ))
-              ) : filtered.length === 0 ? (
+                ))}
+
+              {/* ── Empty state ── */}
+              {!lbLoading && filtered.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={10}
-                    style={{ padding: 48, textAlign: "center", color: C.textMuted }}
-                  >
-                    <Users size={36} color={C.gray300} style={{ display: "block", margin: "0 auto 12px" }} />
+                  <td colSpan={10} className="px-6 py-12 text-center">
                     {leaderboard.length === 0 ? (
-                      <>
-                        <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: C.text }}>
-                          No providers yet
-                        </p>
-                        <p style={{ margin: "0 0 16px", fontSize: 13, color: C.textMuted }}>
-                          Add a provider to start scoring, or use Auto-Discover to import from your EMR.
-                        </p>
-                        <button
-                          onClick={() => setShowAddDialog(true)}
-                          style={{
-                            display: "inline-flex", alignItems: "center", gap: 7,
-                            padding: "9px 18px", borderRadius: 8, border: "none",
-                            background: C.primary, color: C.white, fontSize: 13,
-                            fontWeight: 600, cursor: "pointer",
-                          }}
-                        >
-                          <Plus size={14} /> Add Your First Provider
-                        </button>
-                      </>
+                      <EmptyState
+                        state="no-data"
+                        icon={<Users size={28} />}
+                        title="No providers yet"
+                        description="Add a provider to start scoring, or use Auto-Discover to import from your EMR."
+                        cta={{
+                          label: "Add Your First Provider",
+                          onClick: () => setShowAddDialog(true),
+                        }}
+                      />
                     ) : (
-                      <>
-                        <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: C.text }}>
-                          No providers match
-                        </p>
-                        <p style={{ margin: 0, fontSize: 13, color: C.textMuted }}>
-                          Try adjusting the search or specialty filter.
-                        </p>
-                      </>
+                      <EmptyState
+                        state="filtered-out"
+                        icon={<Users size={28} />}
+                        description="Try adjusting the search or specialty filter."
+                        cta={{
+                          label: "Clear filters",
+                          onClick: () => {
+                            setSearch("");
+                            setSpecialtyFilter("all");
+                          },
+                        }}
+                      />
                     )}
                   </td>
                 </tr>
-              ) : (
+              )}
+
+              {/* ── Data rows ── */}
+              {!lbLoading &&
                 filtered.map((row, idx) => {
                   const isExpanded = expandedId === row.provider_id;
-                  const isHovered = hoveredRow === row.provider_id;
+                  const initials = (
+                    ((row.first_name || "").trim()[0] || "").toUpperCase() +
+                    (row.first_name && row.last_name
+                      ? ((row.last_name || "").trim()[0] || "").toUpperCase()
+                      : "")
+                  ) || "•";
+                  const avatarColor = initialsColor(providerName(row));
+
                   return (
                     <React.Fragment key={row.provider_id}>
                       <tr
-                        className="provider-row-animate hover-lift"
                         onClick={() =>
                           setExpandedId(isExpanded ? null : row.provider_id)
                         }
-                        onMouseEnter={() => setHoveredRow(row.provider_id)}
-                        onMouseLeave={() => setHoveredRow(null)}
-                        style={{
-                          borderBottom: isExpanded ? "none" : `1px solid ${C.borderLight}`,
-                          cursor: "pointer",
-                          background: isExpanded
-                            ? C.primaryLight
-                            : isHovered
-                            ? C.gray50
-                            : C.white,
-                          transition: "background 0.15s, transform 0.25s cubic-bezier(0.4,0,0.2,1), box-shadow 0.25s",
-                          animationDelay: `${idx * 50}ms`,
-                        }}
                         aria-expanded={isExpanded}
+                        className={`border-b border-border/50 cursor-pointer transition-colors ${isExpanded ? "bg-primary/5" : "hover:bg-muted/30"}`}
+                        style={{ animationDelay: `${idx * 40}ms` }}
                       >
                         {/* Rank */}
-                        <td style={{ padding: "12px 12px" }}>
+                        <td className="px-3 py-3">
                           <RankBadge rank={idx + 1} />
                         </td>
+
                         {/* Provider name */}
-                        <td style={{ padding: "12px 12px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <td className="px-3 py-3">
+                          <div className="flex items-center gap-2.5">
                             <div
-                              className="provider-avatar"
+                              className="w-9 h-9 rounded-[10px] flex items-center justify-center text-white text-[13px] font-bold flex-shrink-0"
                               style={{
-                                width: 38,
-                                height: 38,
-                                borderRadius: 10,
-                                background: `linear-gradient(135deg, ${initialsColor(providerName(row))}, ${initialsColor(providerName(row))}cc)`,
-                                color: C.white,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontSize: 13,
-                                fontWeight: 700,
-                                flexShrink: 0,
-                                boxShadow: `0 2px 8px ${initialsColor(providerName(row))}40`,
-                                letterSpacing: "0.02em",
+                                background: `linear-gradient(135deg, ${avatarColor}, ${avatarColor}cc)`,
+                                boxShadow: `0 2px 8px ${avatarColor}40`,
                               }}
+                              aria-hidden
                             >
-                              {((row.first_name || "").trim()[0] || (row.last_name || "").trim()[0] || "\u2022").toUpperCase()}{(row.first_name && row.last_name ? (row.last_name || "").trim()[0] : "").toUpperCase()}
+                              {initials}
                             </div>
                             <div>
-                              <div
-                                style={{
-                                  fontWeight: 600,
-                                  color: C.text,
-                                  fontSize: 13,
-                                }}
-                              >
+                              <div className="font-semibold text-foreground">
                                 {providerName(row)}
                               </div>
                               {row.npi && (
-                                <div
-                                  style={{
-                                    fontSize: 11,
-                                    color: C.textSub,
-                                    marginTop: 1,
-                                  }}
-                                >
+                                <div className="text-[11px] text-muted-foreground mt-0.5">
                                   NPI: {row.npi}
                                 </div>
                               )}
                             </div>
                           </div>
                         </td>
+
                         {/* Specialty */}
-                        <td style={{ padding: "12px 12px" }}>
-                          <div>
-                            <div style={{ fontSize: 12, color: C.text, marginBottom: 3 }}>
-                              {row.specialty}
-                            </div>
-                            <SpecialtyTag cat={row.specialty_category} />
+                        <td className="px-3 py-3">
+                          <div className="text-xs text-foreground mb-1">
+                            {row.specialty}
                           </div>
+                          <SpecialtyTag cat={row.specialty_category} />
                         </td>
+
                         {/* Patients */}
-                        <td style={{ padding: "12px 12px", color: C.text, fontWeight: 600 }}>
+                        <td className="px-3 py-3 font-semibold text-foreground">
                           {row.patient_count.toLocaleString()}
                         </td>
+
                         {/* Avg RAF */}
-                        <td style={{ padding: "12px 12px", fontWeight: 600, color: C.text }}>
+                        <td className="px-3 py-3 font-semibold text-foreground">
                           {fmtN(row.average_raf_score, 3)}
                         </td>
+
                         {/* HCC Capture */}
-                        <td style={{ padding: "12px 12px" }}>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col gap-1">
                             <CaptureBadge rate={row.hcc_capture_rate} />
-                            {row.hcc_capture_rate != null && (
-                              <div
-                                style={{
-                                  height: 4,
-                                  borderRadius: 2,
-                                  background: C.gray200,
-                                  overflow: "hidden",
-                                  width: 60,
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    height: "100%",
-                                    width: `${Math.round(row.hcc_capture_rate * 100)}%`,
-                                    background: captureColor(row.hcc_capture_rate),
-                                    borderRadius: 2,
-                                    transition: "width 0.3s",
-                                  }}
-                                />
-                              </div>
-                            )}
+                            <MiniBar rate={row.hcc_capture_rate} />
                           </div>
                         </td>
+
                         {/* Recapture */}
-                        <td style={{ padding: "12px 12px" }}>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col gap-1">
                             <CaptureBadge rate={row.recapture_rate} />
-                            {row.recapture_rate != null && (
-                              <div
-                                style={{
-                                  height: 4,
-                                  borderRadius: 2,
-                                  background: C.gray200,
-                                  overflow: "hidden",
-                                  width: 60,
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    height: "100%",
-                                    width: `${Math.round(row.recapture_rate * 100)}%`,
-                                    background: captureColor(row.recapture_rate),
-                                    borderRadius: 2,
-                                    transition: "width 0.3s",
-                                  }}
-                                />
-                              </div>
-                            )}
+                            <MiniBar rate={row.recapture_rate} />
                           </div>
                         </td>
+
                         {/* MEAT Score */}
-                        <td style={{ padding: "12px 12px" }}>
+                        <td className="px-3 py-3">
                           {row.meat_score != null ? (
-                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                              <span
-                                style={{
-                                  fontSize: 13,
-                                  fontWeight: 700,
-                                  color: C.violet,
-                                }}
-                              >
+                            <div className="flex flex-col gap-1">
+                              <span className="text-[13px] font-bold text-violet-600 dark:text-violet-400">
                                 {fmtPct(row.meat_score)}
                               </span>
-                              <div
-                                style={{
-                                  height: 4,
-                                  borderRadius: 2,
-                                  background: C.gray200,
-                                  overflow: "hidden",
-                                  width: 60,
-                                }}
-                              >
+                              <div className="h-1 rounded-full bg-muted overflow-hidden w-[60px]">
                                 <div
+                                  className="h-full rounded-full bg-violet-500 transition-[width] duration-300"
                                   style={{
-                                    height: "100%",
                                     width: `${Math.round(row.meat_score * 100)}%`,
-                                    background: C.violet,
-                                    borderRadius: 2,
-                                    transition: "width 0.3s",
                                   }}
                                 />
                               </div>
                             </div>
                           ) : (
-                            <span className="text-gray-400 text-xs">--</span>
+                            <span className="text-muted-foreground text-xs">
+                              --
+                            </span>
                           )}
                         </td>
+
                         {/* Revenue Opportunity */}
-                        <td style={{ padding: "12px 12px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span
-                              style={{
-                                fontWeight: 700,
-                                color: C.emeraldDark,
-                                fontSize: 13,
-                              }}
-                            >
+                        <td className="px-3 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-emerald-700 dark:text-emerald-400">
                               {fmt$(row.revenue_opportunity)}
                             </span>
-                            {(row.revenue_opportunity ?? 0) > 50000 && (
+                            {(row.revenue_opportunity ?? 0) > 50_000 && (
                               <span
                                 aria-label="High revenue opportunity"
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  width: 18,
-                                  height: 18,
-                                  borderRadius: 6,
-                                  background: C.emeraldLight,
-                                  fontSize: 10,
-                                }}
+                                className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-emerald-50 dark:bg-emerald-900/30"
                                 title="High revenue opportunity"
                               >
-                                <TrendingUp size={10} color={C.emerald} />
+                                <TrendingUp
+                                  size={10}
+                                  className="text-emerald-600 dark:text-emerald-400"
+                                  aria-hidden
+                                />
                               </span>
                             )}
                           </div>
                         </td>
+
                         {/* Actions */}
-                        <td style={{ padding: "12px 12px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setExpandedId(isExpanded ? null : row.provider_id);
-                              }}
-                              title={isExpanded ? "Collapse" : "View scorecard"}
-                              aria-label={isExpanded ? "Collapse row" : "Expand scorecard"}
-                              className={isExpanded ? "card-glow-blue" : "glow-hover"}
-                              style={{
-                                padding: "6px 12px",
-                                border: `1px solid ${isExpanded ? C.primary : C.border}`,
-                                borderRadius: 8,
-                                background: isExpanded ? C.primaryLight : C.white,
-                                color: isExpanded ? C.primary : C.textMuted,
-                                fontSize: 12,
-                                fontWeight: 600,
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 4,
-                                transition: "all 0.2s ease",
-                              }}
-                            >
-                              {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                              {isExpanded ? "Collapse" : "Scorecard"}
-                            </button>
-                          </div>
+                        <td className="px-3 py-3">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedId(
+                                isExpanded ? null : row.provider_id,
+                              );
+                            }}
+                            title={isExpanded ? "Collapse" : "View scorecard"}
+                            aria-label={
+                              isExpanded ? "Collapse row" : "Expand scorecard"
+                            }
+                            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${isExpanded ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground"}`}
+                          >
+                            {isExpanded ? (
+                              <ChevronUp size={13} aria-hidden />
+                            ) : (
+                              <ChevronDown size={13} aria-hidden />
+                            )}
+                            {isExpanded ? "Collapse" : "Scorecard"}
+                          </button>
                         </td>
                       </tr>
 
-                      {/* Expanded detail row */}
+                      {/* Inline detail panel */}
                       {isExpanded && (
                         <tr>
                           <td
                             colSpan={10}
-                            className="provider-detail-td"
-                            style={{
-                              padding: "0 16px 20px",
-                              borderBottom: `1px solid ${C.border}`,
-                              background: C.bg,
-                              height: "auto",
-                            }}
+                            className="px-4 pb-5 border-b border-border bg-muted/20"
+                            style={{ height: "auto", minHeight: 0 }}
                           >
                             <LazyProviderDetailPanel
                               providerId={row.provider_id}
@@ -1228,48 +869,42 @@ export default function ProvidersPage() {
                       )}
                     </React.Fragment>
                   );
-                })
-              )}
+                })}
             </tbody>
           </table>
         </div>
 
-        {/* Table footer */}
+        {/* Table footer — count + legend */}
         {!lbLoading && filtered.length > 0 && (
-          <div
-            style={{
-              padding: "12px 20px",
-              borderTop: `1px solid ${C.border}`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              fontSize: 12,
-              color: C.textMuted,
-            }}
-          >
+          <div className="px-5 py-3 border-t border-border flex items-center justify-between flex-wrap gap-3 text-xs text-muted-foreground">
             <span>
               Showing {filtered.length} of {leaderboard.length} providers
               {specialtyFilter !== "all" && ` · Filtered: ${specialtyFilter}`}
             </span>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div className="flex items-center gap-3">
               {[
-                { color: C.emerald, bg: C.emeraldLight, label: "Capture \u226585%" },
-                { color: C.amber, bg: C.amberLight, label: "70 \u2013 85%" },
-                { color: C.red, bg: C.redLight, label: "<70%" },
+                {
+                  bar: "bg-emerald-500",
+                  badge: "bg-emerald-50 text-emerald-700",
+                  label: "Capture ≥85%",
+                },
+                {
+                  bar: "bg-amber-500",
+                  badge: "bg-amber-50 text-amber-700",
+                  label: "70–85%",
+                },
+                {
+                  bar: "bg-red-500",
+                  badge: "bg-red-50 text-red-700",
+                  label: "<70%",
+                },
               ].map((item) => (
                 <div
                   key={item.label}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 5,
-                    padding: "3px 10px 3px 8px",
-                    borderRadius: 999,
-                    background: item.bg,
-                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${item.badge}`}
                 >
-                  <div style={{ width: 8, height: 8, borderRadius: 999, background: item.color }} />
-                  <span style={{ color: item.color, fontWeight: 600 }}>{item.label}</span>
+                  <div className={`w-2 h-2 rounded-full ${item.bar}`} />
+                  {item.label}
                 </div>
               ))}
             </div>
@@ -1277,7 +912,7 @@ export default function ProvidersPage() {
         )}
       </div>
 
-      {/* ── Dialogs (lazy-loaded) ─────────────────────────────────────────────── */}
+      {/* ── Lazy-loaded dialogs ──────────────────────────────────────────── */}
       <ProvidersModals
         showAdd={showAddDialog}
         showDiscover={showDiscoverDialog}

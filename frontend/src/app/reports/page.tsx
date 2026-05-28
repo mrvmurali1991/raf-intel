@@ -9,12 +9,17 @@ import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { tokens } from "@/styles/tokens";
+import { PageHeader } from "@/components/ui/page-header";
+import { BarChart2 } from "lucide-react";
 
 const ReportsHeavyTabs = dynamic(() => import("./ReportsHeavyTabs"), {
   ssr: false,
   loading: () => (
-    <div className="text-muted-foreground" style={{ padding: "60px 24px", textAlign: "center", fontSize: 13 }}>
-      <div style={{ width: 32, height: 32, border: `3px solid ${tokens.slate200}`, borderTopColor: tokens.primary, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
+    <div className="flex flex-col items-center justify-center py-16 text-muted-foreground text-[13px]">
+      <div
+        className="w-8 h-8 rounded-full border-[3px] border-slate-200 mb-3"
+        style={{ borderTopColor: tokens.primary, animation: "spin 0.8s linear infinite" }}
+      />
       Loading...
     </div>
   ),
@@ -70,7 +75,7 @@ type DataQualityPayload = {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const REVENUE_PER_RAF = 11_015.04;
-const YEARS = Array.from({length: 3}, (_, i) => new Date().getFullYear() - i);
+const YEARS = Array.from({ length: 3 }, (_, i) => new Date().getFullYear() - i);
 const CURRENT_PAYMENT_YEAR = new Date().getFullYear();
 type ReportGroup = "Clinical" | "Analytics";
 
@@ -102,11 +107,6 @@ const GROUP_TABS: Record<ReportGroup, readonly TabKey[]> = {
 // ── CMS National Average RAF by year (from official CMS publications) ─────────
 const CMS_NATIONAL_AVG: { [year: number]: number } = { 2024: 1.08, 2025: 1.10, 2026: 1.12 };
 const getCmsAvg = (yr: number) => CMS_NATIONAL_AVG[yr] ?? CMS_NATIONAL_AVG[Math.max(...Object.keys(CMS_NATIONAL_AVG).map(Number))];
-
-// ── Longitudinal data — fetched from API (falls back to empty) ────────────────
-// The YOUR_RAF_TREND, YOUR_HCC_CAPTURE_RATE, YOUR_MEAT_COMPLETENESS, and
-// YOUR_SUSPECT_CLOSURE values are now computed from real API responses in the
-// component below.  Hardcoded values have been removed.
 
 // ── Colors — mapped to design tokens ─────────────────────────────────────────
 const C = {
@@ -189,15 +189,7 @@ function useSortable<T>(data: T[], defaultKey: keyof T, defaultDir: SortDir = "d
   return { sorted, toggle, sortKey, sortDir };
 }
 
-// ── Shared Inline Styles ──────────────────────────────────────────────────────
-const pageStyle: React.CSSProperties = {
-  minHeight: "100vh",
-  background: C.bg,
-  padding: "20px 16px 56px",
-  fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-  color: C.text,
-};
-
+// ── Shared card style (structural only — border, shadow, radius, overflow) ───
 const cardStyle: React.CSSProperties = {
   background: C.card,
   border: `1px solid ${C.border}`,
@@ -251,7 +243,6 @@ function TabFade({ children, tabKey }: { children: React.ReactNode; tabKey: stri
   const [visible, setVisible] = useState(false);
   const [prevKey, setPrevKey] = useState(tabKey);
 
-  // When tabKey changes, reset animation
   if (prevKey !== tabKey) {
     setPrevKey(tabKey);
     setVisible(false);
@@ -263,6 +254,7 @@ function TabFade({ children, tabKey }: { children: React.ReactNode; tabKey: stri
       return () => cancelAnimationFrame(raf);
     }
   }, [visible]);
+
   return (
     <div
       style={{
@@ -279,11 +271,22 @@ function TabFade({ children, tabKey }: { children: React.ReactNode; tabKey: stri
 // ── Section header with gradient accent ─────────────────────────────────────
 function GradientSectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <div style={{ padding: "18px 22px", borderBottom: `1px solid ${C.border}`, background: "linear-gradient(135deg, rgba(37,99,235,0.03) 0%, rgba(139,92,246,0.03) 100%)" }}>
-      <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, background: `linear-gradient(135deg, ${tokens.primary} 0%, ${tokens.accentPurple} 100%)`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+    <div
+      className="px-[22px] py-[18px] border-b border-border"
+      style={{ background: "linear-gradient(135deg, rgba(37,99,235,0.03) 0%, rgba(139,92,246,0.03) 100%)" }}
+    >
+      <h3
+        className="m-0 text-[15px] font-bold"
+        style={{
+          background: `linear-gradient(135deg, ${tokens.primary} 0%, ${tokens.accentPurple} 100%)`,
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+          backgroundClip: "text",
+        }}
+      >
         {title}
       </h3>
-      {subtitle && <p style={{ margin: "4px 0 0", fontSize: 12, color: C.textMuted }}>{subtitle}</p>}
+      {subtitle && <p className="mt-1 mb-0 text-[12px] text-muted-foreground">{subtitle}</p>}
     </div>
   );
 }
@@ -291,22 +294,31 @@ function GradientSectionHeader({ title, subtitle }: { title: string; subtitle?: 
 // ── Loading / Error ───────────────────────────────────────────────────────────
 function Spinner({ label }: { label?: string }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 0", color: C.textMuted }}>
-      <div style={{ width: 36, height: 36, border: `3px solid ${C.gray200}`, borderTopColor: C.primary, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+    <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+      <div
+        className="w-9 h-9 rounded-full border-[3px] border-slate-200"
+        style={{ borderTopColor: C.primary, animation: "spin 0.8s linear infinite" }}
+      />
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-      <p style={{ marginTop: 14, fontSize: 13, fontWeight: 500 }}>{label ?? "Loading data..."}</p>
-      <div className="shimmer" style={{ width: 200, height: 8, borderRadius: 4, marginTop: 12 }} />
+      <p className="mt-3.5 text-[13px] font-medium">{label ?? "Loading data..."}</p>
+      <div className="shimmer w-[200px] h-2 rounded mt-3" />
     </div>
   );
 }
 
 function ErrorBox({ message, onRetry }: { message?: string; onRetry?: () => void }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 0", color: C.red }}>
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      <p style={{ marginTop: 12, fontSize: 13 }}>{message ?? "Failed to load data"}</p>
+    <div className="flex flex-col items-center justify-center py-20" style={{ color: C.red }}>
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+      </svg>
+      <p className="mt-3 text-[13px]">{message ?? "Failed to load data"}</p>
       {onRetry && (
-        <button onClick={onRetry} style={{ marginTop: 12, padding: "8px 20px", borderRadius: 8, border: `1px solid ${C.red}`, background: C.card, color: C.red, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+        <button
+          onClick={onRetry}
+          className="mt-3 px-5 py-2 rounded-lg text-[13px] font-semibold cursor-pointer bg-white"
+          style={{ border: `1px solid ${C.red}`, color: C.red }}
+        >
           Retry
         </button>
       )}
@@ -316,9 +328,12 @@ function ErrorBox({ message, onRetry }: { message?: string; onRetry?: () => void
 
 // ── Sort Arrow Icon ───────────────────────────────────────────────────────────
 function SortArrow({ active, dir }: { active: boolean; dir: SortDir }) {
-  if (!active) return <span style={{ opacity: 0.3, marginLeft: 4, fontSize: 10 }}>⇅</span>;
-  return <span style={{ marginLeft: 4, fontSize: 10 }}>{dir === "asc" ? "↑" : "↓"}</span>;
+  if (!active) return <span className="ml-1 text-[10px] opacity-30">⇅</span>;
+  return <span className="ml-1 text-[10px]">{dir === "asc" ? "↑" : "↓"}</span>;
 }
+
+// ── Select control shared style ───────────────────────────────────────────────
+const selectCls = "px-3.5 pr-8 py-2 text-[14px] font-semibold border border-border rounded-lg bg-white text-foreground cursor-pointer appearance-none";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // PAGE COMPONENT
@@ -332,11 +347,11 @@ export default function ReportsPage() {
   const [activeGroup, setActiveGroup] = useState<ReportGroup>("Clinical");
   const [activeTab, setActiveTab] = useState<TabKey>("Revenue");
 
-  // When switching groups, select the first tab of that group
   const handleGroupChange = (g: ReportGroup) => {
     setActiveGroup(g);
     setActiveTab(GROUP_TABS[g][0]);
   };
+
   const [dateRange, setDateRange] = useState<DateRange>(() => {
     const { from, to } = presetToDates("30d");
     return { preset: "30d", from, to };
@@ -349,6 +364,9 @@ export default function ReportsPage() {
   const recapture = useQuery({ queryKey: ["recapture", year, paymentYear], queryFn: () => getRecaptureGapsReport(year, paymentYear), staleTime: 60_000, retry: 1 });
   const dataQuality = useQuery({ queryKey: ["data-quality"], queryFn: () => getDataCompleteness(), staleTime: 60_000, retry: 1 });
 
+  // Page-level loading state: true while any primary query is loading
+  const isPageLoading = revenue.isLoading || scorecard.isLoading;
+
   const handlePrint = () => {
     const printHeader = document.getElementById("report-print-header");
     if (printHeader) printHeader.style.display = "block";
@@ -357,7 +375,10 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="rci-page-pad-desktop" style={pageStyle} {...(isHistoricalPY ? { "data-read-only": "true" } : {})}>
+    <div
+      className="rci-page-pad-desktop min-h-screen bg-slate-50 p-6 pb-14 font-sans text-foreground"
+      {...(isHistoricalPY ? { "data-read-only": "true" } : {})}
+    >
       {/* ── Print-only header ─────────────────────────────────────────────── */}
       <div
         id="report-print-header"
@@ -366,92 +387,83 @@ export default function ReportsPage() {
         <div className="text-[10px] text-muted-foreground mb-1">{branding.display_name}</div>
         <div className="text-lg font-bold">Analytics &amp; Reports — {activeTab}</div>
         <div className="text-[11px] text-muted-foreground mt-1">
-          Year: {year} &nbsp;|&nbsp; Printed: {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+          Year: {year} &nbsp;|&nbsp; Printed:{" "}
+          {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
         </div>
       </div>
 
       {/* ── Page Header ──────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 32, flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <h1 className="gradient-text" style={{ fontSize: 28, fontWeight: 800, margin: 0, letterSpacing: "-0.03em" }}>Analytics &amp; Reports</h1>
-          <p style={{ fontSize: 14, color: C.textMuted, marginTop: 6, fontWeight: 500 }}>Population health intelligence and revenue analytics</p>
+      <PageHeader
+        title={<span className="gradient-text">Analytics &amp; Reports</span>}
+        subtitle="Population health intelligence and revenue analytics"
+        icon={<BarChart2 size={20} />}
+        actions={
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">
+              Year
+            </label>
+            <select
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value))}
+              className={selectCls}
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "right 10px center",
+              }}
+            >
+              {YEARS.map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+
+            <label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">
+              Payment Year
+            </label>
+            <select
+              value={paymentYear}
+              onChange={(e) => setPaymentYear(Number(e.target.value))}
+              aria-label="As-of payment year"
+              className="px-3.5 pr-8 py-2 text-[14px] font-semibold border rounded-lg cursor-pointer appearance-none"
+              style={{
+                borderColor: isHistoricalPY ? C.amber : C.border,
+                background: isHistoricalPY ? C.amberLight : C.white,
+                color: isHistoricalPY ? C.amberDark : C.text,
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "right 10px center",
+              }}
+            >
+              {PAYMENT_YEARS.map((py) => (
+                <option key={py} value={py}>
+                  PY{py}{py === CURRENT_PAYMENT_YEAR ? " (current)" : ""}
+                </option>
+              ))}
+            </select>
+
+            <DateRangePicker value={dateRange} onChange={setDateRange} className="no-print" />
+
+            <button
+              onClick={handlePrint}
+              className="no-print inline-flex items-center gap-1.5 px-4 py-2 text-[13px] font-semibold border border-border rounded-lg bg-white text-muted-foreground cursor-pointer hover:bg-slate-50 transition-colors"
+              aria-label="Print report"
+            >
+              <Printer size={15} /> Print Report
+            </button>
+
+            <HelpButton />
+          </div>
+        }
+      />
+
+      {/* ── Loading skeleton (page-level) ─────────────────────────────── */}
+      {isPageLoading && (
+        <div className="grid grid-cols-3 gap-5 mb-8" aria-busy="true" aria-label="Loading report data">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="shimmer h-28 rounded-xl" />
+          ))}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Year</label>
-          <select
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-            style={{
-              padding: "8px 32px 8px 14px",
-              fontSize: 14,
-              fontWeight: 600,
-              border: `1px solid ${C.border}`,
-              borderRadius: 8,
-              background: C.white,
-              color: C.text,
-              cursor: "pointer",
-              appearance: "none" as const,
-              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "right 10px center",
-            }}
-          >
-            {YEARS.map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-          <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Payment Year</label>
-          <select
-            value={paymentYear}
-            onChange={(e) => setPaymentYear(Number(e.target.value))}
-            aria-label="As-of payment year"
-            style={{
-              padding: "8px 32px 8px 14px",
-              fontSize: 14,
-              fontWeight: 600,
-              border: `1px solid ${isHistoricalPY ? C.amber : C.border}`,
-              borderRadius: 8,
-              background: isHistoricalPY ? C.amberLight : C.white,
-              color: isHistoricalPY ? C.amberDark : C.text,
-              cursor: "pointer",
-              appearance: "none" as const,
-              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "right 10px center",
-            }}
-          >
-            {PAYMENT_YEARS.map((py) => (
-              <option key={py} value={py}>PY{py}{py === CURRENT_PAYMENT_YEAR ? " (current)" : ""}</option>
-            ))}
-          </select>
-          <DateRangePicker
-            value={dateRange}
-            onChange={setDateRange}
-            className="no-print"
-          />
-          <button
-            onClick={handlePrint}
-            className="no-print"
-            aria-label="Print report"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 16px",
-              fontSize: 13,
-              fontWeight: 600,
-              border: `1px solid ${C.border}`,
-              borderRadius: 8,
-              background: C.white,
-              color: C.textMuted,
-              cursor: "pointer",
-            }}
-          >
-            <Printer size={15} /> Print Report
-          </button>
-          <HelpButton />
-        </div>
-      </div>
+      )}
 
       {/* ── Historical view banner ────────────────────────────────────── */}
       <HistoricalPYBanner paymentYear={paymentYear} />
@@ -460,7 +472,7 @@ export default function ReportsPage() {
       <div
         role="group"
         aria-label="Report group"
-        style={{ display: "inline-flex", gap: 4, marginBottom: 16, padding: 4, background: tokens.slate100, borderRadius: 10 }}
+        className="inline-flex gap-1 mb-4 p-1 bg-slate-100 rounded-[10px]"
       >
         {(["Clinical", "Analytics"] as ReportGroup[]).map((g) => {
           const isActive = activeGroup === g;
@@ -470,17 +482,11 @@ export default function ReportsPage() {
               type="button"
               aria-pressed={isActive}
               onClick={() => handleGroupChange(g)}
+              className="px-[22px] py-[7px] text-[13px] rounded-[7px] border-none cursor-pointer transition-all duration-200 tracking-[-0.01em]"
               style={{
-                padding: "7px 22px",
-                fontSize: 13,
                 fontWeight: isActive ? 700 : 500,
                 color: isActive ? C.white : C.textMuted,
                 background: isActive ? C.primary : "transparent",
-                border: "none",
-                borderRadius: 7,
-                cursor: "pointer",
-                transition: "all 0.2s",
-                letterSpacing: "-0.01em",
                 boxShadow: isActive ? "0 1px 4px rgba(37,99,235,0.25)" : "none",
               }}
             >
@@ -491,40 +497,29 @@ export default function ReportsPage() {
       </div>
 
       {/* ── Tab Bar — shows only the active group's tabs ─────────────── */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 32, padding: 6, background: tokens.slate100, borderRadius: 14, flexWrap: "wrap" }}>
+      <div className="flex gap-1.5 mb-8 p-1.5 bg-slate-100 rounded-[14px] flex-wrap">
         {GROUP_TABS[activeGroup].map((tab) => {
           const isActive = activeTab === tab;
           return (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
+              className="relative px-[18px] py-[9px] text-[13px] border-none rounded-[10px] cursor-pointer transition-all duration-[250ms] tracking-[-0.01em]"
               style={{
-                padding: "9px 18px",
-                fontSize: 13,
                 fontWeight: isActive ? 650 : 500,
                 color: isActive ? C.primary : C.textMuted,
                 background: isActive ? C.white : "transparent",
-                border: "none",
-                borderRadius: 10,
-                cursor: "pointer",
-                transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-                letterSpacing: "-0.01em",
-                boxShadow: isActive ? "0 1px 3px rgba(0,0,0,0.08), 0 2px 8px rgba(37,99,235,0.08)" : "none",
-                position: "relative" as const,
+                boxShadow: isActive
+                  ? "0 1px 3px rgba(0,0,0,0.08), 0 2px 8px rgba(37,99,235,0.08)"
+                  : "none",
               }}
             >
               {tab}
               {isActive && (
-                <span style={{
-                  position: "absolute",
-                  bottom: 6,
-                  left: "50%",
-                  transform: "translateX(-50%)",
-                  width: 16,
-                  height: 3,
-                  borderRadius: 2,
-                  background: `linear-gradient(90deg, ${tokens.primary}, ${tokens.accentPurple})`,
-                }} />
+                <span
+                  className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-4 h-[3px] rounded-sm"
+                  style={{ background: `linear-gradient(90deg, ${tokens.primary}, ${tokens.accentPurple})` }}
+                />
               )}
             </button>
           );
@@ -533,20 +528,40 @@ export default function ReportsPage() {
 
       {/* ── Tab Content ──────────────────────────────────────────────────── */}
       <TabFade tabKey={activeTab}>
-        {activeTab === "Revenue" && <RevenueTab revenue={revenue} scorecard={scorecard} router={router} paymentYear={paymentYear} isHistoricalPY={isHistoricalPY} />}
-        {activeTab === "Patient Scorecard" && <ScorecardTab scorecard={scorecard} router={router} isHistoricalPY={isHistoricalPY} />}
-        {activeTab === "HCC Distribution" && <HccTab hccDist={hccDist} isHistoricalPY={isHistoricalPY} />}
-        {activeTab === "Recapture Gaps" && <RecaptureTab recapture={recapture} router={router} isHistoricalPY={isHistoricalPY} />}
-        {activeTab === "Quality" && <DataQualityTab dataQuality={dataQuality} />}
+        {activeTab === "Revenue" && (
+          <RevenueTab revenue={revenue} scorecard={scorecard} router={router} paymentYear={paymentYear} isHistoricalPY={isHistoricalPY} />
+        )}
+        {activeTab === "Patient Scorecard" && (
+          <ScorecardTab scorecard={scorecard} router={router} isHistoricalPY={isHistoricalPY} />
+        )}
+        {activeTab === "HCC Distribution" && (
+          <HccTab hccDist={hccDist} isHistoricalPY={isHistoricalPY} />
+        )}
+        {activeTab === "Recapture Gaps" && (
+          <RecaptureTab recapture={recapture} router={router} isHistoricalPY={isHistoricalPY} />
+        )}
+        {activeTab === "Quality" && (
+          <DataQualityTab dataQuality={dataQuality} />
+        )}
         {activeTab === "Provider Performance" && (
-          <div style={{ padding: "48px 24px", textAlign: "center", color: C.textMuted, fontSize: 14, borderRadius: 10, border: `1px dashed ${C.border}` }}>
-            <Lock size={20} style={{ marginBottom: 10, opacity: 0.4 }} />
-            <div style={{ fontWeight: 600, marginBottom: 6 }}>Provider Performance</div>
-            <div style={{ fontSize: 13 }}>Provider-level performance benchmarks are coming soon.</div>
+          <div
+            className="flex flex-col items-center justify-center py-12 px-6 text-[14px] text-muted-foreground rounded-[10px] border border-dashed border-border"
+          >
+            <Lock size={20} className="mb-2.5 opacity-40" />
+            <div className="font-semibold mb-1.5">Provider Performance</div>
+            <div className="text-[13px]">Provider-level performance benchmarks are coming soon.</div>
           </div>
         )}
-        {(activeTab === "Longitudinal Trends" || activeTab === "CMS Benchmarks" || activeTab === "Settlement Projection" || activeTab === "Scheduled Reports") && (
-          <ReportsHeavyTabs activeTab={activeTab as "Longitudinal Trends" | "CMS Benchmarks" | "Settlement Projection" | "Scheduled Reports"} revenue={revenue} />
+        {(
+          activeTab === "Longitudinal Trends" ||
+          activeTab === "CMS Benchmarks" ||
+          activeTab === "Settlement Projection" ||
+          activeTab === "Scheduled Reports"
+        ) && (
+          <ReportsHeavyTabs
+            activeTab={activeTab as "Longitudinal Trends" | "CMS Benchmarks" | "Settlement Projection" | "Scheduled Reports"}
+            revenue={revenue}
+          />
         )}
       </TabFade>
     </div>
@@ -556,11 +571,16 @@ export default function ReportsPage() {
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB 1: REVENUE OPPORTUNITY
 // ══════════════════════════════════════════════════════════════════════════════
-function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }: { revenue: QueryResult<RevenueOpportunityReport>; scorecard: QueryResult<PatientRow[]>; router: { push: (path: string) => void }; paymentYear?: number; isHistoricalPY?: boolean }) {
+function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }: {
+  revenue: QueryResult<RevenueOpportunityReport>;
+  scorecard: QueryResult<PatientRow[]>;
+  router: { push: (path: string) => void };
+  paymentYear?: number;
+  isHistoricalPY?: boolean;
+}) {
   const r = revenue.data;
   const patients: PatientRow[] = scorecard.data ?? [];
   const revenueTableRef = React.useRef<HTMLDivElement | null>(null);
-  // Formula provenance for CFO tooltip
   const revMeta = useMetricFormula(r as Record<string, unknown> | null | undefined, "estimated_annual_revenue") ?? r?._meta ?? null;
 
   const { top25, patientsWithGaps } = useMemo(() => {
@@ -586,24 +606,31 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
 
   if (isEmpty) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 24px", textAlign: "center" }}>
-        <div style={{ width: 56, height: 56, borderRadius: 14, background: C.primaryLight, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="1.8"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+        <div
+          className="w-14 h-14 rounded-[14px] flex items-center justify-center mb-5"
+          style={{ background: C.primaryLight }}
+        >
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="1.8">
+            <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+          </svg>
         </div>
-        <h3 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px", color: C.text }}>No revenue data available</h3>
-        <p style={{ fontSize: 14, color: C.textMuted, maxWidth: 400, margin: "0 0 28px", lineHeight: 1.6 }}>
+        <h3 className="text-[18px] font-bold mb-2" style={{ color: C.text }}>No revenue data available</h3>
+        <p className="text-[14px] text-muted-foreground max-w-[400px] mb-7 leading-relaxed">
           No patients have been analyzed for payment year {paymentYear}. Connect your EMR to start analyzing RAF gaps, or load demo data to preview the reports.
         </p>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
+        <div className="flex gap-3 flex-wrap justify-center">
           <button
             onClick={() => router.push("/connect")}
-            style={{ padding: "10px 22px", borderRadius: 10, border: "none", background: C.primary, color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+            className="px-[22px] py-2.5 rounded-[10px] border-none text-[14px] font-semibold cursor-pointer text-white"
+            style={{ background: C.primary }}
           >
             Connect EMR
           </button>
           <button
             onClick={() => router.push("/demo")}
-            style={{ padding: "10px 22px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.white, color: C.text, fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+            className="px-[22px] py-2.5 rounded-[10px] text-[14px] font-semibold cursor-pointer"
+            style={{ border: `1px solid ${C.border}`, background: C.white, color: C.text }}
           >
             Try Demo Data
           </button>
@@ -615,17 +642,28 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
   return (
     <div>
       {/* KPI Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20, marginBottom: 32 }}>
+      <div className="grid gap-5 mb-8" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
         {/* Revenue Card */}
-        <div className="hover-lift card-glow-emerald" style={{ ...cardStyle, borderLeft: `4px solid ${C.emerald}`, padding: 24 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div className="hover-lift card-glow-emerald p-6" style={{ ...cardStyle, borderLeft: `4px solid ${C.emerald}` }}>
+          <div className="flex justify-between items-start">
             <div>
-              <p data-testid="revenue-at-risk-label" style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: C.textMuted, margin: 0, display: "flex", alignItems: "center", gap: 4 }}>
+              <p
+                data-testid="revenue-at-risk-label"
+                className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground m-0 flex items-center gap-1"
+              >
                 Estimated Annual Revenue
                 {revMeta && <MetricMetaTooltip meta={revMeta} side="bottom" />}
               </p>
-              <p data-testid="revenue-at-risk-value" style={{ fontSize: 32, fontWeight: 700, margin: "8px 0 0", letterSpacing: "-0.02em", color: C.emeraldDark }}>{fmt$(totalRevenue)}</p>
-              <p style={{ fontSize: 12, color: C.textSub, margin: "4px 0 0" }}>@ ${REVENUE_PER_RAF.toLocaleString()} / RAF point</p>
+              <p
+                data-testid="revenue-at-risk-value"
+                className="text-[32px] font-bold mt-2 mb-0 tracking-[-0.02em]"
+                style={{ color: C.emeraldDark }}
+              >
+                {fmt$(totalRevenue)}
+              </p>
+              <p className="text-[12px] mt-1 mb-0" style={{ color: C.textSub }}>
+                @ ${REVENUE_PER_RAF.toLocaleString()} / RAF point
+              </p>
               {r?.last_computed_at && (() => {
                 const d = new Date(r.last_computed_at);
                 if (isNaN(d.getTime())) return null;
@@ -633,43 +671,60 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
                 if (mins < 0) return null;
                 const rel = mins < 1 ? "<1m" : mins < 60 ? `${mins}m` : mins < 1440 ? `${Math.floor(mins / 60)}h` : `${Math.floor(mins / 1440)}d`;
                 return (
-                  <span data-testid="last-refreshed" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, color: C.textMuted, marginTop: 4 }}>
+                  <span
+                    data-testid="last-refreshed"
+                    className="inline-flex items-center gap-1 text-[10px] text-muted-foreground mt-1"
+                  >
                     <Clock size={11} aria-hidden />
                     Last refreshed {rel} ago
                   </span>
                 );
               })()}
             </div>
-            <div style={{ width: 44, height: 44, borderRadius: 10, background: C.emeraldLight, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.emerald} strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            <div
+              className="w-11 h-11 rounded-[10px] flex items-center justify-center flex-shrink-0"
+              style={{ background: C.emeraldLight }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.emerald} strokeWidth="2">
+                <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+              </svg>
             </div>
           </div>
         </div>
 
         {/* RAF Gap Card */}
-        <div className="hover-lift card-glow-amber" style={{ ...cardStyle, borderLeft: `4px solid ${C.amber}`, padding: 24 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div className="hover-lift card-glow-amber p-6" style={{ ...cardStyle, borderLeft: `4px solid ${C.amber}` }}>
+          <div className="flex justify-between items-start">
             <div>
-              <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: C.textMuted, margin: 0 }}>Total RAF Gap</p>
-              <p style={{ fontSize: 32, fontWeight: 700, margin: "8px 0 0", letterSpacing: "-0.02em", color: C.amberDark }}>{fmtN(totalGap)}</p>
-              <p style={{ fontSize: 12, color: C.textSub, margin: "4px 0 0" }}>Cumulative gap across population</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground m-0">Total RAF Gap</p>
+              <p className="text-[32px] font-bold mt-2 mb-0 tracking-[-0.02em]" style={{ color: C.amberDark }}>
+                {fmtN(totalGap)}
+              </p>
+              <p className="text-[12px] mt-1 mb-0" style={{ color: C.textSub }}>Cumulative gap across population</p>
             </div>
-            <div style={{ width: 44, height: 44, borderRadius: 10, background: C.amberLight, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.amber} strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            <div className="w-11 h-11 rounded-[10px] flex items-center justify-center flex-shrink-0" style={{ background: C.amberLight }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.amber} strokeWidth="2">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+              </svg>
             </div>
           </div>
         </div>
 
         {/* Patients with Gaps Card */}
-        <div className="hover-lift card-glow-blue" style={{ ...cardStyle, borderLeft: `4px solid ${C.blue}`, padding: 24 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div className="hover-lift card-glow-blue p-6" style={{ ...cardStyle, borderLeft: `4px solid ${C.blue}` }}>
+          <div className="flex justify-between items-start">
             <div>
-              <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: C.textMuted, margin: 0 }}>Patients with Gaps</p>
-              <p style={{ fontSize: 32, fontWeight: 700, margin: "8px 0 0", letterSpacing: "-0.02em", color: C.blueDark }}>{patientsWithGaps}</p>
-              <p style={{ fontSize: 12, color: C.textSub, margin: "4px 0 0" }}>Of {r?.total_patients_analyzed ?? 0} analyzed</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground m-0">Patients with Gaps</p>
+              <p className="text-[32px] font-bold mt-2 mb-0 tracking-[-0.02em]" style={{ color: C.blueDark }}>
+                {patientsWithGaps}
+              </p>
+              <p className="text-[12px] mt-1 mb-0" style={{ color: C.textSub }}>Of {r?.total_patients_analyzed ?? 0} analyzed</p>
             </div>
-            <div style={{ width: 44, height: 44, borderRadius: 10, background: C.blueLight, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <div className="w-11 h-11 rounded-[10px] flex items-center justify-center flex-shrink-0" style={{ background: C.blueLight }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
             </div>
           </div>
         </div>
@@ -677,12 +732,15 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
 
       {/* Revenue Table */}
       <div ref={revenueTableRef} className="premium-shadow" style={cardStyle}>
-        <div style={{ padding: "18px 22px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, background: "linear-gradient(135deg, rgba(37,99,235,0.03) 0%, rgba(139,92,246,0.03) 100%)" }}>
+        <div
+          className="px-[22px] py-[18px] border-b border-border flex items-center justify-between flex-wrap gap-2.5"
+          style={{ background: "linear-gradient(135deg, rgba(37,99,235,0.03) 0%, rgba(139,92,246,0.03) 100%)" }}
+        >
           <div>
-            <h3 className="gradient-text" style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Top 25 Revenue Opportunities</h3>
-            <p style={{ margin: "4px 0 0", fontSize: 12, color: C.textMuted }}>Patients sorted by estimated revenue opportunity</p>
+            <h3 className="gradient-text m-0 text-[15px] font-bold">Top 25 Revenue Opportunities</h3>
+            <p className="mt-1 mb-0 text-[12px] text-muted-foreground">Patients sorted by estimated revenue opportunity</p>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="flex items-center gap-2">
             <button
               onClick={() => {
                 if (isHistoricalPY || !top25.length) return;
@@ -699,7 +757,12 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
               disabled={isHistoricalPY}
               title={isHistoricalPY ? "Disabled in historical view" : undefined}
               data-testid="export-csv-revenue"
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "none", background: isHistoricalPY ? C.gray300 : C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: isHistoricalPY ? "not-allowed" : "pointer", opacity: isHistoricalPY ? 0.6 : 1 }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-[7px] rounded-lg border-none text-[13px] font-semibold text-white cursor-pointer"
+              style={{
+                background: isHistoricalPY ? C.gray300 : C.primary,
+                cursor: isHistoricalPY ? "not-allowed" : "pointer",
+                opacity: isHistoricalPY ? 0.6 : 1,
+              }}
             >
               <FileDown size={14} />
               Export CSV
@@ -720,8 +783,8 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
             />
           </div>
         </div>
-        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-          <table aria-label="Revenue opportunities" style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+          <table aria-label="Revenue opportunities" className="w-full border-collapse">
             <thead>
               <tr>
                 <th style={{ ...thStyle, width: 50, textAlign: "center" }}>#</th>
@@ -738,25 +801,17 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
               {top25.map((p, i) => (
                 <tr
                   key={p.pid}
-                  // TODO: backend /api/reports/patient-scorecard does not return hcc_code or
-                  // encounter_id per row; currently falls back to /patients/{id}?tab=raf.
-                  // When the backend adds those fields, replace the navigation below with:
-                  //   p.encounter_id
-                  //     ? `/patients/${p.pid}?tab=raf&focus=hcc:${p.hcc_code}&encounter=${p.encounter_id}`
-                  //     : `/patients/${p.pid}?tab=raf&focus=hcc:${p.hcc_code}`
                   onClick={() => router.push(`/patients/${p.pid}?tab=raf`)}
                   title="Click to view supporting evidence in patient chart"
                   {...rowProps(i)}
                 >
                   <td style={{ ...tdStyle, textAlign: "center", fontWeight: 600, color: C.textMuted }}>{i + 1}</td>
                   <td style={tdStyle}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{
-                        width: 30, height: 30, borderRadius: "50%",
-                        background: avatarColors[i % avatarColors.length],
-                        color: tokens.white, fontSize: 11, fontWeight: 600,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                      }}>
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="w-[30px] h-[30px] rounded-full flex items-center justify-center text-[11px] font-semibold flex-shrink-0 text-white"
+                        style={{ background: avatarColors[i % avatarColors.length] }}
+                      >
                         {initials(p.name)}
                       </div>
                       <span className="font-medium">{p.name}</span>
@@ -772,13 +827,10 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
                     {p.hcc_count_billing} / {p.hcc_count_ai}
                   </td>
                   <td style={{ ...tdStyle, textAlign: "center" }}>
-                    <span style={{
-                      display: "inline-flex", alignItems: "center", gap: 4,
-                      padding: "3px 8px", borderRadius: 6,
-                      background: tokens.primarySoft, color: tokens.primary,
-                      fontSize: 11, fontWeight: 600, letterSpacing: "0.02em",
-                      whiteSpace: "nowrap",
-                    }}>
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-[3px] rounded-[6px] text-[11px] font-semibold tracking-[0.02em] whitespace-nowrap"
+                      style={{ background: tokens.primarySoft, color: tokens.primary }}
+                    >
                       Evidence →
                     </span>
                   </td>
@@ -802,7 +854,11 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB 2: PATIENT SCORECARD
 // ══════════════════════════════════════════════════════════════════════════════
-function ScorecardTab({ scorecard, router, isHistoricalPY }: { scorecard: QueryResult<PatientRow[]>; router: { push: (path: string) => void }; isHistoricalPY?: boolean }) {
+function ScorecardTab({ scorecard, router, isHistoricalPY }: {
+  scorecard: QueryResult<PatientRow[]>;
+  router: { push: (path: string) => void };
+  isHistoricalPY?: boolean;
+}) {
   const [search, setSearch] = useState("");
   const [limit, setLimit] = useState(100);
   const patients: PatientRow[] = scorecard.data ?? [];
@@ -836,24 +892,21 @@ function ScorecardTab({ scorecard, router, isHistoricalPY }: { scorecard: QueryR
   return (
     <div>
       {/* Search + Export */}
-      <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ position: "relative", maxWidth: 340, flex: 1 }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.textSub} strokeWidth="2" style={{ position: "absolute", left: 12, top: 11 }}>
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      <div className="mb-4 flex items-center gap-2.5">
+        <div className="relative max-w-[340px] flex-1">
+          <svg
+            width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke={C.textSub} strokeWidth="2"
+            className="absolute left-3 top-[11px]"
+          >
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
           <input
             type="text"
             placeholder="Search patients..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "9px 14px 9px 36px",
-              fontSize: 13,
-              border: `1px solid ${C.border}`,
-              borderRadius: 8,
-              background: C.white,
-            }}
+            className="w-full py-[9px] px-3.5 pl-9 text-[13px] border border-border rounded-lg bg-white"
           />
         </div>
         <button
@@ -875,7 +928,12 @@ function ScorecardTab({ scorecard, router, isHistoricalPY }: { scorecard: QueryR
           disabled={isHistoricalPY}
           title={isHistoricalPY ? "Disabled in historical view" : undefined}
           data-testid="export-csv-patient-scorecard"
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 8, border: "none", background: isHistoricalPY ? C.gray300 : C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: isHistoricalPY ? "not-allowed" : "pointer", flexShrink: 0, opacity: isHistoricalPY ? 0.6 : 1 }}
+          className="inline-flex items-center gap-1.5 px-3.5 py-[9px] rounded-lg border-none text-[13px] font-semibold text-white flex-shrink-0"
+          style={{
+            background: isHistoricalPY ? C.gray300 : C.primary,
+            cursor: isHistoricalPY ? "not-allowed" : "pointer",
+            opacity: isHistoricalPY ? 0.6 : 1,
+          }}
         >
           <FileDown size={14} />
           Export CSV
@@ -883,8 +941,8 @@ function ScorecardTab({ scorecard, router, isHistoricalPY }: { scorecard: QueryR
       </div>
 
       <div className="premium-shadow" style={cardStyle}>
-        <div style={{ overflowX: "auto" }}>
-          <table aria-label="Patient scorecard" className="premium-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="overflow-x-auto">
+          <table aria-label="Patient scorecard" className="premium-table w-full border-collapse">
             <thead>
               <tr>
                 {colDefs.map((col) => (
@@ -893,7 +951,7 @@ function ScorecardTab({ scorecard, router, isHistoricalPY }: { scorecard: QueryR
                     style={{ ...thStyle, textAlign: (col.align as React.CSSProperties["textAlign"]) ?? "left" }}
                     onClick={() => toggle(col.key as keyof PatientRow)}
                   >
-                    <span style={{ display: "inline-flex", alignItems: "center" }}>
+                    <span className="inline-flex items-center">
                       {col.label}
                       <SortArrow active={sortKey === col.key} dir={sortDir} />
                     </span>
@@ -903,19 +961,13 @@ function ScorecardTab({ scorecard, router, isHistoricalPY }: { scorecard: QueryR
             </thead>
             <tbody>
               {visible.map((p, i) => (
-                <tr
-                  key={p.pid}
-                  onClick={() => router.push(`/patients/${p.pid}`)}
-                  {...rowProps(i)}
-                >
+                <tr key={p.pid} onClick={() => router.push(`/patients/${p.pid}`)} {...rowProps(i)}>
                   <td style={tdStyle}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{
-                        width: 28, height: 28, borderRadius: "50%",
-                        background: avatarColors[i % avatarColors.length],
-                        color: tokens.white, fontSize: 10, fontWeight: 600,
-                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                      }}>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold flex-shrink-0 text-white"
+                        style={{ background: avatarColors[i % avatarColors.length] }}
+                      >
                         {initials(p.name)}
                       </div>
                       <span className="font-medium text-[13px]">{p.name}</span>
@@ -944,19 +996,11 @@ function ScorecardTab({ scorecard, router, isHistoricalPY }: { scorecard: QueryR
           </table>
         </div>
         {filtered.length > limit && (
-          <div style={{ padding: 16, textAlign: "center", borderTop: `1px solid ${C.border}` }}>
+          <div className="p-4 text-center border-t border-border">
             <button
               onClick={() => setLimit((l) => l + 100)}
-              style={{
-                padding: "8px 24px",
-                fontSize: 13,
-                fontWeight: 600,
-                color: C.primary,
-                background: C.primaryLight,
-                border: "none",
-                borderRadius: 8,
-                cursor: "pointer",
-              }}
+              className="px-6 py-2 text-[13px] font-semibold rounded-lg border-none cursor-pointer"
+              style={{ color: C.primary, background: C.primaryLight }}
             >
               Load more ({filtered.length - limit} remaining)
             </button>
@@ -970,7 +1014,10 @@ function ScorecardTab({ scorecard, router, isHistoricalPY }: { scorecard: QueryR
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB 3: HCC DISTRIBUTION
 // ══════════════════════════════════════════════════════════════════════════════
-function HccTab({ hccDist, isHistoricalPY }: { hccDist: QueryResult<HccDistributionRow[]>; isHistoricalPY?: boolean }) {
+function HccTab({ hccDist, isHistoricalPY }: {
+  hccDist: QueryResult<HccDistributionRow[]>;
+  isHistoricalPY?: boolean;
+}) {
   const chartRef = React.useRef<HTMLDivElement | null>(null);
   if (hccDist.isLoading) return <Spinner label="Loading HCC distribution..." />;
   if (hccDist.isError) return <ErrorBox message="Failed to load HCC data" onRetry={hccDist.refetch} />;
@@ -993,18 +1040,26 @@ function HccTab({ hccDist, isHistoricalPY }: { hccDist: QueryResult<HccDistribut
 
   return (
     <div ref={chartRef} className="premium-shadow" style={cardStyle}>
-      <div style={{ padding: "18px 22px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, background: "linear-gradient(135deg, rgba(37,99,235,0.03) 0%, rgba(139,92,246,0.03) 100%)" }}>
+      <div
+        className="px-[22px] py-[18px] border-b border-border flex items-center justify-between flex-wrap gap-2.5"
+        style={{ background: "linear-gradient(135deg, rgba(37,99,235,0.03) 0%, rgba(139,92,246,0.03) 100%)" }}
+      >
         <div>
-          <h3 className="gradient-text" style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>HCC Distribution — Top 20 by Patient Count</h3>
-          <p style={{ margin: "4px 0 0", fontSize: 12, color: C.textMuted }}>Hierarchical Condition Categories across the population</p>
+          <h3 className="gradient-text m-0 text-[15px] font-bold">HCC Distribution — Top 20 by Patient Count</h3>
+          <p className="mt-1 mb-0 text-[12px] text-muted-foreground">Hierarchical Condition Categories across the population</p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div className="flex items-center gap-2">
           <button
             onClick={() => { if (!isHistoricalPY && top20.length) downloadCSV(csvData, "hcc-distribution"); }}
             disabled={isHistoricalPY}
             title={isHistoricalPY ? "Disabled in historical view" : undefined}
             data-testid="export-csv-hcc-distribution"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "none", background: isHistoricalPY ? C.gray300 : C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: isHistoricalPY ? "not-allowed" : "pointer", opacity: isHistoricalPY ? 0.6 : 1 }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-[7px] rounded-lg border-none text-[13px] font-semibold text-white"
+            style={{
+              background: isHistoricalPY ? C.gray300 : C.primary,
+              cursor: isHistoricalPY ? "not-allowed" : "pointer",
+              opacity: isHistoricalPY ? 0.6 : 1,
+            }}
           >
             <FileDown size={14} />
             Export CSV
@@ -1017,38 +1072,40 @@ function HccTab({ hccDist, isHistoricalPY }: { hccDist: QueryResult<HccDistribut
           />
         </div>
       </div>
-      <div style={{ padding: 20 }}>
+      <div className="p-5">
         {top20.map((item, i) => {
           const rank = i + 1;
           const pct = (item.patient_count / maxCount) * 100;
           return (
-            <div key={item.hcc_code} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-              <span style={{ width: 28, textAlign: "right", fontSize: 12, fontWeight: 600, color: C.textMuted, flexShrink: 0 }}>{rank}</span>
-              <span style={{ width: 70, fontSize: 12, fontWeight: 700, color: barColor(rank), fontFamily: "monospace", flexShrink: 0 }}>{item.hcc_code}</span>
-              <div style={{ flex: 1, position: "relative", height: 28, background: C.gray100, borderRadius: 6, overflow: "hidden" }}>
+            <div key={item.hcc_code} className="flex items-center gap-3 mb-2.5">
+              <span className="w-7 text-right text-[12px] font-semibold text-muted-foreground flex-shrink-0">{rank}</span>
+              <span
+                className="w-[70px] text-[12px] font-bold font-mono flex-shrink-0"
+                style={{ color: barColor(rank) }}
+              >
+                {item.hcc_code}
+              </span>
+              <div className="flex-1 relative h-7 rounded-md overflow-hidden" style={{ background: C.gray100 }}>
                 <div
-                  style={{
-                    width: `${Math.max(pct, 2)}%`,
-                    height: "100%",
-                    background: barColor(rank),
-                    borderRadius: 6,
-                    opacity: 0.8,
-                    transition: "width 0.4s ease",
-                  }}
+                  className="h-full rounded-md opacity-80 transition-[width] duration-300 ease-in-out"
+                  style={{ width: `${Math.max(pct, 2)}%`, background: barColor(rank) }}
                 />
               </div>
-              <span style={{ width: 50, textAlign: "right", fontSize: 13, fontWeight: 600, color: C.text, flexShrink: 0 }}>{item.patient_count}</span>
+              <span className="w-[50px] text-right text-[13px] font-semibold flex-shrink-0" style={{ color: C.text }}>
+                {item.patient_count}
+              </span>
             </div>
           );
         })}
         {top20.length === 0 && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "28px 16px", textAlign: "center" }}>
-            <p style={{ fontSize: 13, fontWeight: 600, color: C.text, margin: 0 }}>
+          <div className="flex flex-col items-center gap-2 py-7 px-4 text-center">
+            <p className="text-[13px] font-semibold m-0" style={{ color: C.text }}>
               No HCC data — run analysis to populate this chart
             </p>
             <a
               href="/patients"
-              style={{ display: "inline-block", padding: "7px 16px", borderRadius: 8, background: C.primary, color: C.white, fontSize: 13, fontWeight: 600, textDecoration: "none" }}
+              className="inline-block px-4 py-[7px] rounded-lg text-[13px] font-semibold no-underline text-white"
+              style={{ background: C.primary }}
             >
               Go to Patients
             </a>
@@ -1062,7 +1119,11 @@ function HccTab({ hccDist, isHistoricalPY }: { hccDist: QueryResult<HccDistribut
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB 4: RECAPTURE GAPS
 // ══════════════════════════════════════════════════════════════════════════════
-function RecaptureTab({ recapture, router, isHistoricalPY }: { recapture: QueryResult<unknown>; router: { push: (path: string) => void }; isHistoricalPY?: boolean }) {
+function RecaptureTab({ recapture, router, isHistoricalPY }: {
+  recapture: QueryResult<unknown>;
+  router: { push: (path: string) => void };
+  isHistoricalPY?: boolean;
+}) {
   if (recapture.isLoading) return <Spinner label="Loading recapture gaps..." />;
   if (recapture.isError) return <ErrorBox message="Failed to load recapture data" onRetry={recapture.refetch} />;
 
@@ -1071,7 +1132,6 @@ function RecaptureTab({ recapture, router, isHistoricalPY }: { recapture: QueryR
   const totalGaps = gaps.length;
   const uniquePatients = new Set(gaps.map((g) => g.patient_id ?? g.pid)).size;
 
-  // Top conditions summary
   const conditionMap = new Map<string, { condition: string; icd10: string; count: number }>();
   gaps.forEach((g) => {
     const key = g.icd10_code ?? g.icd10 ?? "Unknown";
@@ -1087,22 +1147,22 @@ function RecaptureTab({ recapture, router, isHistoricalPY }: { recapture: QueryR
   return (
     <div>
       {/* KPI Row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 20, marginBottom: 32 }}>
-        <div className="hover-lift card-glow-rose" style={{ ...cardStyle, borderLeft: `4px solid ${C.red}`, padding: 24 }}>
-          <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: C.textMuted, margin: 0 }}>Total Gaps</p>
-          <p style={{ fontSize: 32, fontWeight: 700, margin: "8px 0 0", color: C.redDark }}>{totalGaps}</p>
+      <div className="grid gap-5 mb-8" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+        <div className="hover-lift card-glow-rose p-6" style={{ ...cardStyle, borderLeft: `4px solid ${C.red}` }}>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground m-0">Total Gaps</p>
+          <p className="text-[32px] font-bold mt-2 mb-0" style={{ color: C.redDark }}>{totalGaps}</p>
         </div>
-        <div className="hover-lift card-glow-amber" style={{ ...cardStyle, borderLeft: `4px solid ${C.amber}`, padding: 24 }}>
-          <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: C.textMuted, margin: 0 }}>Patients Affected</p>
-          <p style={{ fontSize: 32, fontWeight: 700, margin: "8px 0 0", color: C.amberDark }}>{uniquePatients}</p>
+        <div className="hover-lift card-glow-amber p-6" style={{ ...cardStyle, borderLeft: `4px solid ${C.amber}` }}>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground m-0">Patients Affected</p>
+          <p className="text-[32px] font-bold mt-2 mb-0" style={{ color: C.amberDark }}>{uniquePatients}</p>
         </div>
       </div>
 
       {/* Top Conditions Table */}
-      <div className="premium-shadow" style={{ ...cardStyle, marginBottom: 24 }}>
+      <div className="premium-shadow mb-6" style={cardStyle}>
         <GradientSectionHeader title="Top Conditions for Recapture" />
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
             <thead>
               <tr>
                 <th style={thStyle}>Condition</th>
@@ -1119,7 +1179,11 @@ function RecaptureTab({ recapture, router, isHistoricalPY }: { recapture: QueryR
                 </tr>
               ))}
               {topConditions.length === 0 && (
-                <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: C.textMuted, padding: 40 }}>No recapture gaps found</td></tr>
+                <tr>
+                  <td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: C.textMuted, padding: 40 }}>
+                    No recapture gaps found
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
@@ -1128,8 +1192,11 @@ function RecaptureTab({ recapture, router, isHistoricalPY }: { recapture: QueryR
 
       {/* Full Gaps Table */}
       <div className="premium-shadow" style={cardStyle}>
-        <div style={{ padding: "18px 22px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, background: "linear-gradient(135deg, rgba(37,99,235,0.03) 0%, rgba(139,92,246,0.03) 100%)" }}>
-          <h3 className="gradient-text" style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>All Recapture Gaps</h3>
+        <div
+          className="px-[22px] py-[18px] border-b border-border flex items-center justify-between flex-wrap gap-2.5"
+          style={{ background: "linear-gradient(135deg, rgba(37,99,235,0.03) 0%, rgba(139,92,246,0.03) 100%)" }}
+        >
+          <h3 className="gradient-text m-0 text-[15px] font-bold">All Recapture Gaps</h3>
           <button
             onClick={() => {
               if (isHistoricalPY || !gaps.length) return;
@@ -1145,14 +1212,19 @@ function RecaptureTab({ recapture, router, isHistoricalPY }: { recapture: QueryR
             disabled={isHistoricalPY}
             title={isHistoricalPY ? "Disabled in historical view" : undefined}
             data-testid="export-csv-recapture-gaps"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "none", background: isHistoricalPY ? C.gray300 : C.primary, color: C.white, fontSize: 13, fontWeight: 600, cursor: isHistoricalPY ? "not-allowed" : "pointer", opacity: isHistoricalPY ? 0.6 : 1 }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-[7px] rounded-lg border-none text-[13px] font-semibold text-white"
+            style={{
+              background: isHistoricalPY ? C.gray300 : C.primary,
+              cursor: isHistoricalPY ? "not-allowed" : "pointer",
+              opacity: isHistoricalPY ? 0.6 : 1,
+            }}
           >
             <FileDown size={14} />
             Export CSV
           </button>
         </div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
             <thead>
               <tr>
                 <th style={thStyle}>Patient</th>
@@ -1171,14 +1243,20 @@ function RecaptureTab({ recapture, router, isHistoricalPY }: { recapture: QueryR
                     if (pid) router.push(`/patients/${pid}`);
                   }}
                 >
-                  <td style={{ ...tdStyle, fontWeight: 500, color: C.primary }}>{g.patient_name ?? g.name ?? `Patient #${g.patient_id ?? g.pid}`}</td>
+                  <td style={{ ...tdStyle, fontWeight: 500, color: C.primary }}>
+                    {g.patient_name ?? g.name ?? `Patient #${g.patient_id ?? g.pid}`}
+                  </td>
                   <td style={tdStyle}>{g.condition ?? g.description ?? "—"}</td>
                   <td style={{ ...tdStyle, fontFamily: "monospace", fontWeight: 600 }}>{g.icd10_code ?? g.icd10 ?? "—"}</td>
                   <td style={{ ...tdStyle, color: C.textMuted }}>{g.onset_date ?? g.date ?? "—"}</td>
                 </tr>
               ))}
               {gaps.length === 0 && (
-                <tr><td colSpan={4} style={{ ...tdStyle, textAlign: "center", color: C.textMuted, padding: 40 }}>No recapture gaps found</td></tr>
+                <tr>
+                  <td colSpan={4} style={{ ...tdStyle, textAlign: "center", color: C.textMuted, padding: 40 }}>
+                    No recapture gaps found
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
@@ -1220,7 +1298,6 @@ function DataQualityTab({ dataQuality }: { dataQuality: QueryResult<DataQualityP
     return C.redLight;
   }
 
-  // SVG donut
   const donutSize = 180;
   const strokeWidth = 16;
   const radius = (donutSize - strokeWidth) / 2;
@@ -1230,23 +1307,15 @@ function DataQualityTab({ dataQuality }: { dataQuality: QueryResult<DataQualityP
   return (
     <div>
       {/* Donut + Score */}
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: 36 }}>
-        <div className="premium-shadow hover-lift" style={{ ...cardStyle, padding: 32, display: "flex", flexDirection: "column", alignItems: "center", width: 280 }}>
+      <div className="flex justify-center mb-9">
+        <div
+          className="premium-shadow hover-lift p-8 flex flex-col items-center w-[280px]"
+          style={cardStyle}
+        >
           <svg width={donutSize} height={donutSize} viewBox={`0 0 ${donutSize} ${donutSize}`}>
-            {/* Background ring */}
+            <circle cx={donutSize / 2} cy={donutSize / 2} r={radius} fill="none" stroke={C.gray200} strokeWidth={strokeWidth} />
             <circle
-              cx={donutSize / 2}
-              cy={donutSize / 2}
-              r={radius}
-              fill="none"
-              stroke={C.gray200}
-              strokeWidth={strokeWidth}
-            />
-            {/* Progress ring */}
-            <circle
-              cx={donutSize / 2}
-              cy={donutSize / 2}
-              r={radius}
+              cx={donutSize / 2} cy={donutSize / 2} r={radius}
               fill="none"
               stroke={pctColor(overallScore)}
               strokeWidth={strokeWidth}
@@ -1256,61 +1325,42 @@ function DataQualityTab({ dataQuality }: { dataQuality: QueryResult<DataQualityP
               transform={`rotate(-90 ${donutSize / 2} ${donutSize / 2})`}
               style={{ transition: "stroke-dashoffset 0.6s ease" }}
             />
-            {/* Center text */}
-            <text
-              x={donutSize / 2}
-              y={donutSize / 2 - 6}
-              textAnchor="middle"
-              style={{ fontSize: 36, fontWeight: 700, fill: C.text }}
-            >
+            <text x={donutSize / 2} y={donutSize / 2 - 6} textAnchor="middle" style={{ fontSize: 36, fontWeight: 700, fill: C.text }}>
               {Math.round(overallScore)}%
             </text>
-            <text
-              x={donutSize / 2}
-              y={donutSize / 2 + 18}
-              textAnchor="middle"
-              style={{ fontSize: 12, fill: C.textMuted }}
-            >
+            <text x={donutSize / 2} y={donutSize / 2 + 18} textAnchor="middle" style={{ fontSize: 12, fill: C.textMuted }}>
               Completeness
             </text>
           </svg>
-          <p style={{ marginTop: 16, fontSize: 14, fontWeight: 600, color: C.text }}>Overall Data Completeness</p>
+          <p className="mt-4 text-[14px] font-semibold" style={{ color: C.text }}>Overall Data Completeness</p>
         </div>
       </div>
 
       {/* Data Type Cards Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}>
+      <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
         {dataTypes.map((dt) => {
           const pct = dt.total > 0 ? Math.round((dt.count / dt.total) * 100) : 0;
           return (
-            <div key={dt.key} className="hover-lift" style={{ ...cardStyle, padding: 20 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div key={dt.key} className="hover-lift p-5" style={cardStyle}>
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex items-center gap-2">
                   <span className="text-xl">{dt.icon}</span>
                   <span className="text-[13px] font-semibold">{dt.label}</span>
                 </div>
-                <span style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: pctColor(pct),
-                  background: pctBg(pct),
-                  padding: "2px 8px",
-                  borderRadius: 99,
-                }}>{pct}%</span>
+                <span
+                  className="text-[12px] font-bold px-2 py-[2px] rounded-full"
+                  style={{ color: pctColor(pct), background: pctBg(pct) }}
+                >
+                  {pct}%
+                </span>
               </div>
-              <p style={{ fontSize: 12, color: C.textMuted, margin: "0 0 8px" }}>
+              <p className="text-[12px] text-muted-foreground mb-2">
                 {dt.count.toLocaleString()} / {dt.total.toLocaleString()} records
               </p>
-              {/* Progress bar */}
-              <div style={{ height: 6, background: C.gray200, borderRadius: 3, overflow: "hidden" }}>
+              <div className="h-1.5 rounded-sm overflow-hidden" style={{ background: C.gray200 }}>
                 <div
-                  style={{
-                    width: `${pct}%`,
-                    height: "100%",
-                    background: pctColor(pct),
-                    borderRadius: 3,
-                    transition: "width 0.4s ease",
-                  }}
+                  className="h-full rounded-sm transition-[width] duration-300 ease-in-out"
+                  style={{ width: `${pct}%`, background: pctColor(pct) }}
                 />
               </div>
             </div>
@@ -1320,4 +1370,3 @@ function DataQualityTab({ dataQuality }: { dataQuality: QueryResult<DataQualityP
     </div>
   );
 }
-

@@ -48,26 +48,25 @@ async function getRole(): Promise<string | null> {
   }
 }
 
+/** Resolve which dashboard to show based on the authenticated user's role. */
+function resolveDashboard(role: string | null): React.ComponentType {
+  if (role === "provider" || role === "clinician") return ProviderDashboard;
+  if (role === "coder") return CoderDashboard;
+  // admin, manager, auditor, AND unknown/null (SSR-cookie race) all land here.
+  // AdminDashboard is the full Population Health Intelligence view — the safe
+  // default when role detection fails (middleware redirects unauthenticated users
+  // before this code runs, so a null role here means SSR couldn't read cookies).
+  return AdminDashboard;
+}
+
 export default async function DashboardOrchestrator() {
   const role = await getRole();
-
-  let Dashboard: React.ComponentType;
-  if (role === "provider" || role === "clinician") {
-    Dashboard = ProviderDashboard;
-  } else if (role === "coder") {
-    Dashboard = CoderDashboard;
-  } else {
-    // admin, manager, auditor, AND unknown/null (SSR-cookie race) all land here.
-    // AdminDashboard is the full Population Health Intelligence view — the safe
-    // default when role detection fails (middleware redirects unauthenticated users
-    // before this code runs, so a null role here means SSR couldn't read cookies).
-    Dashboard = AdminDashboard;
-  }
+  const Dashboard = resolveDashboard(role);
 
   return (
-    <>
+    <div className="p-6">
       <AIHealthBanner />
       <Dashboard />
-    </>
+    </div>
   );
 }

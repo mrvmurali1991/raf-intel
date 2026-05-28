@@ -17,25 +17,24 @@ interface CoderDashboardStats {
 function Pulse({ w, h, r = 6 }: { w: string | number; h: number; r?: number }) {
   return (
     <div
-      style={{
-        width: w,
-        height: h,
-        borderRadius: r,
-        background: "linear-gradient(90deg, #E2E8F0 25%, #EDF2F7 50%, #E2E8F0 75%)",
-        backgroundSize: "200% 100%",
-        animation: "shimmer 1.5s ease-in-out infinite",
-      }}
+      className="shimmer"
+      style={{ width: w, height: h, borderRadius: r }}
     />
   );
 }
 
 function KPISkeleton() {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="bg-card border border-border/40 rounded-2xl p-6 shadow-sm">
+    <div
+      className="grid grid-cols-3 gap-5"
+      aria-busy="true"
+      aria-label="Loading dashboard"
+      role="status"
+    >
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="rounded-lg border bg-card p-6 shadow-sm">
           <Pulse w={100} h={14} />
-          <div style={{ height: 12 }} />
+          <div className="h-3" />
           <Pulse w={80} h={32} />
         </div>
       ))}
@@ -57,50 +56,51 @@ export function CoderDashboard() {
         subtitle="Review suspected conditions, missing documentation, and active queue."
       />
 
-      <div style={{ paddingBottom: 24 }} />
-
-      {isLoading ? (
-        <KPISkeleton />
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 32 }}>
-          <MetricCard
-            label="Pending Suspects"
-            value={stats?.total_suspects_open ?? "0"}
-            subtitle="Requires Validation"
-            icon={<AlertTriangle size={20} />}
-            intent="warning"
-            href="/suspects"
-          />
-          <MetricCard
-            label="Missing Documents"
-            value={"0"}
-            subtitle="Follow-up needed"
-            icon={<FileText size={20} />}
-          />
-          <MetricCard
-            label="Analyzed Patients"
-            value={stats?.patients_analyzed ?? "0"}
-            subtitle="Total NLP Scanned"
-            icon={<Activity size={20} />}
-            intent="success"
-            href="/patients"
-          />
-        </div>
-      )}
+      <div className="mt-6">
+        {isLoading ? (
+          <KPISkeleton />
+        ) : (
+          <div className="grid grid-cols-3 gap-5 mb-8">
+            <MetricCard
+              label="Pending Suspects"
+              value={stats?.total_suspects_open ?? "0"}
+              subtitle="Requires Validation"
+              icon={<AlertTriangle size={18} />}
+              intent="warning"
+              href="/suspects"
+            />
+            <MetricCard
+              label="Missing Documents"
+              value="0"
+              subtitle="Follow-up needed"
+              icon={<FileText size={18} />}
+              intent="default"
+            />
+            <MetricCard
+              label="Analyzed Patients"
+              value={stats?.patients_analyzed ?? "0"}
+              subtitle="Total NLP Scanned"
+              icon={<Activity size={18} />}
+              intent="success"
+              href="/patients"
+            />
+          </div>
+        )}
+      </div>
 
       <SectionHeader title="Active Quick Links" />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginTop: 16 }}>
-        <Link href="/suspects" className="block p-6 bg-card border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
+      <div className="grid grid-cols-2 gap-5 mt-4">
+        <Link href="/suspects" className="block p-6 rounded-lg border bg-card shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3 text-amber-600 mb-2">
-            <AlertTriangle size={24} />
-            <span className="font-semibold text-lg text-foreground">Suspects Queue</span>
+            <AlertTriangle size={22} />
+            <span className="font-semibold text-base text-foreground">Suspects Queue</span>
           </div>
           <p className="text-muted-foreground text-sm">Validations are waiting. Accept suspects to push them directly to OpenEMR.</p>
         </Link>
-        <Link href="/documents" className="block p-6 bg-card border border-border/40 rounded-2xl shadow-sm hover:shadow-md transition">
+        <Link href="/documents" className="block p-6 rounded-lg border bg-card shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3 text-blue-600 mb-2">
-            <FileText size={24} />
-            <span className="font-semibold text-lg text-foreground">Document Analysis</span>
+            <FileText size={22} />
+            <span className="font-semibold text-base text-foreground">Document Analysis</span>
           </div>
           <p className="text-muted-foreground text-sm">Upload C-CDA or PDF files for NLP extraction and validation.</p>
         </Link>

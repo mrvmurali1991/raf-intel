@@ -760,21 +760,13 @@ export function AdminDashboard() {
     <TooltipProvider delay={200}>
     <>
     {showTour && <TourModal onClose={() => setShowTour(false)} />}
-    <div className="admin-dash-outer bg-background" style={{ minHeight: "100vh", padding: "28px 40px 48px", overflowX: "hidden" }}>
+    <div className="admin-dash-outer bg-background" style={{ minHeight: "100vh", overflowX: "hidden" }}>
       {/* PageAlerts collapsed by default — banners stay accessible but deprioritized */}
       <PageAlerts defaultOpen={false}>
         <DataQualityBanner />
         <HistoricalPYBanner />
       </PageAlerts>
       <style>{`
-        @keyframes shimmer {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
@@ -787,6 +779,15 @@ export function AdminDashboard() {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
         }
+        .shimmer {
+          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background-size: 400% 100%;
+          animation: shimmer 1.4s ease-in-out infinite;
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
         .fade-in-up { animation: fadeInUp 500ms ease-out both; }
         .fade-in-up-1 { animation-delay: 0ms; }
         .fade-in-up-2 { animation-delay: 100ms; }
@@ -794,19 +795,12 @@ export function AdminDashboard() {
         .fade-in-up-4 { animation-delay: 300ms; }
         .fade-in-up-5 { animation-delay: 400ms; }
         .fade-in-up-6 { animation-delay: 500ms; }
-        .shimmer {
-          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
-          background-size: 400% 100%;
-          animation: shimmer 1.4s ease-in-out infinite;
-        }
         @media (max-width: 1024px) {
           .kpi-strip        { grid-template-columns: repeat(2, 1fr) !important; }
           .row-60-40        { grid-template-columns: 1fr !important; }
           .row-55-45        { grid-template-columns: 1fr !important; }
           .row-50-50        { grid-template-columns: 1fr !important; }
           .cms-sweep-hero   { grid-template-columns: 1fr !important; gap: 16px !important; }
-          .admin-dash-outer { padding-left: 12px !important; padding-right: 12px !important; }
-          .admin-dash-header { padding-left: 48px !important; }
         }
         @media (max-width: 640px) {
           .kpi-strip { grid-template-columns: 1fr !important; }
@@ -814,14 +808,14 @@ export function AdminDashboard() {
       `}</style>
 
       {/* ── Header ── */}
-      <div className="admin-dash-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 16 }}>
+      <div className="admin-dash-header flex items-start justify-between flex-wrap gap-4 mb-5">
         <div>
-          <h1 className="text-foreground font-extrabold tracking-tight leading-tight m-0" style={{ fontSize: 28 }}>
+          <h1 className="text-[28px] text-foreground font-extrabold tracking-tight leading-tight m-0">
             Population Health Intelligence
           </h1>
-          <span className="text-muted-foreground" style={{ fontSize: 13, marginTop: 6, display: "block" }}>{dateStr}</span>
+          <span className="block text-[13px] text-muted-foreground mt-1.5">{dateStr}</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div className="flex items-center gap-2.5 flex-wrap">
           {/* Tour link — subtle, top-right */}
           <button
             onClick={() => setShowTour(true)}
@@ -1134,94 +1128,76 @@ export function AdminDashboard() {
         <DashboardSkeleton />
       ) : (
         <div
-          className="kpi-strip"
+          className="kpi-strip grid grid-cols-4 gap-4 mb-6"
           role="status"
           aria-live="polite"
-          style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}
         >
-          {/* TOTAL MEMBERS */}
-          <div style={{ ...card, minHeight: 160, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <Tooltip>
-                <TooltipTrigger style={{ background: "none", border: "none", padding: 0, cursor: "default" }} data-testid="tooltip-kpi-total-members">
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Total Members</span>
-                </TooltipTrigger>
-                <TooltipContent>Total number of patients currently loaded in the system from all connected EMR sources and CSV uploads.</TooltipContent>
-              </Tooltip>
-              <div style={{ background: "hsl(var(--muted))", borderRadius: 8, padding: 6 }}>
-                <Users size={16} color="#64748B" />
-              </div>
-            </div>
-            <div style={{ fontSize: 36, fontWeight: 800, color: "hsl(var(--foreground))", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}>
-              {fmtN(totalPop)}
-            </div>
-            <div style={{ fontSize: 12, color: "#64748B" }}>Patients in system</div>
-          </div>
+          {/* TOTAL PATIENTS */}
+          <MetricCard
+            label="Total Patients"
+            value={fmtN(totalPop)}
+            subtitle="Patients in system"
+            icon={<Users size={18} />}
+            intent="default"
+            href="/patients"
+            labelTooltip="Total number of patients currently loaded in the system from all connected EMR sources and CSV uploads."
+            labelTestId="kpi-label-total-members"
+            valueTestId="kpi-value-total-members"
+            trend={kpiTrends?.panel_patients?.length ? kpiTrends.panel_patients : undefined}
+            delta={kpiTrends?.deltas?.panel_patients ?? undefined}
+          />
 
-          {/* PATIENTS ANALYZED */}
-          <div style={{ ...card, minHeight: 160, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <Tooltip>
-                <TooltipTrigger style={{ background: "none", border: "none", padding: 0, cursor: "default" }} data-testid="tooltip-kpi-patients-analyzed">
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Patients Analyzed</span>
-                </TooltipTrigger>
-                <TooltipContent>Patients who have had at least one AI analysis run. The percentage shows how much of your total roster has been scored for RAF and HCC gaps.</TooltipContent>
-              </Tooltip>
-              <div style={{ background: "#F0FDF4", borderRadius: 8, padding: 6 }}>
-                <CheckCircle size={16} color="#10B981" />
-              </div>
-            </div>
-            <div style={{ fontSize: 36, fontWeight: 800, color: "hsl(var(--foreground))", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}>
-              {analyzed > 0 ? fmtN(analyzed) : fmtN(totalPop)}
-            </div>
-            <div style={{ fontSize: 12, color: "#64748B" }}>
-              {totalPop > 0 ? `${Math.round(((analyzed > 0 ? analyzed : totalPop) / totalPop) * 100)}% coverage` : "No patients yet"}
-            </div>
-          </div>
+          {/* OPEN SUSPECTS */}
+          <MetricCard
+            label="Open Suspects"
+            value={fmtN(suspectsCount)}
+            subtitle={suspectsCount > 0 ? `Across ${suspectsPatients} patients` : "Run analysis to identify gaps"}
+            icon={<AlertCircle size={18} />}
+            intent="warning"
+            href="/suspects"
+            labelTooltip="AI-flagged conditions not yet coded in billing, awaiting coder review."
+            labelTestId="kpi-label-open-suspects"
+            valueTestId="kpi-value-open-suspects"
+            trend={kpiTrends?.suspects?.length ? kpiTrends.suspects : undefined}
+            delta={kpiTrends?.deltas?.suspects ?? undefined}
+          />
 
-          {/* AVERAGE RAF SCORE */}
-          <div style={{ ...card, minHeight: 160, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <Tooltip>
-                <TooltipTrigger style={{ background: "none", border: "none", padding: 0, cursor: "default" }} data-testid="tooltip-kpi-avg-raf-score">
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Average RAF Score</span>
-                </TooltipTrigger>
-                <TooltipContent>Mean Risk Adjustment Factor across all scored patients. 1.0 equals average national risk; above 1.5 signals a high-acuity panel that may be under-reimbursed.</TooltipContent>
-              </Tooltip>
-              <div style={{ background: "#F0FDF4", borderRadius: 8, padding: 6 }}>
-                <TrendingUp size={16} color="#10B981" />
-              </div>
-            </div>
-            <div style={{ fontSize: 36, fontWeight: 800, color: "hsl(var(--foreground))", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}>
-              {avgRaf > 0 ? avgRaf.toFixed(3) : "--"}
-            </div>
-            <div style={{ fontSize: 12, color: "#64748B" }}>
-              {avgRaf === 0 ? "Pending analysis" : avgRaf < 1.0 ? "Below average acuity" : avgRaf < 1.5 ? "Moderate acuity" : "High acuity population"}
-            </div>
-          </div>
+          {/* AVG RAF SCORE */}
+          <MetricCard
+            label="Avg RAF Score"
+            value={avgRaf > 0 ? avgRaf.toFixed(3) : "--"}
+            subtitle={
+              avgRaf === 0
+                ? "Pending analysis"
+                : avgRaf < 1.0
+                ? "Below average acuity"
+                : avgRaf < 1.5
+                ? "Moderate acuity"
+                : "High acuity population"
+            }
+            icon={<TrendingUp size={18} />}
+            intent={avgRaf === 0 ? "default" : avgRaf >= 1.5 ? "danger" : "success"}
+            href="/providers"
+            labelTooltip="Mean Risk Adjustment Factor across all scored patients. 1.0 equals average national risk; above 1.5 signals a high-acuity panel that may be under-reimbursed."
+            labelTestId="kpi-label-avg-raf-score"
+            valueTestId="kpi-value-avg-raf-score"
+            trend={kpiTrends?.avg_raf?.length ? kpiTrends.avg_raf : undefined}
+            delta={kpiTrends?.deltas?.avg_raf ?? undefined}
+          />
 
-          {/* REVENUE OPPORTUNITY */}
-          <div style={{ ...card, minHeight: 160, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <Tooltip>
-                <TooltipTrigger style={{ background: "none", border: "none", padding: 0, cursor: "default" }} data-testid="tooltip-kpi-revenue-opportunity">
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Revenue Opportunity</span>
-                </TooltipTrigger>
-                <TooltipContent>Estimated annual revenue recoverable by closing all identified HCC coding gaps. Calculated as RAF gap &times; $11,015 per RAF point per patient.</TooltipContent>
-              </Tooltip>
-              <div style={{ background: "#F0FDF4", borderRadius: 8, padding: 6 }}>
-                <DollarSign size={16} color="#10B981" />
-              </div>
-            </div>
-            <div style={{ fontSize: 36, fontWeight: 800, color: "hsl(var(--foreground))", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}
-              data-testid="revenue-at-risk-value"
-            >
-              {revenueOpp > 0 ? fmt$(revenueOpp) : "--"}
-            </div>
-            <div style={{ fontSize: 12, color: "#64748B" }}>
-              {revenueOpp > 0 ? "Estimated annual capture" : "Run analysis to calculate"}
-            </div>
-          </div>
+          {/* REVENUE AT RISK */}
+          <MetricCard
+            label="Revenue at Risk"
+            value={revenueOpp > 0 ? fmt$(revenueOpp) : "--"}
+            subtitle={revenueOpp > 0 ? "Estimated annual capture" : "Run analysis to calculate"}
+            icon={<DollarSign size={18} />}
+            intent="success"
+            href="/reports"
+            labelTooltip="Estimated annual revenue recoverable by closing all identified HCC coding gaps. Calculated as RAF gap × $11,015 per RAF point per patient."
+            labelTestId="kpi-label-revenue-opportunity"
+            valueTestId="revenue-at-risk-value"
+            meta={revMeta}
+          />
         </div>
       )}
       </div>
