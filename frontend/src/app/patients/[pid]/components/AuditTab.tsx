@@ -3,9 +3,7 @@
 import React, { useState, useEffect } from "react";
 import type { AuditPackagesResponse } from "@/lib/api";
 import { downloadAuditPackage } from "@/lib/api";
-import {
-  EmptyState,
-} from "@/components/healthcare-ui";
+import { SectionBanner } from "@/components/ui/section-banner";
 import {
   C,
   formatDate,
@@ -76,16 +74,9 @@ export function AuditTab({ audits, auditsLoading, auditMutation, selectedYear }:
         {auditsLoading ? (
           <SectionLoader label="Loading audit packages..." />
         ) : !audits?.packages?.length ? (
-          <EmptyState
-            title="No audit packages generated yet"
-            description="Click Generate New Audit to create your first package"
-            icon={
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-              </svg>
-            }
-          />
+          <div className="px-4 py-3">
+            <SectionBanner message="No audit packages generated yet. Click Generate New Audit above to create one." />
+          </div>
         ) : (
           <div>
             <div className="bg-muted border-b border-border" style={{

@@ -151,43 +151,46 @@ export function SuspectsSection({
     if (!items.length) return null;
     return (
       <section key={tier.key} aria-label={`${tier.label} suspects`} className="space-y-2">
-        <div className={`flex items-center gap-2 pl-3 ${tier.rail}`}>
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {tier.label}
-          </h3>
-          <span className={`inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums ${tier.badge}`}>
-            {items.length}
-          </span>
-        </div>
-        <div className="space-y-2 pl-3">
-          {items.map((s) => (
-            <SuspectCardView
-              key={s.id}
-              suspect={s}
-              patientId={patientId}
-              onChange={onChange}
-              modelVersion={modelVersion}
-              measurementYear={measurementYear}
-            />
+        <div className="space-y-2">
+          {items.map((s, idx) => (
+            <div key={s.id} className="relative">
+              {/* Inline confidence label — shown only on the first card in the bucket */}
+              {idx === 0 && (
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${tier.badge}`}>
+                    {tier.label}
+                  </span>
+                  <span className={`inline-flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums ${tier.badge}`}>
+                    {items.length}
+                  </span>
+                </div>
+              )}
+              <SuspectCardView
+                suspect={s}
+                patientId={patientId}
+                onChange={onChange}
+                modelVersion={modelVersion}
+                measurementYear={measurementYear}
+              />
+            </div>
           ))}
         </div>
       </section>
     );
   };
 
-  // Chip styling — emulates a segmented control. The active chip uses the
-  // primary tone; idle chips use neutral muted tones. Counts sit in a
-  // tabular-nums badge so the row doesn't reflow when filtering.
+  // Chip styling — pill filter controls. Active: teal bg + white text.
+  // Inactive: light gray bg + dark text. Consistent height and padding.
   const chipBase =
-    "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-sky-500";
+    "inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-teal-500 cursor-pointer";
   const chipIdle =
-    "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800";
+    "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700";
   const chipActive =
-    "border-sky-600 bg-sky-600 text-white hover:bg-sky-600 dark:border-sky-500 dark:bg-sky-500";
+    "bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-400";
   const countIdle =
-    "inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-zinc-100 px-1 text-[10px] font-semibold tabular-nums text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
+    "inline-flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-zinc-200 px-1 text-[10px] font-semibold tabular-nums text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300";
   const countActive =
-    "inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-white/25 px-1 text-[10px] font-semibold tabular-nums text-white";
+    "inline-flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-white/30 px-1 text-[10px] font-semibold tabular-nums text-white";
 
   const visibleSpecialties = SPECIALTY_ORDER.filter(
     (key) => specialtyCounts[key] > 0,

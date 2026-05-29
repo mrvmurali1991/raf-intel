@@ -7,8 +7,8 @@
  *
  *   GET /api/raf-central/{patientId}/suspect/{suspectId}/explain
  *
- * Right-anchored drawer. Optional Accept / Dismiss footer lets the reviewer
- * act on the suspect without closing the drawer first.
+ * Right-anchored drawer (max 420px). Optional Accept / Dismiss footer lets
+ * the reviewer act on the suspect without closing the drawer first.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -39,6 +39,8 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { CONFIDENCE_METHODOLOGY, confidenceTier } from "@/lib/confidence";
+import { humanizeEvidence } from "@/lib/evidence-labels";
+import type { SuspectMeat } from "@/components/raf-central/_shared";
 
 export interface ExplainPanelProps {
   patientId: number;
@@ -49,6 +51,10 @@ export interface ExplainPanelProps {
   onAccept?: () => void | Promise<void>;
   onRequestDismiss?: () => void;
   busy?: "accept" | "dismiss" | null;
+  /** Per-suspect MEAT letter booleans — rendered as [M][E][A][T] indicators. */
+  suspectMeat?: SuspectMeat | null;
+  /** Expected revenue uplift from accepting this suspect ($). */
+  suspectDollarImpact?: number | null;
 }
 
 interface ContributingSignal {
@@ -136,6 +142,10 @@ const SOURCE_META: Record<
   },
 };
 
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
 function ConfidenceHero({ pct }: { pct: number }) {
   const tier = confidenceTier(pct);
 
@@ -197,9 +207,116 @@ function ConfidenceHero({ pct }: { pct: number }) {
   );
 }
 
+/**
+ * [M][E][A][T] letter indicator row.
+ * Green = found, gray = missing. No circular gauge.
+ */
+function MeatIndicators({ meat }: { meat: SuspectMeat }) {
+  const letters: { key: keyof SuspectMeat; label: string; title: string }[] = [
+    { key: "monitor", label: "M", title: "Monitor" },
+    { key: "evaluate", label: "E", title: "Evaluate" },
+    { key: "assess", label: "A", title: "Assess" },
+    { key: "treat", label: "T", title: "Treat" },
+  ];
+
+  const foundCount = letters.filter(({ key }) => Boolean(meat[key])).length;
+
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          MEAT documentation
+        </p>
+        <span className="text-[11px] tabular-nums text-muted-foreground/70">
+          {foundCount} / 4
+        </span>
+      </div>
+      <div
+        className="flex items-end gap-3"
+        role="list"
+        aria-label="MEAT documentation status"
+      >
+        {letters.map(({ key, label, title }) => {
+          const present = Boolean(meat[key]);
+          return (
+            <div
+              key={key}
+              role="listitem"
+              className="flex flex-col items-center gap-1"
+            >
+              <span
+                title={`${title}: ${present ? "documented" : "not documented"}`}
+                aria-label={`${title}: ${present ? "documented" : "not documented"}`}
+                className={cn(
+                  "inline-flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold border select-none",
+                  present
+                    ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700"
+                    : "bg-muted/40 text-muted-foreground/35 border-muted",
+                )}
+              >
+                {label}
+              </span>
+              <span
+                className={cn(
+                  "text-[9px] font-medium uppercase tracking-wide",
+                  present
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-muted-foreground/40",
+                )}
+              >
+                {present ? "found" : "—"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Revenue uplift card.
+ * Stacked layout, whole-dollar amounts, no cents.
+ */
+function UpliftCard({ dollarImpact }: { dollarImpact: number }) {
+  const perYear = Math.round(dollarImpact);
+  const perMonth = Math.round(dollarImpact / 12);
+
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Revenue impact
+      </p>
+      <div className="space-y-1.5">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+            +${perYear.toLocaleString()}
+          </span>
+          <span className="text-xs text-muted-foreground">/ year</span>
+        </div>
+        <p className="text-xs text-muted-foreground tabular-nums">
+          +${perMonth.toLocaleString()} / month
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function SignalCard({ sig }: { sig: ContributingSignal }) {
   const meta = SOURCE_META[sig.source] ?? SOURCE_META.other;
   const Icon = meta.icon;
+
+  // Humanize the label — fall back gracefully if it's a raw type key.
+  const displayLabel = (() => {
+    if (!sig.label) return "Supporting evidence found";
+    // If the label looks like a raw snake_case key (no spaces, contains _)
+    // and matches the source type, humanize it. Otherwise use as-is.
+    if (sig.label === sig.source || sig.label.match(/^[a-z_]+$/) && !sig.label.includes(" ")) {
+      return humanizeEvidence(sig.label);
+    }
+    return sig.label;
+  })();
+
   return (
     <li className="rounded-lg border bg-card p-3 transition-colors hover:border-foreground/20">
       <div className="flex items-start gap-3">
@@ -208,6 +325,7 @@ function SignalCard({ sig }: { sig: ContributingSignal }) {
             "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border",
             meta.accent,
           )}
+          aria-hidden
         >
           <Icon className="h-4 w-4" />
         </span>
@@ -223,7 +341,7 @@ function SignalCard({ sig }: { sig: ContributingSignal }) {
             )}
           </div>
           <p className="break-words text-sm font-medium leading-snug">
-            {sig.label}
+            {displayLabel}
           </p>
           {sig.value && (
             <p className="break-words text-xs leading-relaxed text-muted-foreground">
@@ -253,6 +371,10 @@ function LoadingSkeleton() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export function ExplainPanel({
   patientId,
   suspectId,
@@ -262,6 +384,8 @@ export function ExplainPanel({
   onAccept,
   onRequestDismiss,
   busy = null,
+  suspectMeat,
+  suspectDollarImpact,
 }: ExplainPanelProps) {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -343,13 +467,20 @@ export function ExplainPanel({
       aria-hidden="true"
     >
       <FocusTrap enabled restoreFocus={false}>
+        {/*
+          Max-width 420px per design spec. The full-height right-anchored
+          drawer sits on top of a semi-transparent backdrop that handles
+          click-away to close — main content is visible but dimmed behind it.
+        */}
         <div
-          className="absolute right-0 top-0 flex h-full w-full animate-in slide-in-from-right flex-col border-l shadow-2xl duration-200 sm:max-w-[460px] lg:max-w-[520px] glass-frosted"
+          className="absolute right-0 top-0 flex h-full w-full animate-in slide-in-from-right flex-col border-l shadow-2xl duration-200 glass-frosted"
+          style={{ maxWidth: 420 }}
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
           aria-label={`Evidence for ${suspectLabel}`}
         >
+          {/* ── Header ─────────────────────────────────────────────── */}
           <header className="flex-shrink-0 border-b border-white/20 dark:border-white/10 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm">
             <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-3">
               <div className="min-w-0 flex-1">
@@ -370,12 +501,14 @@ export function ExplainPanel({
                     <Badge variant="outline" className="font-mono">
                       {data.suspect_icd10}
                     </Badge>
-                    <Badge
-                      variant="ghost"
-                      className="capitalize text-muted-foreground"
-                    >
-                      {data.evidence_type.replace(/_/g, " ")}
-                    </Badge>
+                    {data.evidence_type && (
+                      <Badge
+                        variant="ghost"
+                        className="text-muted-foreground capitalize"
+                      >
+                        {humanizeEvidence(data.evidence_type)}
+                      </Badge>
+                    )}
                   </div>
                 )}
               </div>
@@ -392,6 +525,7 @@ export function ExplainPanel({
             </div>
           </header>
 
+          {/* ── Scrollable body ─────────────────────────────────────── */}
           <div
             className="flex-1 overflow-y-auto"
             aria-live="polite"
@@ -415,7 +549,7 @@ export function ExplainPanel({
 
               {!loading && !error && data && (
                 <>
-                  {/* ── Stale-evidence banner ──────────────────────────── */}
+                  {/* ── Stale-evidence banner ─────────────────────────── */}
                   {(() => {
                     if (!data.evidence_date) return null;
                     const ageMs =
@@ -426,7 +560,7 @@ export function ExplainPanel({
                     return (
                       <div
                         role="alert"
-                        className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2.5 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/60 dark:text-red-300"
+                        className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
                       >
                         <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden />
                         <span>
@@ -440,7 +574,7 @@ export function ExplainPanel({
                     );
                   })()}
 
-                  {/* ── Context-classification warning banner ──────────── */}
+                  {/* ── Context-classification warning banner ─────────── */}
                   {data.context_classification &&
                     data.context_classification !== "positive" && (
                       <div
@@ -459,8 +593,10 @@ export function ExplainPanel({
                       </div>
                     )}
 
+                  {/* ── Confidence hero ───────────────────────────────── */}
                   {confPct !== null && <ConfidenceHero pct={confPct} />}
 
+                  {/* ── Summary ──────────────────────────────────────── */}
                   {data.summary && (
                     <div className="rounded-lg border-l-2 border-primary/40 bg-muted px-4 py-3">
                       <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -472,6 +608,17 @@ export function ExplainPanel({
                     </div>
                   )}
 
+                  {/* ── Revenue uplift (from SuspectCard prop) ────────── */}
+                  {suspectDollarImpact != null && suspectDollarImpact > 0 && (
+                    <UpliftCard dollarImpact={suspectDollarImpact} />
+                  )}
+
+                  {/* ── MEAT [M][E][A][T] indicators ─────────────────── */}
+                  {suspectMeat != null && (
+                    <MeatIndicators meat={suspectMeat} />
+                  )}
+
+                  {/* ── Contributing signals ──────────────────────────── */}
                   <div>
                     <div className="mb-2 flex items-baseline justify-between">
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -505,7 +652,7 @@ export function ExplainPanel({
                     )}
                   </div>
 
-                  {/* ── Clinical-rule adjustments ──────────────────────── */}
+                  {/* ── Clinical-rule adjustments ─────────────────────── */}
                   {data.clinical_rule_adjustments &&
                     data.clinical_rule_adjustments.length > 0 && (
                       <div>
@@ -544,6 +691,7 @@ export function ExplainPanel({
             </div>
           </div>
 
+          {/* ── Footer ─────────────────────────────────────────────── */}
           {showFooter && !error && (
             <footer className="flex-shrink-0 border-t border-white/20 dark:border-white/10 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm px-5 py-3">
               <div className="flex items-center gap-2">

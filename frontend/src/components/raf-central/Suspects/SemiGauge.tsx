@@ -13,7 +13,7 @@ export function SemiGauge({
   color,
 }: {
   value: number; // 0-100
-  color: "emerald" | "amber" | "red";
+  color: "emerald" | "amber" | "slate";
 }) {
   const [animated, setAnimated] = useState(false);
   useEffect(() => {
@@ -33,7 +33,7 @@ export function SemiGauge({
   const dashOffset = circumference * (1 - (animated ? pct : 0));
 
   const strokeColor =
-    color === "emerald" ? "#10b981" : color === "amber" ? "#f59e0b" : "#ef4444";
+    color === "emerald" ? "#10b981" : color === "amber" ? "#f59e0b" : "#94a3b8";
 
   return (
     <div className="flex flex-col items-center" style={{ width: w }}>

@@ -151,12 +151,11 @@ function fmtN(v: number | null | undefined, d = 2): string {
   return (v ?? 0).toFixed(d);
 }
 
-function gapBadgeStyle(gap: number | null): React.CSSProperties {
-  if (gap == null || gap < 0.2)
-    return { background: C.emeraldLight, color: C.emeraldDark, padding: "2px 10px", borderRadius: 99, fontSize: 12, fontWeight: 600 };
-  if (gap < 0.5)
-    return { background: C.amberLight, color: C.amberDark, padding: "2px 10px", borderRadius: 99, fontSize: 12, fontWeight: 600 };
-  return { background: C.redLight, color: C.redDark, padding: "2px 10px", borderRadius: 99, fontSize: 12, fontWeight: 600 };
+function gapBadgeClass(gap: number | null): string {
+  const base = "inline-block px-2.5 py-[2px] rounded-full text-xs font-semibold";
+  if (gap == null || gap < 0.2) return `${base} bg-emerald-100 text-emerald-800`;
+  if (gap < 0.5) return `${base} bg-amber-100 text-amber-800`;
+  return `${base} bg-red-100 text-red-700`;
 }
 
 function initials(name: string): string {
@@ -189,55 +188,6 @@ function useSortable<T>(data: T[], defaultKey: keyof T, defaultDir: SortDir = "d
   return { sorted, toggle, sortKey, sortDir };
 }
 
-// ── Shared card style (structural only — border, shadow, radius, overflow) ───
-const cardStyle: React.CSSProperties = {
-  background: C.card,
-  border: `1px solid ${C.border}`,
-  borderRadius: 14,
-  overflow: "hidden",
-  boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
-  transition: "box-shadow 0.25s ease",
-};
-
-const thStyle: React.CSSProperties = {
-  padding: "12px 16px",
-  fontSize: 11,
-  fontWeight: 700,
-  textTransform: "uppercase" as const,
-  letterSpacing: "0.06em",
-  color: C.textMuted,
-  borderBottom: `2px solid ${C.border}`,
-  background: `linear-gradient(180deg, ${C.borderLight} 0%, ${tokens.slate100} 100%)`,
-  whiteSpace: "nowrap" as const,
-  cursor: "pointer",
-  userSelect: "none" as const,
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "12px 16px",
-  fontSize: 13,
-  borderBottom: `1px solid ${C.borderLight}`,
-  whiteSpace: "nowrap" as const,
-  transition: "background-color 0.15s ease",
-};
-
-// ── Row helper for alternating stripes + hover ──────────────────────────────
-function rowProps(index: number) {
-  return {
-    style: {
-      cursor: "pointer" as const,
-      transition: "background-color 0.15s ease",
-      background: index % 2 === 1 ? tokens.slate50 : "transparent",
-    },
-    onMouseEnter: (e: React.MouseEvent<HTMLTableRowElement>) => {
-      e.currentTarget.style.background = tokens.slate50;
-    },
-    onMouseLeave: (e: React.MouseEvent<HTMLTableRowElement>) => {
-      e.currentTarget.style.background = index % 2 === 1 ? tokens.slate50 : "transparent";
-    },
-  };
-}
-
 // ── Tab content fade wrapper ────────────────────────────────────────────────
 function TabFade({ children, tabKey }: { children: React.ReactNode; tabKey: string }) {
   const [visible, setVisible] = useState(false);
@@ -268,25 +218,12 @@ function TabFade({ children, tabKey }: { children: React.ReactNode; tabKey: stri
   );
 }
 
-// ── Section header with gradient accent ─────────────────────────────────────
-function GradientSectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+// ── Section header ────────────────────────────────────────────────────────────
+function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <div
-      className="px-[22px] py-[18px] border-b border-border"
-      style={{ background: "linear-gradient(135deg, rgba(37,99,235,0.03) 0%, rgba(139,92,246,0.03) 100%)" }}
-    >
-      <h3
-        className="m-0 text-[15px] font-bold"
-        style={{
-          background: `linear-gradient(135deg, ${tokens.primary} 0%, ${tokens.accentPurple} 100%)`,
-          WebkitBackgroundClip: "text",
-          WebkitTextFillColor: "transparent",
-          backgroundClip: "text",
-        }}
-      >
-        {title}
-      </h3>
-      {subtitle && <p className="mt-1 mb-0 text-[12px] text-muted-foreground">{subtitle}</p>}
+    <div className="px-5 py-4 border-b border-border">
+      <h3 className="text-sm font-semibold text-foreground m-0">{title}</h3>
+      {subtitle && <p className="mt-0.5 mb-0 text-xs text-muted-foreground">{subtitle}</p>}
     </div>
   );
 }
@@ -308,7 +245,7 @@ function Spinner({ label }: { label?: string }) {
 
 function ErrorBox({ message, onRetry }: { message?: string; onRetry?: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center py-20" style={{ color: C.red }}>
+    <div className="flex flex-col items-center justify-center py-20 text-red-600">
       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
       </svg>
@@ -316,8 +253,7 @@ function ErrorBox({ message, onRetry }: { message?: string; onRetry?: () => void
       {onRetry && (
         <button
           onClick={onRetry}
-          className="mt-3 px-5 py-2 rounded-lg text-[13px] font-semibold cursor-pointer bg-white"
-          style={{ border: `1px solid ${C.red}`, color: C.red }}
+          className="mt-3 px-5 py-2 rounded-lg text-[13px] font-semibold cursor-pointer bg-white border border-red-400 text-red-600"
         >
           Retry
         </button>
@@ -334,6 +270,27 @@ function SortArrow({ active, dir }: { active: boolean; dir: SortDir }) {
 
 // ── Select control shared style ───────────────────────────────────────────────
 const selectCls = "px-3.5 pr-8 py-2 text-[14px] font-semibold border border-border rounded-lg bg-white text-foreground cursor-pointer appearance-none";
+
+// ── Shared table class helpers ────────────────────────────────────────────────
+const thCls = "px-4 py-3 text-[11px] font-bold uppercase tracking-[0.06em] text-muted-foreground border-b border-border bg-slate-50 whitespace-nowrap cursor-pointer select-none";
+const tdCls = "px-4 py-3 text-[13px] border-b border-border/60 whitespace-nowrap";
+
+// ── Row helper for alternating stripes + hover ──────────────────────────────
+function rowProps(index: number) {
+  return {
+    style: {
+      cursor: "pointer" as const,
+      transition: "background-color 0.15s ease",
+      background: index % 2 === 1 ? tokens.slate50 : "transparent",
+    },
+    onMouseEnter: (e: React.MouseEvent<HTMLTableRowElement>) => {
+      e.currentTarget.style.background = tokens.slate50;
+    },
+    onMouseLeave: (e: React.MouseEvent<HTMLTableRowElement>) => {
+      e.currentTarget.style.background = index % 2 === 1 ? tokens.slate50 : "transparent";
+    },
+  };
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // PAGE COMPONENT
@@ -482,13 +439,12 @@ export default function ReportsPage() {
               type="button"
               aria-pressed={isActive}
               onClick={() => handleGroupChange(g)}
-              className="px-[22px] py-[7px] text-[13px] rounded-[7px] border-none cursor-pointer transition-all duration-200 tracking-[-0.01em]"
-              style={{
-                fontWeight: isActive ? 700 : 500,
-                color: isActive ? C.white : C.textMuted,
-                background: isActive ? C.primary : "transparent",
-                boxShadow: isActive ? "0 1px 4px rgba(37,99,235,0.25)" : "none",
-              }}
+              className={[
+                "px-[22px] py-[7px] text-[13px] rounded-[7px] border-none cursor-pointer transition-all duration-200 tracking-[-0.01em]",
+                isActive
+                  ? "font-bold text-white bg-primary shadow-sm"
+                  : "font-medium text-muted-foreground bg-transparent",
+              ].join(" ")}
             >
               {g}
             </button>
@@ -496,31 +452,28 @@ export default function ReportsPage() {
         })}
       </div>
 
-      {/* ── Tab Bar — shows only the active group's tabs ─────────────── */}
-      <div className="flex gap-1.5 mb-8 p-1.5 bg-slate-100 rounded-[14px] flex-wrap">
+      {/* ── Tab Bar — underline style ─────────────────────────────────── */}
+      <div
+        role="tablist"
+        aria-label={`${activeGroup} report tabs`}
+        className="flex gap-0 mb-8 border-b border-border flex-wrap"
+      >
         {GROUP_TABS[activeGroup].map((tab) => {
           const isActive = activeTab === tab;
           return (
             <button
               key={tab}
+              role="tab"
+              aria-selected={isActive}
               onClick={() => setActiveTab(tab)}
-              className="relative px-[18px] py-[9px] text-[13px] border-none rounded-[10px] cursor-pointer transition-all duration-[250ms] tracking-[-0.01em]"
-              style={{
-                fontWeight: isActive ? 650 : 500,
-                color: isActive ? C.primary : C.textMuted,
-                background: isActive ? C.white : "transparent",
-                boxShadow: isActive
-                  ? "0 1px 3px rgba(0,0,0,0.08), 0 2px 8px rgba(37,99,235,0.08)"
-                  : "none",
-              }}
+              className={[
+                "relative px-4 py-2.5 text-[13px] border-none bg-transparent cursor-pointer transition-colors duration-150 tracking-[-0.01em] whitespace-nowrap",
+                isActive
+                  ? "font-semibold text-teal-600 border-b-2 border-teal-600 -mb-px"
+                  : "font-medium text-muted-foreground hover:text-foreground",
+              ].join(" ")}
             >
               {tab}
-              {isActive && (
-                <span
-                  className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-4 h-[3px] rounded-sm"
-                  style={{ background: `linear-gradient(90deg, ${tokens.primary}, ${tokens.accentPurple})` }}
-                />
-              )}
             </button>
           );
         })}
@@ -544,9 +497,7 @@ export default function ReportsPage() {
           <DataQualityTab dataQuality={dataQuality} />
         )}
         {activeTab === "Provider Performance" && (
-          <div
-            className="flex flex-col items-center justify-center py-12 px-6 text-[14px] text-muted-foreground rounded-[10px] border border-dashed border-border"
-          >
+          <div className="flex flex-col items-center justify-center py-12 px-6 text-[14px] text-muted-foreground rounded-xl border border-dashed border-border">
             <Lock size={20} className="mb-2.5 opacity-40" />
             <div className="font-semibold mb-1.5">Provider Performance</div>
             <div className="text-[13px]">Provider-level performance benchmarks are coming soon.</div>
@@ -607,30 +558,25 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
   if (isEmpty) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-        <div
-          className="w-14 h-14 rounded-[14px] flex items-center justify-center mb-5"
-          style={{ background: C.primaryLight }}
-        >
+        <div className="w-14 h-14 rounded-[14px] flex items-center justify-center mb-5 bg-blue-50">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="1.8">
             <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
           </svg>
         </div>
-        <h3 className="text-[18px] font-bold mb-2" style={{ color: C.text }}>No revenue data available</h3>
+        <h3 className="text-[18px] font-bold mb-2 text-foreground">No revenue data available</h3>
         <p className="text-[14px] text-muted-foreground max-w-[400px] mb-7 leading-relaxed">
           No patients have been analyzed for payment year {paymentYear}. Connect your EMR to start analyzing RAF gaps, or load demo data to preview the reports.
         </p>
         <div className="flex gap-3 flex-wrap justify-center">
           <button
             onClick={() => router.push("/connect")}
-            className="px-[22px] py-2.5 rounded-[10px] border-none text-[14px] font-semibold cursor-pointer text-white"
-            style={{ background: C.primary }}
+            className="px-[22px] py-2.5 rounded-[10px] border-none text-[14px] font-semibold cursor-pointer text-white bg-primary"
           >
             Connect EMR
           </button>
           <button
             onClick={() => router.push("/demo")}
-            className="px-[22px] py-2.5 rounded-[10px] text-[14px] font-semibold cursor-pointer"
-            style={{ border: `1px solid ${C.border}`, background: C.white, color: C.text }}
+            className="px-[22px] py-2.5 rounded-[10px] text-[14px] font-semibold cursor-pointer border border-border bg-white text-foreground"
           >
             Try Demo Data
           </button>
@@ -644,7 +590,7 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
       {/* KPI Cards */}
       <div className="grid gap-5 mb-8" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
         {/* Revenue Card */}
-        <div className="hover-lift card-glow-emerald p-6" style={{ ...cardStyle, borderLeft: `4px solid ${C.emerald}` }}>
+        <div className="border border-border rounded-xl p-6 bg-white border-l-4 border-l-emerald-500">
           <div className="flex justify-between items-start">
             <div>
               <p
@@ -656,12 +602,11 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
               </p>
               <p
                 data-testid="revenue-at-risk-value"
-                className="text-[32px] font-bold mt-2 mb-0 tracking-[-0.02em]"
-                style={{ color: C.emeraldDark }}
+                className="text-[32px] font-bold mt-2 mb-0 tracking-[-0.02em] text-emerald-800"
               >
                 {fmt$(totalRevenue)}
               </p>
-              <p className="text-[12px] mt-1 mb-0" style={{ color: C.textSub }}>
+              <p className="text-[12px] mt-1 mb-0 text-slate-400">
                 @ ${REVENUE_PER_RAF.toLocaleString()} / RAF point
               </p>
               {r?.last_computed_at && (() => {
@@ -681,10 +626,7 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
                 );
               })()}
             </div>
-            <div
-              className="w-11 h-11 rounded-[10px] flex items-center justify-center flex-shrink-0"
-              style={{ background: C.emeraldLight }}
-            >
+            <div className="w-11 h-11 rounded-[10px] flex items-center justify-center flex-shrink-0 bg-emerald-100">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.emerald} strokeWidth="2">
                 <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
               </svg>
@@ -693,16 +635,16 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
         </div>
 
         {/* RAF Gap Card */}
-        <div className="hover-lift card-glow-amber p-6" style={{ ...cardStyle, borderLeft: `4px solid ${C.amber}` }}>
+        <div className="border border-border rounded-xl p-6 bg-white border-l-4 border-l-amber-400">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground m-0">Total RAF Gap</p>
-              <p className="text-[32px] font-bold mt-2 mb-0 tracking-[-0.02em]" style={{ color: C.amberDark }}>
+              <p className="text-[32px] font-bold mt-2 mb-0 tracking-[-0.02em] text-amber-800">
                 {fmtN(totalGap)}
               </p>
-              <p className="text-[12px] mt-1 mb-0" style={{ color: C.textSub }}>Cumulative gap across population</p>
+              <p className="text-[12px] mt-1 mb-0 text-slate-400">Cumulative gap across population</p>
             </div>
-            <div className="w-11 h-11 rounded-[10px] flex items-center justify-center flex-shrink-0" style={{ background: C.amberLight }}>
+            <div className="w-11 h-11 rounded-[10px] flex items-center justify-center flex-shrink-0 bg-amber-100">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.amber} strokeWidth="2">
                 <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
               </svg>
@@ -711,16 +653,16 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
         </div>
 
         {/* Patients with Gaps Card */}
-        <div className="hover-lift card-glow-blue p-6" style={{ ...cardStyle, borderLeft: `4px solid ${C.blue}` }}>
+        <div className="border border-border rounded-xl p-6 bg-white border-l-4 border-l-blue-400">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground m-0">Patients with Gaps</p>
-              <p className="text-[32px] font-bold mt-2 mb-0 tracking-[-0.02em]" style={{ color: C.blueDark }}>
+              <p className="text-[32px] font-bold mt-2 mb-0 tracking-[-0.02em] text-blue-800">
                 {patientsWithGaps}
               </p>
-              <p className="text-[12px] mt-1 mb-0" style={{ color: C.textSub }}>Of {r?.total_patients_analyzed ?? 0} analyzed</p>
+              <p className="text-[12px] mt-1 mb-0 text-slate-400">Of {r?.total_patients_analyzed ?? 0} analyzed</p>
             </div>
-            <div className="w-11 h-11 rounded-[10px] flex items-center justify-center flex-shrink-0" style={{ background: C.blueLight }}>
+            <div className="w-11 h-11 rounded-[10px] flex items-center justify-center flex-shrink-0 bg-blue-50">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
                 <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
@@ -731,14 +673,11 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
       </div>
 
       {/* Revenue Table */}
-      <div ref={revenueTableRef} className="premium-shadow" style={cardStyle}>
-        <div
-          className="px-[22px] py-[18px] border-b border-border flex items-center justify-between flex-wrap gap-2.5"
-          style={{ background: "linear-gradient(135deg, rgba(37,99,235,0.03) 0%, rgba(139,92,246,0.03) 100%)" }}
-        >
+      <div ref={revenueTableRef} className="border border-border rounded-xl bg-white overflow-hidden">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between flex-wrap gap-2.5">
           <div>
-            <h3 className="gradient-text m-0 text-[15px] font-bold">Top 25 Revenue Opportunities</h3>
-            <p className="mt-1 mb-0 text-[12px] text-muted-foreground">Patients sorted by estimated revenue opportunity</p>
+            <h3 className="text-sm font-semibold text-foreground m-0">Top 25 Revenue Opportunities</h3>
+            <p className="mt-0.5 mb-0 text-xs text-muted-foreground">Patients sorted by estimated revenue opportunity</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -757,12 +696,7 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
               disabled={isHistoricalPY}
               title={isHistoricalPY ? "Disabled in historical view" : undefined}
               data-testid="export-csv-revenue"
-              className="inline-flex items-center gap-1.5 px-3.5 py-[7px] rounded-lg border-none text-[13px] font-semibold text-white cursor-pointer"
-              style={{
-                background: isHistoricalPY ? C.gray300 : C.primary,
-                cursor: isHistoricalPY ? "not-allowed" : "pointer",
-                opacity: isHistoricalPY ? 0.6 : 1,
-              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-[7px] rounded-lg border-none text-[13px] font-semibold text-white cursor-pointer bg-primary disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <FileDown size={14} />
               Export CSV
@@ -783,18 +717,18 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
             />
           </div>
         </div>
-        <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+        <div className="overflow-x-auto">
           <table aria-label="Revenue opportunities" className="w-full border-collapse">
             <thead>
               <tr>
-                <th style={{ ...thStyle, width: 50, textAlign: "center" }}>#</th>
-                <th style={thStyle}>Patient</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>Current RAF</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>Analyzed RAF</th>
-                <th style={{ ...thStyle, textAlign: "center" }}>Gap</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>Revenue</th>
-                <th style={{ ...thStyle, textAlign: "center" }}>HCCs (Billing / Analyzed)</th>
-                <th style={{ ...thStyle, textAlign: "center" }}>Evidence</th>
+                <th className={`${thCls} w-12 text-center`}>#</th>
+                <th className={thCls}>Patient</th>
+                <th className={`${thCls} text-right`}>Current RAF</th>
+                <th className={`${thCls} text-right`}>Analyzed RAF</th>
+                <th className={`${thCls} text-center`}>Gap</th>
+                <th className={`${thCls} text-right`}>Revenue</th>
+                <th className={`${thCls} text-center`}>HCCs (Billing / Analyzed)</th>
+                <th className={`${thCls} text-center`}>Evidence</th>
               </tr>
             </thead>
             <tbody>
@@ -805,8 +739,8 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
                   title="Click to view supporting evidence in patient chart"
                   {...rowProps(i)}
                 >
-                  <td style={{ ...tdStyle, textAlign: "center", fontWeight: 600, color: C.textMuted }}>{i + 1}</td>
-                  <td style={tdStyle}>
+                  <td className={`${tdCls} text-center font-semibold text-muted-foreground`}>{i + 1}</td>
+                  <td className={tdCls}>
                     <div className="flex items-center gap-2.5">
                       <div
                         className="w-[30px] h-[30px] rounded-full flex items-center justify-center text-[11px] font-semibold flex-shrink-0 text-white"
@@ -817,20 +751,17 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
                       <span className="font-medium">{p.name}</span>
                     </div>
                   </td>
-                  <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", fontSize: 13 }}>{fmtN(p.billing_raf)}</td>
-                  <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", fontSize: 13 }}>{fmtN(p.ai_raf)}</td>
-                  <td style={{ ...tdStyle, textAlign: "center" }}>
-                    <span style={gapBadgeStyle(p.gap)}>{fmtN(p.gap)}</span>
+                  <td className={`${tdCls} text-right font-mono`}>{fmtN(p.billing_raf)}</td>
+                  <td className={`${tdCls} text-right font-mono`}>{fmtN(p.ai_raf)}</td>
+                  <td className={`${tdCls} text-center`}>
+                    <span className={gapBadgeClass(p.gap)}>{fmtN(p.gap)}</span>
                   </td>
-                  <td style={{ ...tdStyle, textAlign: "right", fontWeight: 600, color: C.emeraldDark }}>{fmt$(p.revenue_opportunity)}</td>
-                  <td style={{ ...tdStyle, textAlign: "center", fontFamily: "monospace", fontSize: 12 }}>
+                  <td className={`${tdCls} text-right font-semibold text-emerald-800`}>{fmt$(p.revenue_opportunity)}</td>
+                  <td className={`${tdCls} text-center font-mono text-xs`}>
                     {p.hcc_count_billing} / {p.hcc_count_ai}
                   </td>
-                  <td style={{ ...tdStyle, textAlign: "center" }}>
-                    <span
-                      className="inline-flex items-center gap-1 px-2 py-[3px] rounded-[6px] text-[11px] font-semibold tracking-[0.02em] whitespace-nowrap"
-                      style={{ background: tokens.primarySoft, color: tokens.primary }}
-                    >
+                  <td className={`${tdCls} text-center`}>
+                    <span className="inline-flex items-center gap-1 px-2 py-[3px] rounded-[6px] text-[11px] font-semibold tracking-[0.02em] whitespace-nowrap bg-blue-50 text-primary">
                       Evidence →
                     </span>
                   </td>
@@ -838,7 +769,7 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
               ))}
               {top25.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ ...tdStyle, textAlign: "center", color: C.textMuted, padding: 40 }}>
+                  <td colSpan={8} className={`${tdCls} text-center text-muted-foreground py-10`}>
                     No revenue gaps found for this year
                   </td>
                 </tr>
@@ -928,27 +859,22 @@ function ScorecardTab({ scorecard, router, isHistoricalPY }: {
           disabled={isHistoricalPY}
           title={isHistoricalPY ? "Disabled in historical view" : undefined}
           data-testid="export-csv-patient-scorecard"
-          className="inline-flex items-center gap-1.5 px-3.5 py-[9px] rounded-lg border-none text-[13px] font-semibold text-white flex-shrink-0"
-          style={{
-            background: isHistoricalPY ? C.gray300 : C.primary,
-            cursor: isHistoricalPY ? "not-allowed" : "pointer",
-            opacity: isHistoricalPY ? 0.6 : 1,
-          }}
+          className="inline-flex items-center gap-1.5 px-3.5 py-[9px] rounded-lg border-none text-[13px] font-semibold text-white flex-shrink-0 bg-primary disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
         >
           <FileDown size={14} />
           Export CSV
         </button>
       </div>
 
-      <div className="premium-shadow" style={cardStyle}>
+      <div className="border border-border rounded-xl bg-white overflow-hidden">
         <div className="overflow-x-auto">
-          <table aria-label="Patient scorecard" className="premium-table w-full border-collapse">
+          <table aria-label="Patient scorecard" className="w-full border-collapse">
             <thead>
               <tr>
                 {colDefs.map((col) => (
                   <th
                     key={col.key}
-                    style={{ ...thStyle, textAlign: (col.align as React.CSSProperties["textAlign"]) ?? "left" }}
+                    className={[thCls, col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : "text-left"].join(" ")}
                     onClick={() => toggle(col.key as keyof PatientRow)}
                   >
                     <span className="inline-flex items-center">
@@ -962,7 +888,7 @@ function ScorecardTab({ scorecard, router, isHistoricalPY }: {
             <tbody>
               {visible.map((p, i) => (
                 <tr key={p.pid} onClick={() => router.push(`/patients/${p.pid}`)} {...rowProps(i)}>
-                  <td style={tdStyle}>
+                  <td className={tdCls}>
                     <div className="flex items-center gap-2">
                       <div
                         className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold flex-shrink-0 text-white"
@@ -973,17 +899,17 @@ function ScorecardTab({ scorecard, router, isHistoricalPY }: {
                       <span className="font-medium text-[13px]">{p.name}</span>
                     </div>
                   </td>
-                  <td style={{ ...tdStyle, textAlign: "center" }}>{p.age ?? "—"}</td>
-                  <td style={{ ...tdStyle, textAlign: "center" }}>{p.sex ?? "—"}</td>
-                  <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>{fmtN(p.billing_raf)}</td>
-                  <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>{fmtN(p.ai_raf)}</td>
-                  <td style={{ ...tdStyle, textAlign: "right" }}>
-                    <span style={gapBadgeStyle(p.gap)}>{fmtN(p.gap)}</span>
+                  <td className={`${tdCls} text-center`}>{p.age ?? "—"}</td>
+                  <td className={`${tdCls} text-center`}>{p.sex ?? "—"}</td>
+                  <td className={`${tdCls} text-right font-mono`}>{fmtN(p.billing_raf)}</td>
+                  <td className={`${tdCls} text-right font-mono`}>{fmtN(p.ai_raf)}</td>
+                  <td className={`${tdCls} text-right`}>
+                    <span className={gapBadgeClass(p.gap)}>{fmtN(p.gap)}</span>
                   </td>
-                  <td style={{ ...tdStyle, textAlign: "right", fontWeight: 600, color: C.emeraldDark }}>{fmt$(p.revenue_opportunity)}</td>
-                  <td style={{ ...tdStyle, textAlign: "center", fontFamily: "monospace" }}>{p.hcc_count_billing}</td>
-                  <td style={{ ...tdStyle, textAlign: "center", fontFamily: "monospace" }}>{p.hcc_count_ai}</td>
-                  <td style={{ ...tdStyle, textAlign: "center" }}>
+                  <td className={`${tdCls} text-right font-semibold text-emerald-800`}>{fmt$(p.revenue_opportunity)}</td>
+                  <td className={`${tdCls} text-center font-mono`}>{p.hcc_count_billing}</td>
+                  <td className={`${tdCls} text-center font-mono`}>{p.hcc_count_ai}</td>
+                  <td className={`${tdCls} text-center`}>
                     {p.analyzed ? (
                       <span className="text-emerald-600 font-semibold text-[15px]">✓</span>
                     ) : (
@@ -999,8 +925,7 @@ function ScorecardTab({ scorecard, router, isHistoricalPY }: {
           <div className="p-4 text-center border-t border-border">
             <button
               onClick={() => setLimit((l) => l + 100)}
-              className="px-6 py-2 text-[13px] font-semibold rounded-lg border-none cursor-pointer"
-              style={{ color: C.primary, background: C.primaryLight }}
+              className="px-6 py-2 text-[13px] font-semibold rounded-lg border-none cursor-pointer text-primary bg-blue-50"
             >
               Load more ({filtered.length - limit} remaining)
             </button>
@@ -1039,14 +964,11 @@ function HccTab({ hccDist, isHistoricalPY }: {
   }));
 
   return (
-    <div ref={chartRef} className="premium-shadow" style={cardStyle}>
-      <div
-        className="px-[22px] py-[18px] border-b border-border flex items-center justify-between flex-wrap gap-2.5"
-        style={{ background: "linear-gradient(135deg, rgba(37,99,235,0.03) 0%, rgba(139,92,246,0.03) 100%)" }}
-      >
+    <div ref={chartRef} className="border border-border rounded-xl bg-white overflow-hidden">
+      <div className="px-5 py-4 border-b border-border flex items-center justify-between flex-wrap gap-2.5">
         <div>
-          <h3 className="gradient-text m-0 text-[15px] font-bold">HCC Distribution — Top 20 by Patient Count</h3>
-          <p className="mt-1 mb-0 text-[12px] text-muted-foreground">Hierarchical Condition Categories across the population</p>
+          <h3 className="text-sm font-semibold text-foreground m-0">HCC Distribution — Top 20 by Patient Count</h3>
+          <p className="mt-0.5 mb-0 text-xs text-muted-foreground">Hierarchical Condition Categories across the population</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -1054,12 +976,7 @@ function HccTab({ hccDist, isHistoricalPY }: {
             disabled={isHistoricalPY}
             title={isHistoricalPY ? "Disabled in historical view" : undefined}
             data-testid="export-csv-hcc-distribution"
-            className="inline-flex items-center gap-1.5 px-3.5 py-[7px] rounded-lg border-none text-[13px] font-semibold text-white"
-            style={{
-              background: isHistoricalPY ? C.gray300 : C.primary,
-              cursor: isHistoricalPY ? "not-allowed" : "pointer",
-              opacity: isHistoricalPY ? 0.6 : 1,
-            }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-[7px] rounded-lg border-none text-[13px] font-semibold text-white bg-primary disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
           >
             <FileDown size={14} />
             Export CSV
@@ -1085,13 +1002,13 @@ function HccTab({ hccDist, isHistoricalPY }: {
               >
                 {item.hcc_code}
               </span>
-              <div className="flex-1 relative h-7 rounded-md overflow-hidden" style={{ background: C.gray100 }}>
+              <div className="flex-1 relative h-7 rounded-md overflow-hidden bg-slate-100">
                 <div
                   className="h-full rounded-md opacity-80 transition-[width] duration-300 ease-in-out"
                   style={{ width: `${Math.max(pct, 2)}%`, background: barColor(rank) }}
                 />
               </div>
-              <span className="w-[50px] text-right text-[13px] font-semibold flex-shrink-0" style={{ color: C.text }}>
+              <span className="w-[50px] text-right text-[13px] font-semibold flex-shrink-0 text-foreground">
                 {item.patient_count}
               </span>
             </div>
@@ -1099,13 +1016,12 @@ function HccTab({ hccDist, isHistoricalPY }: {
         })}
         {top20.length === 0 && (
           <div className="flex flex-col items-center gap-2 py-7 px-4 text-center">
-            <p className="text-[13px] font-semibold m-0" style={{ color: C.text }}>
+            <p className="text-[13px] font-semibold m-0 text-foreground">
               No HCC data — run analysis to populate this chart
             </p>
             <a
               href="/patients"
-              className="inline-block px-4 py-[7px] rounded-lg text-[13px] font-semibold no-underline text-white"
-              style={{ background: C.primary }}
+              className="inline-block px-4 py-[7px] rounded-lg text-[13px] font-semibold no-underline text-white bg-primary"
             >
               Go to Patients
             </a>
@@ -1148,39 +1064,39 @@ function RecaptureTab({ recapture, router, isHistoricalPY }: {
     <div>
       {/* KPI Row */}
       <div className="grid gap-5 mb-8" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-        <div className="hover-lift card-glow-rose p-6" style={{ ...cardStyle, borderLeft: `4px solid ${C.red}` }}>
+        <div className="border border-border rounded-xl p-6 bg-white border-l-4 border-l-red-400">
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground m-0">Total Gaps</p>
-          <p className="text-[32px] font-bold mt-2 mb-0" style={{ color: C.redDark }}>{totalGaps}</p>
+          <p className="text-[32px] font-bold mt-2 mb-0 text-red-700">{totalGaps}</p>
         </div>
-        <div className="hover-lift card-glow-amber p-6" style={{ ...cardStyle, borderLeft: `4px solid ${C.amber}` }}>
+        <div className="border border-border rounded-xl p-6 bg-white border-l-4 border-l-amber-400">
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground m-0">Patients Affected</p>
-          <p className="text-[32px] font-bold mt-2 mb-0" style={{ color: C.amberDark }}>{uniquePatients}</p>
+          <p className="text-[32px] font-bold mt-2 mb-0 text-amber-800">{uniquePatients}</p>
         </div>
       </div>
 
       {/* Top Conditions Table */}
-      <div className="premium-shadow mb-6" style={cardStyle}>
-        <GradientSectionHeader title="Top Conditions for Recapture" />
+      <div className="border border-border rounded-xl bg-white overflow-hidden mb-6">
+        <SectionHeader title="Top Conditions for Recapture" />
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>
               <tr>
-                <th style={thStyle}>Condition</th>
-                <th style={thStyle}>ICD-10</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>Gap Count</th>
+                <th className={thCls}>Condition</th>
+                <th className={thCls}>ICD-10</th>
+                <th className={`${thCls} text-right`}>Gap Count</th>
               </tr>
             </thead>
             <tbody>
               {topConditions.map((c, i) => (
                 <tr key={c.icd10} style={{ background: i % 2 === 1 ? tokens.slate50 : "transparent" }}>
-                  <td style={tdStyle}>{c.condition}</td>
-                  <td style={{ ...tdStyle, fontFamily: "monospace", fontWeight: 600, color: C.primary }}>{c.icd10}</td>
-                  <td style={{ ...tdStyle, textAlign: "right", fontWeight: 600 }}>{c.count}</td>
+                  <td className={tdCls}>{c.condition}</td>
+                  <td className={`${tdCls} font-mono font-semibold text-primary`}>{c.icd10}</td>
+                  <td className={`${tdCls} text-right font-semibold`}>{c.count}</td>
                 </tr>
               ))}
               {topConditions.length === 0 && (
                 <tr>
-                  <td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: C.textMuted, padding: 40 }}>
+                  <td colSpan={3} className={`${tdCls} text-center text-muted-foreground py-10`}>
                     No recapture gaps found
                   </td>
                 </tr>
@@ -1191,12 +1107,9 @@ function RecaptureTab({ recapture, router, isHistoricalPY }: {
       </div>
 
       {/* Full Gaps Table */}
-      <div className="premium-shadow" style={cardStyle}>
-        <div
-          className="px-[22px] py-[18px] border-b border-border flex items-center justify-between flex-wrap gap-2.5"
-          style={{ background: "linear-gradient(135deg, rgba(37,99,235,0.03) 0%, rgba(139,92,246,0.03) 100%)" }}
-        >
-          <h3 className="gradient-text m-0 text-[15px] font-bold">All Recapture Gaps</h3>
+      <div className="border border-border rounded-xl bg-white overflow-hidden">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between flex-wrap gap-2.5">
+          <h3 className="text-sm font-semibold text-foreground m-0">All Recapture Gaps</h3>
           <button
             onClick={() => {
               if (isHistoricalPY || !gaps.length) return;
@@ -1212,12 +1125,7 @@ function RecaptureTab({ recapture, router, isHistoricalPY }: {
             disabled={isHistoricalPY}
             title={isHistoricalPY ? "Disabled in historical view" : undefined}
             data-testid="export-csv-recapture-gaps"
-            className="inline-flex items-center gap-1.5 px-3.5 py-[7px] rounded-lg border-none text-[13px] font-semibold text-white"
-            style={{
-              background: isHistoricalPY ? C.gray300 : C.primary,
-              cursor: isHistoricalPY ? "not-allowed" : "pointer",
-              opacity: isHistoricalPY ? 0.6 : 1,
-            }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-[7px] rounded-lg border-none text-[13px] font-semibold text-white bg-primary disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
           >
             <FileDown size={14} />
             Export CSV
@@ -1227,10 +1135,10 @@ function RecaptureTab({ recapture, router, isHistoricalPY }: {
           <table className="w-full border-collapse">
             <thead>
               <tr>
-                <th style={thStyle}>Patient</th>
-                <th style={thStyle}>Condition</th>
-                <th style={thStyle}>ICD-10</th>
-                <th style={thStyle}>Onset Date</th>
+                <th className={thCls}>Patient</th>
+                <th className={thCls}>Condition</th>
+                <th className={thCls}>ICD-10</th>
+                <th className={thCls}>Onset Date</th>
               </tr>
             </thead>
             <tbody>
@@ -1243,17 +1151,17 @@ function RecaptureTab({ recapture, router, isHistoricalPY }: {
                     if (pid) router.push(`/patients/${pid}`);
                   }}
                 >
-                  <td style={{ ...tdStyle, fontWeight: 500, color: C.primary }}>
+                  <td className={`${tdCls} font-medium text-primary`}>
                     {g.patient_name ?? g.name ?? `Patient #${g.patient_id ?? g.pid}`}
                   </td>
-                  <td style={tdStyle}>{g.condition ?? g.description ?? "—"}</td>
-                  <td style={{ ...tdStyle, fontFamily: "monospace", fontWeight: 600 }}>{g.icd10_code ?? g.icd10 ?? "—"}</td>
-                  <td style={{ ...tdStyle, color: C.textMuted }}>{g.onset_date ?? g.date ?? "—"}</td>
+                  <td className={tdCls}>{g.condition ?? g.description ?? "—"}</td>
+                  <td className={`${tdCls} font-mono font-semibold`}>{g.icd10_code ?? g.icd10 ?? "—"}</td>
+                  <td className={`${tdCls} text-muted-foreground`}>{g.onset_date ?? g.date ?? "—"}</td>
                 </tr>
               ))}
               {gaps.length === 0 && (
                 <tr>
-                  <td colSpan={4} style={{ ...tdStyle, textAlign: "center", color: C.textMuted, padding: 40 }}>
+                  <td colSpan={4} className={`${tdCls} text-center text-muted-foreground py-10`}>
                     No recapture gaps found
                   </td>
                 </tr>
@@ -1292,10 +1200,10 @@ function DataQualityTab({ dataQuality }: { dataQuality: QueryResult<DataQualityP
     return C.red;
   }
 
-  function pctBg(pct: number): string {
-    if (pct >= 80) return C.emeraldLight;
-    if (pct >= 50) return C.amberLight;
-    return C.redLight;
+  function pctBadgeClass(pct: number): string {
+    if (pct >= 80) return "text-emerald-800 bg-emerald-100";
+    if (pct >= 50) return "text-amber-800 bg-amber-100";
+    return "text-red-700 bg-red-100";
   }
 
   const donutSize = 180;
@@ -1308,10 +1216,7 @@ function DataQualityTab({ dataQuality }: { dataQuality: QueryResult<DataQualityP
     <div>
       {/* Donut + Score */}
       <div className="flex justify-center mb-9">
-        <div
-          className="premium-shadow hover-lift p-8 flex flex-col items-center w-[280px]"
-          style={cardStyle}
-        >
+        <div className="border border-border rounded-xl p-8 bg-white flex flex-col items-center w-[280px]">
           <svg width={donutSize} height={donutSize} viewBox={`0 0 ${donutSize} ${donutSize}`}>
             <circle cx={donutSize / 2} cy={donutSize / 2} r={radius} fill="none" stroke={C.gray200} strokeWidth={strokeWidth} />
             <circle
@@ -1332,7 +1237,7 @@ function DataQualityTab({ dataQuality }: { dataQuality: QueryResult<DataQualityP
               Completeness
             </text>
           </svg>
-          <p className="mt-4 text-[14px] font-semibold" style={{ color: C.text }}>Overall Data Completeness</p>
+          <p className="mt-4 text-[14px] font-semibold text-foreground">Overall Data Completeness</p>
         </div>
       </div>
 
@@ -1341,23 +1246,20 @@ function DataQualityTab({ dataQuality }: { dataQuality: QueryResult<DataQualityP
         {dataTypes.map((dt) => {
           const pct = dt.total > 0 ? Math.round((dt.count / dt.total) * 100) : 0;
           return (
-            <div key={dt.key} className="hover-lift p-5" style={cardStyle}>
+            <div key={dt.key} className="border border-border rounded-xl p-5 bg-white">
               <div className="flex justify-between items-start mb-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">{dt.icon}</span>
                   <span className="text-[13px] font-semibold">{dt.label}</span>
                 </div>
-                <span
-                  className="text-[12px] font-bold px-2 py-[2px] rounded-full"
-                  style={{ color: pctColor(pct), background: pctBg(pct) }}
-                >
+                <span className={`text-[12px] font-bold px-2 py-[2px] rounded-full ${pctBadgeClass(pct)}`}>
                   {pct}%
                 </span>
               </div>
               <p className="text-[12px] text-muted-foreground mb-2">
                 {dt.count.toLocaleString()} / {dt.total.toLocaleString()} records
               </p>
-              <div className="h-1.5 rounded-sm overflow-hidden" style={{ background: C.gray200 }}>
+              <div className="h-1.5 rounded-sm overflow-hidden bg-slate-200">
                 <div
                   className="h-full rounded-sm transition-[width] duration-300 ease-in-out"
                   style={{ width: `${pct}%`, background: pctColor(pct) }}

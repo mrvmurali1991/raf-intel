@@ -845,7 +845,7 @@ export default function WorklistPage() {
           </div>
         )}
 
-        {/* Patient cards grid — or inline empty state for elevated users with no filtered results */}
+        {/* Patient cards list — or inline empty state for elevated users with no filtered results */}
         {visibleItems.length === 0 ? (
           <div className="mt-2">
             <EmptyState
@@ -856,10 +856,7 @@ export default function WorklistPage() {
             />
           </div>
         ) : (
-          <div
-            className="grid gap-4"
-            style={{ gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}
-          >
+          <div className="flex flex-col gap-3">
             {visibleItems.map((item, index) => (
               <PatientCard
                 key={item.patient_id}
@@ -998,8 +995,27 @@ function SummaryTile({ label, value, icon, color }: { label: string; value: stri
 }
 
 // ---------------------------------------------------------------------------
-// PatientCard — always-visible 16px checkbox top-left
+// PatientCard — single compact row (desktop), always-visible 16px checkbox
 // ---------------------------------------------------------------------------
+
+/** Derive age in years from an ISO date string (YYYY-MM-DD or similar). */
+function ageFromDob(dob: string | null | undefined): number | null {
+  if (!dob) return null;
+  const birth = new Date(dob);
+  if (isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age >= 0 ? age : null;
+}
+
+/** Return a colour for a RAF impact value (0–3+ typical range). */
+function rafColor(raf: number): { color: string; bg: string } {
+  if (raf >= 1.5) return { color: tokens.riskHigh, bg: tokens.riskHighSoft };
+  if (raf >= 0.5) return { color: tokens.warningStrong, bg: tokens.warningSoft };
+  return { color: tokens.slate600, bg: tokens.slate100 };
+}
 
 function PatientCard({
   item,
@@ -1010,7 +1026,34 @@ function PatientCard({
   isSelected: boolean;
   onSelect: (shiftKey: boolean) => void;
 }) {
-  const band = priorityBand(item.priority_score);
+  const age = ageFromDob(item.dob);
+  const ageSex = age !== null ? `${age}y` : "Age N/A";
+
+  const suspectCount = item.suspect_conditions?.length ?? 0;
+  const topGap = item.open_recapture_gaps?.[0];
+  const raf = item.estimated_raf_impact ?? 0;
+  const rafStyle = rafColor(raf);
+
+  // Initials — up to 2 letters
+  const initials = item.patient_name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join("");
+
+  // Visit time: use awv_due_date only when status is today-relevant
+  const visitLabel = (() => {
+    if (!item.awv_due_date) return null;
+    const due = new Date(item.awv_due_date);
+    const today = new Date();
+    const sameDay =
+      due.getFullYear() === today.getFullYear() &&
+      due.getMonth() === today.getMonth() &&
+      due.getDate() === today.getDate();
+    if (!sameDay) return null;
+    return due.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  })();
 
   const handleCheckboxClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -1027,7 +1070,7 @@ function PatientCard({
 
   return (
     <div className="relative">
-      {/* 16px checkbox — always visible, positioned top-left */}
+      {/* 16px checkbox — always visible, positioned top-left, vertically centered */}
       <WT
         text="Select this patient for a bulk action (Send to Attestation, Schedule AWV, or Export CSV). Shift+Click to select a range."
         side="right"
@@ -1040,7 +1083,7 @@ function PatientCard({
           aria-label={`Select ${item.patient_name}`}
           onClick={handleCheckboxClick}
           data-testid={`card-checkbox-${item.patient_id}`}
-          className="absolute top-2.5 left-2.5 z-10 w-4 h-4 rounded flex items-center justify-center p-0 transition-colors duration-100 cursor-pointer"
+          className="absolute top-1/2 -translate-y-1/2 left-3 z-10 w-4 h-4 rounded flex items-center justify-center p-0 transition-colors duration-100 cursor-pointer"
           style={{
             border: isSelected ? `2px solid ${BRAND}` : `2px solid ${tokens.slate300}`,
             background: isSelected ? BRAND : "hsl(var(--card))",
@@ -1055,144 +1098,136 @@ function PatientCard({
         </button>
       </WT>
 
+      {/*
+        Single-row card layout (desktop):
+        [checkbox gap] [initials] [name+age] [RAF badge] [suspects] [top gap] [revenue] [visit] [arrow]
+      */}
       <Link
         href={`/patients/${item.patient_id}`}
         onClick={handleCardClick}
-        className="block pl-[34px] pr-4 py-4 rounded-lg no-underline text-inherit transition-[box-shadow,border-color,background] duration-[120ms] hover-lift"
+        aria-label={`Open chart for ${item.patient_name}`}
+        className="flex items-center gap-3 pl-10 pr-4 py-3 rounded-lg no-underline text-inherit transition-colors duration-[120ms] cursor-pointer group"
         style={{
           background: isSelected ? "rgba(15,118,110,0.06)" : "hsl(var(--card))",
           border: isSelected ? `1.5px solid ${BRAND}` : `1px solid ${tokens.slate200}`,
         }}
+        onMouseEnter={(e) => {
+          if (!isSelected) (e.currentTarget as HTMLAnchorElement).style.background = "hsl(var(--muted)/0.5)";
+        }}
+        onMouseLeave={(e) => {
+          if (!isSelected) (e.currentTarget as HTMLAnchorElement).style.background = "hsl(var(--card))";
+        }}
       >
-        {/* Header row: name + priority pill */}
-        <div className="flex items-start justify-between gap-3 mb-2.5">
-          <div className="min-w-0 flex-1">
-            <div className="text-[15px] font-bold text-foreground overflow-hidden text-ellipsis whitespace-nowrap">
-              {item.patient_name}
-            </div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              {item.dob ? `DOB ${item.dob}` : "DOB unknown"}
-              {item.last_visit_date ? ` · last visit ${item.last_visit_date}` : ""}
-            </div>
+        {/* Initials avatar — 32px circle */}
+        <div
+          aria-hidden
+          className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold select-none"
+          style={{ background: tokens.primarySoft, color: tokens.primary }}
+        >
+          {initials}
+        </div>
+
+        {/* Name + age/sex — grows to fill available space */}
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-bold text-foreground overflow-hidden text-ellipsis whitespace-nowrap leading-tight">
+            {item.patient_name}
           </div>
+          <div className="text-[11px] text-muted-foreground leading-tight">{ageSex}</div>
+        </div>
+
+        {/* RAF score badge */}
+        <WT
+          text={`Estimated RAF impact: ${raf.toFixed(2)} points. Reflects the incremental risk-adjustment contribution of all open gaps for this patient.`}
+          side="top"
+        >
+          <span
+            data-testid={`raf-badge-${item.patient_id}`}
+            className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold tabular-nums whitespace-nowrap cursor-default"
+            style={{ background: rafStyle.bg, color: rafStyle.color }}
+          >
+            RAF {raf.toFixed(2)}
+          </span>
+        </WT>
+
+        {/* Open suspects badge — amber, only shown if > 0 */}
+        {suspectCount > 0 ? (
           <WT
-            text="Computed from RAF lift × confidence × days outstanding. High = score ≥ 70, Medium = 40–69, Low = below 40."
+            text={`${suspectCount} open suspect condition${suspectCount === 1 ? "" : "s"} — conditions flagged by analytics as likely present but not yet coded this year.`}
             side="top"
           >
             <span
-              data-testid={`priority-pill-${item.patient_id}`}
-              className="shrink-0 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wide cursor-default"
-              style={{ background: band.bg, color: band.color }}
+              data-testid={`suspects-badge-${item.patient_id}`}
+              className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold tabular-nums whitespace-nowrap cursor-default"
+              style={{ background: tokens.warningSoft, color: tokens.warningStrong }}
             >
-              {band.label}
+              {suspectCount} suspect{suspectCount === 1 ? "" : "s"}
             </span>
           </WT>
-        </div>
-
-        {/* Stats row */}
-        <div className="grid grid-cols-2 gap-2 mb-2.5">
-          <Stat label="Open gaps" value={item.open_recapture_gaps?.length ?? 0} tone={(item.open_recapture_gaps?.length ?? 0) > 0 ? tokens.riskHigh : tokens.slate500} />
-          <Stat label="Revenue at risk" value={fmtCurrency(item.estimated_revenue_at_risk ?? 0)} tone={tokens.slate900} />
-        </div>
-
-        {/* HCC gap chips */}
-        {item.open_recapture_gaps && item.open_recapture_gaps.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-2">
-            {item.open_recapture_gaps.slice(0, 4).map((g, i) => (
-              <HccGapChip key={`${g.hcc_code}-${i}`} gap={g} patientId={item.patient_id} />
-            ))}
-            {item.open_recapture_gaps.length > 4 && (
-              <span className="text-[11px] text-muted-foreground self-center">
-                +{item.open_recapture_gaps.length - 4} more
-              </span>
-            )}
-          </div>
+        ) : (
+          /* Placeholder keeps column alignment on rows with no suspects */
+          <span className="shrink-0 w-[60px]" aria-hidden />
         )}
 
-        {/* AWV status row — hidden for "future" to keep cards compact */}
-        {item.awv_status && item.awv_status !== "future" && awvDaysLabel(item) && (
-          <div className="mt-1.5 flex items-center gap-1.5 text-[11px]">
-            <CalendarClock size={12} style={{ color: awvPill(item.awv_status).color }} />
-            <WT text={awvTooltip(item)} side="top">
+        {/* Top HCC gap — truncated condition label */}
+        <div className="shrink-0 w-[140px] min-w-0 hidden sm:block">
+          {topGap ? (
+            <WT
+              text={`Top open recapture gap: HCC ${topGap.hcc_code}${topGap.icd10_codes?.length ? ` (${topGap.icd10_codes[0]})` : ""}. Was coded in a prior year but not yet confirmed this measurement year.`}
+              side="top"
+            >
               <span
-                data-testid={`awv-pill-${item.patient_id}`}
-                className="px-2 py-0.5 rounded-full font-semibold cursor-default"
-                style={{
-                  background: awvPill(item.awv_status).bg,
-                  color: awvPill(item.awv_status).color,
-                }}
+                className="block text-[11px] font-semibold overflow-hidden text-ellipsis whitespace-nowrap cursor-default"
+                style={{ color: tokens.danger }}
               >
-                {awvDaysLabel(item)}
+                HCC {topGap.hcc_code}
+                {item.open_recapture_gaps.length > 1 && (
+                  <span className="ml-1 font-normal text-muted-foreground">
+                    +{item.open_recapture_gaps.length - 1}
+                  </span>
+                )}
               </span>
             </WT>
-          </div>
-        )}
+          ) : (
+            <span className="text-[11px] text-muted-foreground">No gaps</span>
+          )}
+        </div>
 
-        {/* Footer row: priority score + open chart CTA */}
-        <div className="mt-2 flex items-center justify-between text-xs font-semibold" style={{ color: tokens.primary }}>
-          <span>Priority score · {item.priority_score}</span>
-          <WT
-            text="Opens full patient detail with RAF breakdown, HCC evidence, encounter history, and documentation support tools."
-            side="top"
+        {/* Revenue at risk */}
+        <WT
+          text="Estimated incremental revenue at risk if open HCC gaps are not recaptured this measurement year. Calculated at the MA rate of ~$9,000 per RAF point."
+          side="top"
+        >
+          <span
+            data-testid={`revenue-${item.patient_id}`}
+            className="shrink-0 text-[12px] font-bold tabular-nums whitespace-nowrap cursor-default hidden md:block"
+            style={{ color: tokens.slate700 }}
           >
+            {fmtCurrency(item.estimated_revenue_at_risk ?? 0)}
+          </span>
+        </WT>
+
+        {/* Visit time — only shown when AWV is scheduled today */}
+        {visitLabel ? (
+          <WT text={`AWV scheduled today at ${visitLabel}.`} side="top">
             <span
-              data-testid={`open-chart-${item.patient_id}`}
-              className="flex items-center gap-1 cursor-pointer"
+              className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold whitespace-nowrap cursor-default hidden lg:inline-flex"
+              style={{ color: tokens.primary }}
             >
-              Open chart <ChevronRight size={14} />
+              <CalendarClock size={12} aria-hidden />
+              {visitLabel}
             </span>
           </WT>
-        </div>
+        ) : (
+          <span className="shrink-0 w-[72px] hidden lg:block" aria-hidden />
+        )}
+
+        {/* Navigate arrow */}
+        <ChevronRight
+          size={15}
+          className="shrink-0 text-muted-foreground transition-transform duration-100 group-hover:translate-x-0.5"
+          aria-hidden
+        />
       </Link>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// HccGapChip — HCC code chip with Reject button tooltip
-// ---------------------------------------------------------------------------
-
-function HccGapChip({ gap, patientId }: { gap: WorklistGap; patientId: number }) {
-  return (
-    <span
-      data-testid={`hcc-chip-${patientId}-${gap.hcc_code}`}
-      className="inline-flex items-center gap-1 pl-2 pr-1.5 py-0.5 rounded-full text-[11px] font-semibold"
-      style={{ background: tokens.dangerSoft, color: tokens.danger }}
-    >
-      HCC {gap.hcc_code}
-      <WT
-        text="Reject this HCC gap with a reason code. All rejections are logged with timestamp and user for DOJ-compliant audit trail."
-        side="top"
-        delay={200}
-      >
-        <button
-          type="button"
-          aria-label={`Reject HCC ${gap.hcc_code} gap`}
-          data-testid={`hcc-reject-${patientId}-${gap.hcc_code}`}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            // Rejection logic lives in the patient detail page; navigate or open modal there
-          }}
-          className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border-none bg-transparent cursor-pointer p-0 opacity-70 hover:opacity-100 transition-opacity"
-          style={{ color: tokens.danger }}
-        >
-          <X size={10} aria-hidden />
-        </button>
-      </WT>
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Stat
-// ---------------------------------------------------------------------------
-
-function Stat({ label, value, tone }: { label: string; value: string | number; tone: string }) {
-  return (
-    <div className="px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-100">
-      <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{label}</div>
-      <div className="tabular-nums text-base font-bold" style={{ color: tone }}>{value}</div>
     </div>
   );
 }

@@ -491,10 +491,10 @@ export function RAFCentralPanel({
             >
               <div className="flex items-center gap-2 px-5 py-3.5 border-b bg-card">
                 <Sparkles className="h-4 w-4 text-amber-500 flex-shrink-0" aria-hidden />
-                <span className="text-sm font-semibold text-muted-foreground">Suspect Conditions</span>
+                <span className="text-sm font-semibold text-foreground">Suspect Conditions</span>
                 <Badge
                   className={cn(
-                    "ml-1 text-[10px] font-semibold border-0",
+                    "text-[10px] font-semibold border-0 leading-none",
                     suspectsList.length === 0
                       ? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
                       : "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"

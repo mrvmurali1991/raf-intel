@@ -328,39 +328,39 @@ function SidebarItem({ item, collapsed, isActive, showShortcutHints, userRole }:
       title={item.tooltip ?? resolvedLabel}
       aria-current={isActive ? "page" : undefined}
       className={[
-        "group flex items-center h-9 text-[13px] font-medium no-underline",
+        "group flex items-center h-9 text-sm no-underline",
         "transition-all duration-150 ease-out relative",
         // Collapsed: centered icon pill
         collapsed
           ? "justify-center mx-2 rounded-lg"
-          : "justify-start rounded-r-lg mr-2 ml-0 pl-[13px] pr-3",
-        // Active state
+          : "justify-start rounded-r-lg mr-2 ml-0 py-2 px-4",
+        // Active state — 3 px left accent + teal tint
         isActive
           ? [
-              "border-l-[3px] border-sidebar-primary",
-              "bg-sidebar-primary/10 text-sidebar-primary font-semibold",
-              collapsed ? "shadow-[inset_0_0_0_1px_hsl(var(--sidebar-primary)/0.2)]" : "",
+              collapsed
+                ? "shadow-[inset_0_0_0_1px_hsl(var(--sidebar-primary)/0.2)] bg-sidebar-primary/10 text-sidebar-primary"
+                : "border-l-[3px] border-[var(--primary)] bg-primary/10 text-foreground font-medium pl-[13px]",
             ].join(" ")
           : [
-              "border-l-[3px] border-transparent",
-              "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              collapsed ? "" : "border-l-[3px] border-transparent pl-[13px]",
+              "text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-accent-foreground",
             ].join(" "),
-        // Collapsed adjustments — remove left border positioning issue
+        // Collapsed needs its own border reset
         collapsed ? "border-l-0 border border-transparent" : "",
       ].join(" ")}
     >
       <item.icon
-        size={17}
+        size={16}
         className={[
           "shrink-0 transition-[color,transform] duration-150",
           isActive
-            ? "text-sidebar-primary scale-[1.05]"
-            : "text-sidebar-foreground group-hover:text-sidebar-primary group-hover:scale-[1.12]",
+            ? "text-sidebar-primary"
+            : "text-sidebar-foreground group-hover:text-sidebar-primary",
         ].join(" ")}
       />
       {!collapsed && (
         <>
-          <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap ml-2.5">
+          <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap ml-3">
             {resolvedLabel}
           </span>
           {item.badge !== undefined && (
@@ -488,14 +488,14 @@ function SidebarSection({
 }: SidebarSectionProps) {
   return (
     <div>
-      {/* Section divider */}
+      {/* Section divider — collapsed: short centered rule; expanded: full-width gradient rule */}
       {groupIndex > 0 && (
         collapsed ? (
           <div className="flex justify-center my-3">
             <div className="w-7 h-px bg-border/60 rounded" />
           </div>
         ) : (
-          <div className="h-px mx-4 mt-3 bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="h-px mx-0 mt-4 bg-gradient-to-r from-transparent via-border/70 to-transparent" />
         )
       )}
 
@@ -507,16 +507,16 @@ function SidebarSection({
           aria-controls={`nav-section-${group.title}`}
           className={[
             "flex items-center justify-between w-full bg-transparent border-none cursor-pointer",
-            "px-4 mb-1",
-            groupIndex > 0 ? "mt-2.5" : "mt-2",
+            "px-4 pt-5 pb-1",
+            groupIndex === 0 ? "pt-2" : "",
           ].join(" ")}
         >
-          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/60">
             {group.title}
           </span>
           <ChevronDown
-            size={12}
-            className={`text-muted-foreground/70 shrink-0 transition-transform duration-200 ${sectionCollapsed ? "-rotate-90" : "rotate-0"}`}
+            size={11}
+            className={`text-muted-foreground/50 shrink-0 transition-transform duration-200 ${sectionCollapsed ? "-rotate-90" : "rotate-0"}`}
           />
         </button>
       ) : null}
@@ -817,31 +817,41 @@ export function Sidebar() {
           collapsed ? "px-1 py-2" : "px-3 py-2",
         ].join(" ")}
       >
-        {/* EMR Connection Status */}
-        <Link
-          href="/emr-config"
-          title={collapsed ? (emrLoading ? "EMR: Checking..." : emrStatus?.connected ? "EMR Connected" : "EMR Disconnected") : undefined}
-          className={[
-            "flex items-center gap-2 w-full h-8 no-underline cursor-pointer",
-            "text-sidebar-foreground text-[12px] rounded mb-1 transition-colors duration-150 hover:bg-sidebar-accent",
-            collapsed ? "justify-center px-0" : "justify-start pl-1",
-          ].join(" ")}
-        >
-          <span
-            className={`w-2 h-2 rounded-full shrink-0 transition-colors duration-300 ${
+        {/* EMR Connection Status — pill badge */}
+        <div className={["flex mb-2", collapsed ? "justify-center" : "justify-start pl-0.5"].join(" ")}>
+          <Link
+            href="/emr-config"
+            title={emrLoading ? "EMR: Checking…" : emrStatus?.connected ? "EMR Connected" : "EMR Disconnected"}
+            aria-label={emrLoading ? "EMR checking" : emrStatus?.connected ? "EMR Connected — click to configure" : "EMR Disconnected — click to configure"}
+            className={[
+              "inline-flex items-center gap-1.5 no-underline cursor-pointer",
+              "rounded-full border transition-colors duration-150",
+              collapsed ? "w-6 h-6 justify-center px-0" : "px-2.5 py-[3px]",
               emrLoading
-                ? "bg-muted-foreground"
+                ? "border-border/50 bg-muted/40 text-muted-foreground hover:bg-muted"
                 : emrStatus?.connected
-                  ? "bg-green-500 emr-pulse"
-                  : "bg-red-500"
-            }`}
-          />
-          {!collapsed && (
-            <span className="text-[12px] text-sidebar-foreground">
-              {emrLoading ? "EMR Checking..." : emrStatus?.connected ? "EMR Connected" : "EMR Disconnected"}
-            </span>
-          )}
-        </Link>
+                  ? "border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/20"
+                  : "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20",
+            ].join(" ")}
+          >
+            <span
+              className={[
+                "rounded-full shrink-0 transition-colors duration-300",
+                collapsed ? "w-2 h-2" : "w-1.5 h-1.5",
+                emrLoading
+                  ? "bg-muted-foreground"
+                  : emrStatus?.connected
+                    ? "bg-green-500 emr-pulse"
+                    : "bg-red-500",
+              ].join(" ")}
+            />
+            {!collapsed && (
+              <span className="text-[11px] font-medium leading-none">
+                {emrLoading ? "Checking…" : emrStatus?.connected ? "Connected" : "Disconnected"}
+              </span>
+            )}
+          </Link>
+        </div>
 
         {/* Theme toggle */}
         <button

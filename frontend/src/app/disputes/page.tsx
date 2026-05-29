@@ -51,6 +51,7 @@ import {
 } from "@/components/healthcare-ui";
 import { MetricCard } from "@/components/ui/metric-card";
 import { useToast } from "@/components/Toast";
+import { humanizeEvidence } from "@/lib/evidence-labels";
 
 /* ------------------------------------------------------------------ */
 /*  Tokens (mirrors the existing /suspects palette)                    */
@@ -579,7 +580,7 @@ function DetailDrawer({ dispute, onClose }: { dispute: Dispute; onClose: () => v
         {(dispute.evidence ?? []).map((e) => (
           <div key={e.id} style={{ background: T.slate50, padding: 10, borderRadius: 6, fontSize: 12, color: T.slate700 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-              <span style={{ fontWeight: 600 }}>{e.evidence_type} · {e.encounter_date ?? "—"}</span>
+              <span style={{ fontWeight: 600 }}>{humanizeEvidence(e.evidence_type)} · {e.encounter_date ?? "—"}</span>
               <span style={{ fontFamily: "monospace", color: T.emerald600 }}>{e.meat_components ?? "—"}</span>
             </div>
             <div style={{ whiteSpace: "pre-wrap", fontSize: 11, color: T.slate600 }}>

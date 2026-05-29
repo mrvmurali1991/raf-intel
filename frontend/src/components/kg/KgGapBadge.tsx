@@ -8,6 +8,7 @@
 
 import { useState, type CSSProperties, type MouseEvent } from "react";
 import { EvidenceChainPanel } from "@/components/kg/EvidenceChainPanel";
+import { humanizeEvidence } from "@/lib/evidence-labels";
 
 export type KgEvidenceTypeRaw =
   | "kg-rule"
@@ -60,7 +61,7 @@ function classify(raw: string | null | undefined): BadgeStyle {
   if (t.includes("kg") || t.includes("rule")) {
     return { label: "KG-rule", bg: "#DBEAFE", fg: "#1D4ED8", border: "#BFDBFE" };
   }
-  return { label: raw || "Evidence", bg: "#F1F5F9", fg: "#475569", border: "#E2E8F0" };
+  return { label: humanizeEvidence(raw) || "Evidence", bg: "#F1F5F9", fg: "#475569", border: "#E2E8F0" };
 }
 
 export function KgGapBadge({

@@ -15,6 +15,7 @@
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { Loader2, AlertTriangle, TrendingDown, TrendingUp } from "lucide-react";
+import { formatCurrency } from "@/lib/format";
 
 type V28PatientImpact = {
   patient_id: number;
@@ -32,9 +33,7 @@ type V28PatientImpact = {
 };
 
 function fmtMoney(n: number): string {
-  const sign = n < 0 ? "-" : n > 0 ? "+" : "";
-  const abs = Math.abs(n);
-  return `${sign}$${abs.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  return formatCurrency(Math.round(n), { showSign: n > 0 });
 }
 
 function fmtRAF(n: number): string {

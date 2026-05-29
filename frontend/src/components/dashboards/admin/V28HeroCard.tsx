@@ -37,16 +37,16 @@ export function V28HeroCard({ v28Summary, isLoading }: V28HeroCardProps) {
       data-testid="v28-hero-card"
       className="fade-in-up fade-in-up-1"
       style={{
-        background: "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)",
-        border: "2px solid #f59e0b",
-        borderRadius: 14,
-        padding: "20px 24px",
+        background: "hsl(var(--card))",
+        border: "1px solid hsl(var(--border))",
+        borderRadius: 12,
+        padding: 20,
         marginBottom: 20,
         display: "flex",
         alignItems: "center",
         gap: 24,
         flexWrap: "wrap",
-        boxShadow: "0 2px 12px rgba(245,158,11,0.12)",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
       }}
     >
       {/* Icon badge */}
@@ -70,8 +70,8 @@ export function V28HeroCard({ v28Summary, isLoading }: V28HeroCardProps) {
           <span
             style={{
               fontSize: 15,
-              fontWeight: 800,
-              color: "#92400e",
+              fontWeight: 700,
+              color: "hsl(var(--foreground))",
               letterSpacing: "-0.01em",
             }}
           >
@@ -124,7 +124,7 @@ export function V28HeroCard({ v28Summary, isLoading }: V28HeroCardProps) {
               </TooltipTrigger>
               <TooltipContent>Portfolio-wide annual revenue impact of the CMS-HCC V28 model vs V24, summed across all {v28Summary.computed_patient_count} patients. Negative means V28 reduces risk scores; positive means V28 increases them.</TooltipContent>
             </Tooltip>
-            <div style={{ fontSize: 12, color: "#78350f", marginTop: 3, fontWeight: 500 }}>
+            <div style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", marginTop: 3, fontWeight: 500 }}>
               {(() => {
                 const eroded = (v28Summary.top_eroded_patients ?? []).filter(
                   (p) => p.revenue < -500,
@@ -178,7 +178,7 @@ export function V28HeroCard({ v28Summary, isLoading }: V28HeroCardProps) {
           gap: 6,
           whiteSpace: "nowrap",
           flexShrink: 0,
-          boxShadow: "0 2px 8px rgba(245,158,11,0.35)",
+          boxShadow: "none",
           transition: "opacity 0.15s",
         }}
         aria-label="Open V28 Impact Analysis"

@@ -3,9 +3,10 @@
 import React, { useState } from "react";
 import type { PatientSuspectsResponse } from "@/lib/api";
 import {
-  EmptyState,
   ConfidencePill,
 } from "@/components/healthcare-ui";
+import { formatCurrency } from "@/lib/format";
+import { SectionBanner } from "@/components/ui/section-banner";
 import {
   C,
   SectionLoader,
@@ -19,6 +20,7 @@ import {
   type AcceptOverridePayload,
 } from "@/components/AcceptConfirmDialog";
 import { DismissReasonDialog } from "@/components/raf-central/Suspects/DismissReasonDialog";
+import { humanizeEvidence } from "@/lib/evidence-labels";
 
 export function SuspectsTab({
   suspects,
@@ -58,18 +60,7 @@ export function SuspectsTab({
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {DisclaimerBar}
-        <Card>
-          <EmptyState
-            state="no-data"
-            title="analyze encounters to surface suspect conditions"
-            icon={
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-            }
-          />
-        </Card>
+        <SectionBanner message="No open suspect conditions for this patient. Analyze encounters to surface HCC opportunities." />
       </div>
     );
   }
@@ -104,7 +95,7 @@ export function SuspectsTab({
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span className="text-sm font-semibold text-foreground">
-                    {s.suspected_condition || s.condition || s.evidence_type || "—"}
+                    {s.suspected_condition || s.condition || (s.evidence_type ? humanizeEvidence(s.evidence_type) : null) || "—"}
                   </span>
                   {(s.suspect_icd10 || s.icd10_code) && (
                     <span className="text-xs font-semibold font-mono bg-muted text-foreground border border-border" style={{
@@ -114,7 +105,7 @@ export function SuspectsTab({
                     </span>
                   )}
                   {(s.suspect_hcc != null) && (
-                    <WithTooltip tip={`HCC ${s.suspect_hcc}${s.hcc_coefficient ? ` — RAF coefficient: +${Number(s.hcc_coefficient).toFixed(3)}` : ""}${s.hcc_coefficient ? `. Estimated annual revenue uplift: $${Math.round(Number(s.hcc_coefficient) * 10000).toLocaleString()} (at $10,000/RAF point). Accepting and attesting this condition adds this coefficient to the patient's total RAF score.` : ""}`}>
+                    <WithTooltip tip={`HCC ${s.suspect_hcc}${s.hcc_coefficient ? ` — RAF coefficient: +${Number(s.hcc_coefficient).toFixed(3)}` : ""}${s.hcc_coefficient ? `. Estimated annual revenue uplift: ${formatCurrency(Math.round(Number(s.hcc_coefficient) * 10000))} (at $10,000/RAF point). Accepting and attesting this condition adds this coefficient to the patient's total RAF score.` : ""}`}>
                       <span
                         data-testid={`suspect-hcc-chip-${s.suspect_hcc}`}
                         style={{

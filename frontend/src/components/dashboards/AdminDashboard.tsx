@@ -181,21 +181,20 @@ function generateSparklineData(center: number, count: number): number[] {
 const card: React.CSSProperties = {
   background: "hsl(var(--card))",
   border: "1px solid hsl(var(--border))",
-  borderRadius: 14,
-  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-  padding: 24,
+  borderRadius: 12,
+  boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+  padding: 20,
 };
 
 const hoverCard = (e: React.MouseEvent<HTMLDivElement>, enter: boolean) => {
   if (enter) {
-    // Multi-layer soft shadow for 2025-style depth
-    e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.08), 0 16px 40px rgba(0,0,0,0.06)";
-    e.currentTarget.style.transform = "translateY(-2px) scale(1.005)";
-    e.currentTarget.style.transition = "all 220ms cubic-bezier(0.34, 1.56, 0.64, 1)";
+    e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06)";
+    e.currentTarget.style.transform = "translateY(-1px)";
+    e.currentTarget.style.transition = "all 180ms ease";
   } else {
-    e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.04)";
-    e.currentTarget.style.transform = "translateY(0) scale(1)";
-    e.currentTarget.style.transition = "all 200ms ease";
+    e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.04)";
+    e.currentTarget.style.transform = "translateY(0)";
+    e.currentTarget.style.transition = "all 180ms ease";
   }
 };
 
@@ -219,7 +218,7 @@ function Pulse({ w, h, r = 6 }: { w: string | number; h: number; r?: number }) {
 function KPISkeleton() {
   // Mirrors the real bento strip: 2fr hero + 3 equal tiles, 160px min-height
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 20, marginBottom: 24 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 16, marginBottom: 24 }}>
       {[{ flex: true }, {}, {}, {}].map((cfg, i) => (
         <div key={i} style={{ ...card, minHeight: 160, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
@@ -348,11 +347,11 @@ function CmsSweepWidget({ revenueOpp, loading }: { revenueOpp: number; loading?:
         gridTemplateColumns: "1fr 1fr 1fr",
         alignItems: "center",
         background: "#0F172A",
-        borderRadius: 10,
+        borderRadius: 12,
         padding: "20px 28px",
         marginBottom: 24,
         gap: 0,
-        boxShadow: "0 4px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04)",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
         position: "relative",
         overflow: "hidden",
       }}
@@ -470,15 +469,15 @@ function AttentionCard({
         display: "flex",
         flexDirection: "column",
         gap: 10,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
         transition: "box-shadow 0.2s, transform 0.2s",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = `0 4px 16px ${s.border}20, 0 1px 3px rgba(0,0,0,0.04)`;
+        e.currentTarget.style.boxShadow = `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${s.border}18`;
         e.currentTarget.style.transform = "translateY(-1px)";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.04)";
+        e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.04)";
         e.currentTarget.style.transform = "translateY(0)";
       }}
     >
@@ -973,9 +972,9 @@ export function AdminDashboard() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            background: "linear-gradient(135deg, #FFF7ED 0%, #FFFBEB 100%)",
+            background: "#FFF7ED",
             border: "1px solid #FED7AA",
-            borderRadius: 10,
+            borderRadius: 12,
             padding: "20px 28px",
             marginBottom: 24,
             gap: 16,
@@ -1539,8 +1538,8 @@ export function AdminDashboard() {
                     transition: "box-shadow 0.2s, transform 0.2s",
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = `0 4px 16px ${t.color}20`;
-                    e.currentTarget.style.transform = "translateY(-2px)";
+                    e.currentTarget.style.boxShadow = `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${t.color}18`;
+                    e.currentTarget.style.transform = "translateY(-1px)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.boxShadow = "none";

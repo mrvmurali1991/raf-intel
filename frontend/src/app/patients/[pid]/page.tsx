@@ -138,7 +138,7 @@ export default function PatientDetailPage({
   const router = useRouter();
   const searchParams = useSearchParams();
   // Initialise from URL so refresh / shared links restore the correct tab.
-  // Sub-pill state for the merged "RAF" tab (item B8)
+  // Sub-pill state for the merged "RAF & Suspects" tab
   const [rafSubTab, setRafSubTab] = useState<"central" | "details" | "comparison" | "v28-impact">(() => {
     const t = searchParams.get("tab");
     if (t === "rafdetails" || t === "raf") return "details";
@@ -149,18 +149,21 @@ export default function PatientDetailPage({
 
   const [activeTab, setActiveTab] = useState(() => {
     const t = searchParams.get("tab");
-    // Legacy aliases → new tab names
+    // Legacy aliases → new consolidated tab names
     if (
       t === "rafcentral" ||
       t === "rafdetails" ||
       t === "modelcomparison" ||
       t === "v28-impact" ||
-      t === "v28impact"
+      t === "v28impact" ||
+      t === "raf"
     ) {
-      return "raf";
+      return "raf-suspects";
     }
-    // suspects / review queue → meat evidence tab
-    if (t === "suspects" || t === "reviewqueue") return "meat";
+    // suspects / review queue / meat evidence → raf-suspects tab
+    if (t === "suspects" || t === "reviewqueue" || t === "meat") return "raf-suspects";
+    // audit + activity → history tab
+    if (t === "audit" || t === "activity") return "history";
     // clinical → overview (clinical data merged into overview context)
     if (t === "clinical") return "overview";
     return t ?? "overview";
@@ -257,12 +260,13 @@ export default function PatientDetailPage({
   // the previous tab interactive while the new one mounts — smoother feel
   // than a hard re-render. URL update stays outside (urgent navigation).
   const handleTabChange = (tab: string) => {
-    // Resolve legacy tab aliases to new IA
+    // Resolve legacy tab aliases to new consolidated IA
     let resolvedTab = tab;
-    if (tab === "rafcentral") { resolvedTab = "raf"; setRafSubTab("central"); }
-    else if (tab === "rafdetails") { resolvedTab = "raf"; setRafSubTab("details"); }
-    else if (tab === "modelcomparison" || tab === "models") { resolvedTab = "raf"; setRafSubTab("comparison"); }
-    else if (tab === "suspects" || tab === "reviewqueue") { resolvedTab = "meat"; }
+    if (tab === "rafcentral") { resolvedTab = "raf-suspects"; setRafSubTab("central"); }
+    else if (tab === "rafdetails" || tab === "raf") { resolvedTab = "raf-suspects"; setRafSubTab("details"); }
+    else if (tab === "modelcomparison" || tab === "models") { resolvedTab = "raf-suspects"; setRafSubTab("comparison"); }
+    else if (tab === "suspects" || tab === "reviewqueue" || tab === "meat") { resolvedTab = "raf-suspects"; }
+    else if (tab === "audit" || tab === "activity") { resolvedTab = "history"; }
     else if (tab === "clinical") { resolvedTab = "overview"; }
     startTransition(() => {
       setActiveTab(resolvedTab);
@@ -271,6 +275,13 @@ export default function PatientDetailPage({
     params.set("tab", resolvedTab);
     router.replace(`?${params.toString()}`);
   };
+  // Sub-view state for the merged "RAF & Suspects" tab:
+  // rafMeatView=true shows the MEAT Evidence / SuspectsTab sub-section
+  const [rafMeatView, setRafMeatView] = useState(false);
+
+  // Sub-pill state for the merged "History" tab
+  const [historySubTab, setHistorySubTab] = useState<"audit" | "activity">("audit");
+
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [lastAnalysisResult, setLastAnalysisResult] = useState<Record<number, AnalysisResult>>({});
 
@@ -355,7 +366,7 @@ export default function PatientDetailPage({
     queryKey: ["patient-recapture", pid, selectedYear],
     queryFn: () => getPatientRecaptureGaps(pid, selectedYear),
     staleTime: 30_000,
-    enabled: activeTab === "raf" || activeTab === "overview",
+    enabled: activeTab === "raf-suspects" || activeTab === "overview",
   });
 
   const labSuspectsQ = useQuery({
@@ -411,7 +422,7 @@ export default function PatientDetailPage({
   const auditsQ = useQuery({
     queryKey: ["patient-audits", pid],
     queryFn: () => getAuditPackages(Number(pid)),
-    enabled: activeTab === "audit",
+    enabled: activeTab === "history",
   });
 
   const documentsQ = useQuery({
@@ -675,19 +686,18 @@ export default function PatientDetailPage({
     };
   }, [encountersQ.data, profile, rafBreakdownQ.data]);
 
-  // ---- Coder-first tab IA (reorganised) ------------------------------------
-  // "Today's action items" (HCC suspects + HEDIS gaps) live above the tabs as
-  // a persistent action queue. The "suspects" tab is renamed "MEAT Evidence"
-  // to reflect its drill-down role; the review queue is always visible.
-  // Legacy aliases: suspects → meat, rafcentral → raf, activity → activity
+  // ---- Consolidated 5-tab IA -----------------------------------------------
+  // Overview: patient summary + action items
+  // RAF & Suspects: RAF Detail + MEAT Evidence (sub-pills inside)
+  // Encounters: clinical visits
+  // Documents: uploaded files
+  // History: Audit + Activity merged
   const tabs: Array<{ id: string; label: string; badge?: number }> = [
     { id: "overview", label: "Overview" },
-    { id: "raf", label: "RAF Detail" },
-    { id: "meat", label: "MEAT Evidence" },
+    { id: "raf-suspects", label: "RAF & Suspects" },
     { id: "encounters", label: "Encounters" },
     { id: "documents", label: "Documents" },
-    { id: "audit", label: "Audit" },
-    { id: "activity", label: "Activity" },
+    { id: "history", label: "History" },
   ];
 
   // Last encounter date for the hero strip staleness indicator
@@ -926,49 +936,82 @@ export default function PatientDetailPage({
 
       {/* TAB NAVIGATION */}
       <div style={{ background: "hsl(var(--card))", borderBottom: `1px solid ${C.slate200}`, padding: "0 24px" }}>
+        {/* overflow-x-auto + scrollbar-hide for mobile horizontal scroll */}
         <div
           className="raf-tabbar-scroll"
           style={{
-            display: "flex", gap: 0, alignItems: "center",
-            overflowX: "auto", overflowY: "hidden",
-            flexWrap: "nowrap", whiteSpace: "nowrap",
-            scrollbarWidth: "thin",
-          }}
+            overflowX: "auto",
+            overflowY: "hidden",
+            scrollbarWidth: "none",
+            msOverflowStyle: "none",
+          } as React.CSSProperties}
         >
-          <div role="tablist" style={{ display: "flex", flexWrap: "nowrap" }}>
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                role="tab"
-                aria-selected={activeTab === tab.id}
-                id={`tab-${tab.id}`}
-                onClick={() => handleTabChange(tab.id)}
-                style={{
-                  padding: "14px 20px", fontSize: 13,
-                  fontWeight: activeTab === tab.id ? 600 : 500,
-                  color: activeTab === tab.id ? C.blue600 : C.slate500,
-                  background: "transparent", border: "none",
-                  borderBottom: activeTab === tab.id ? `2px solid ${C.blue600}` : "2px solid transparent",
-                  cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6,
-                  transition: "color 0.15s, border-color 0.15s",
-                  flexShrink: 0,
-                  outline: "none",
-                }}
-                onFocus={(e) => (e.currentTarget.style.outline = `2px solid ${C.blue600}`)}
-                onBlur={(e) => (e.currentTarget.style.outline = "none")}
-              >
-                {tab.label}
-                {tab.badge !== undefined && (
-                  <span style={{
-                    display: "inline-flex", alignItems: "center", justifyContent: "center",
-                    minWidth: 20, height: 20, padding: "0 6px", borderRadius: 999,
-                    fontSize: 10, fontWeight: 700, background: C.amber500, color: C.white,
-                  }}>
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            ))}
+          <div
+            role="tablist"
+            style={{
+              display: "flex",
+              gap: 24,
+              flexWrap: "nowrap",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {tabs.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  role="tab"
+                  aria-selected={isActive}
+                  id={`tab-${tab.id}`}
+                  onClick={() => handleTabChange(tab.id)}
+                  className={`raf-tab-btn${isActive ? " raf-tab-active" : ""}`}
+                  style={{
+                    padding: "12px 0",
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: isActive ? C.blue600 : C.slate500,
+                    background: "transparent",
+                    border: "none",
+                    borderBottom: isActive
+                      ? `2px solid ${C.blue600}`
+                      : "2px solid transparent",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    transition: "color 0.15s, border-color 0.15s",
+                    flexShrink: 0,
+                    outline: "none",
+                    lineHeight: "1.25",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.borderBottomColor = C.slate300;
+                      e.currentTarget.style.color = C.slate700;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.borderBottomColor = "transparent";
+                      e.currentTarget.style.color = C.slate500;
+                    }
+                  }}
+                  onFocus={(e) => (e.currentTarget.style.outline = `2px solid ${C.blue600}`)}
+                  onBlur={(e) => (e.currentTarget.style.outline = "none")}
+                >
+                  {tab.label}
+                  {tab.badge !== undefined && (
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      minWidth: 20, height: 20, padding: "0 6px", borderRadius: 999,
+                      fontSize: 10, fontWeight: 700, background: C.amber500, color: C.white,
+                    }}>
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -1007,24 +1050,37 @@ export default function PatientDetailPage({
             pipelineCompletedAt={pipelineCompletedAt}
           />
         )}
-        {activeTab === "raf" && (
+
+        {/* RAF & Suspects — RAF Detail + MEAT Evidence in one tab with sub-pills */}
+        {activeTab === "raf-suspects" && (
           <div>
-            {/* Sub-pill navigation for RAF Detail tab */}
+            {/* Sub-pill navigation */}
             <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
               {([
                 { id: "central" as const, label: "Central" },
                 { id: "details" as const, label: "Details" },
                 { id: "comparison" as const, label: "Comparison" },
                 { id: "v28-impact" as const, label: "V28 Impact" },
-              ]).map((pill) => (
+                { id: "meat" as const, label: "MEAT Evidence" },
+              ] as Array<{ id: "central" | "details" | "comparison" | "v28-impact" | "meat"; label: string }>).map((pill) => (
                 <button
                   key={pill.id}
-                  onClick={() => setRafSubTab(pill.id)}
+                  onClick={() => {
+                    if (pill.id === "meat") {
+                      // "meat" is rendered as a sibling section below the sub-pill bar;
+                      // store it as a special sub-tab value
+                      setRafSubTab("central"); // reset RAF sub-tab
+                      // use a local state flag — handled below via rafMeatView
+                    }
+                    if (pill.id !== "meat") setRafSubTab(pill.id);
+                    setRafMeatView(pill.id === "meat");
+                  }}
                   style={{
-                    padding: "6px 16px", fontSize: 12, fontWeight: rafSubTab === pill.id ? 700 : 500,
-                    color: rafSubTab === pill.id ? C.white : C.slate600,
-                    background: rafSubTab === pill.id ? C.blue600 : "hsl(var(--card))",
-                    border: `1px solid ${rafSubTab === pill.id ? C.blue600 : C.slate200}`,
+                    padding: "6px 16px", fontSize: 12,
+                    fontWeight: (pill.id === "meat" ? rafMeatView : (!rafMeatView && rafSubTab === pill.id)) ? 700 : 500,
+                    color: (pill.id === "meat" ? rafMeatView : (!rafMeatView && rafSubTab === pill.id)) ? C.white : C.slate600,
+                    background: (pill.id === "meat" ? rafMeatView : (!rafMeatView && rafSubTab === pill.id)) ? C.blue600 : "hsl(var(--card))",
+                    border: `1px solid ${(pill.id === "meat" ? rafMeatView : (!rafMeatView && rafSubTab === pill.id)) ? C.blue600 : C.slate200}`,
                     borderRadius: 14, cursor: "pointer", transition: "all 0.15s",
                   }}
                 >
@@ -1032,8 +1088,8 @@ export default function PatientDetailPage({
                 </button>
               ))}
             </div>
-            {rafSubTab === "central" && <RAFCentralTab pid={pid} year={selectedYear} />}
-            {rafSubTab === "details" && (
+            {!rafMeatView && rafSubTab === "central" && <RAFCentralTab pid={pid} year={selectedYear} />}
+            {!rafMeatView && rafSubTab === "details" && (
               <RAFTab
                 breakdown={breakdown}
                 breakdownLoading={rafBreakdownQ.isLoading}
@@ -1047,31 +1103,30 @@ export default function PatientDetailPage({
                 selectedYear={selectedYear}
               />
             )}
-            {rafSubTab === "comparison" && (
+            {!rafMeatView && rafSubTab === "comparison" && (
               <div style={{ maxWidth: 1100 }}>
                 <ModelComparison pid={pid} year={selectedYear} />
               </div>
             )}
-            {rafSubTab === "v28-impact" && (
+            {!rafMeatView && rafSubTab === "v28-impact" && (
               <div style={{ maxWidth: 1100 }}>
                 <PatientV28ImpactPanel pid={pid} year={selectedYear} />
               </div>
             )}
+            {rafMeatView && (
+              <>
+                <SuspectsTab
+                  suspects={suspectsQ.data}
+                  suspectsLoading={suspectsQ.isLoading}
+                  acceptMutation={acceptMutation}
+                  dismissMutation={dismissMutation}
+                />
+                <PatientHedisStrip pid={pid} year={selectedYear} />
+              </>
+            )}
           </div>
         )}
-        {/* "meat" tab = deep MEAT Evidence drill-down (replaces old "suspects" tab) */}
-        {activeTab === "meat" && (
-          <>
-            <SuspectsTab
-              suspects={suspectsQ.data}
-              suspectsLoading={suspectsQ.isLoading}
-              acceptMutation={acceptMutation}
-              dismissMutation={dismissMutation}
-            />
-            {/* HEDIS strip — still co-located for PCP visit context */}
-            <PatientHedisStrip pid={pid} year={selectedYear} />
-          </>
-        )}
+
         {activeTab === "encounters" && (
           <EncountersTab
             encounters={encountersQ.data}
@@ -1091,15 +1146,43 @@ export default function PatientDetailPage({
             patientName={patient ? `${patient.fname || patient.first_name || ""} ${patient.lname || patient.last_name || ""}`.trim() : ""}
           />
         )}
-        {activeTab === "audit" && (
-          <AuditTab
-            audits={auditsQ.data}
-            auditsLoading={auditsQ.isLoading}
-            auditMutation={auditMutation}
-            selectedYear={selectedYear}
-          />
+
+        {/* History tab — Audit + Activity merged */}
+        {activeTab === "history" && (
+          <div>
+            {/* Sub-pill navigation for History */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
+              {([
+                { id: "audit" as const, label: "Audit Packages" },
+                { id: "activity" as const, label: "Activity Log" },
+              ]).map((pill) => (
+                <button
+                  key={pill.id}
+                  onClick={() => setHistorySubTab(pill.id)}
+                  style={{
+                    padding: "6px 16px", fontSize: 12,
+                    fontWeight: historySubTab === pill.id ? 700 : 500,
+                    color: historySubTab === pill.id ? C.white : C.slate600,
+                    background: historySubTab === pill.id ? C.blue600 : "hsl(var(--card))",
+                    border: `1px solid ${historySubTab === pill.id ? C.blue600 : C.slate200}`,
+                    borderRadius: 14, cursor: "pointer", transition: "all 0.15s",
+                  }}
+                >
+                  {pill.label}
+                </button>
+              ))}
+            </div>
+            {historySubTab === "audit" && (
+              <AuditTab
+                audits={auditsQ.data}
+                auditsLoading={auditsQ.isLoading}
+                auditMutation={auditMutation}
+                selectedYear={selectedYear}
+              />
+            )}
+            {historySubTab === "activity" && <ActivityTab pid={pid} />}
+          </div>
         )}
-        {activeTab === "activity" && <ActivityTab pid={pid} />}
       </div>
     </div>
   );

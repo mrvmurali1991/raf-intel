@@ -21,6 +21,7 @@ import {
   type KgEvidenceChain,
   type KgEvidenceItem,
 } from "@/lib/api";
+import { humanizeEvidence } from "@/lib/evidence-labels";
 import KgGraphView, {
   type KgGraphEdge,
   type KgGraphNode,
@@ -623,9 +624,9 @@ function EvidenceLineItem({ item }: { item: KgEvidenceItem }) {
       <EvidenceIcon kind={item.kind} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, color: "#475569" }}>
-          <span style={{ color: "#0F172A", fontWeight: 600 }}>{item.kind}</span>
+          <span style={{ color: "#0F172A", fontWeight: 600 }}>{humanizeEvidence(item.kind)}</span>
           {" · "}
-          <span style={{ fontFamily: "monospace" }}>{item.source}</span>
+          <span style={{ fontFamily: "monospace" }}>{humanizeEvidence(item.source)}</span>
           {valueText ? (
             <>
               {" · "}

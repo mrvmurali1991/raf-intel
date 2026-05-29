@@ -33,7 +33,6 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SectionHeader } from "@/components/ui/section-header";
 import { MetricCard } from "@/components/ui/metric-card";
 import { DataQualityBanner } from "@/components/DataQualityBanner";
-import { tokens } from "@/styles/tokens";
 import {
   getQualityMeasures,
   getQualitySummary,
@@ -44,7 +43,7 @@ import type {
   QualityMeasure,
   QualitySummary,
 } from "@/lib/api";
-import { C, T, starsColor, starsLabel, StarsGauge, Spinner, ErrorBox } from "./tabs/_shared";
+import { C, starsLabel, StarsGauge, Spinner, ErrorBox, renderStars } from "./tabs/_shared";
 
 // ── Lazy-loaded tab panels (only parsed when the tab is first activated) ───────
 function TabFallback() {
@@ -69,6 +68,92 @@ const CareGapsTabDynamic = dynamic(
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 const TABS = ["Summary", "HEDIS Measures", "STARS Estimate", "Care Gaps"] as const;
 type TabKey = (typeof TABS)[number];
+
+// ── HEDIS measure card used in the Summary tab ────────────────────────────────
+function MeasureProgressCard({ measure }: { measure: QualityMeasure }) {
+  const rate = Math.round(measure.rate * 100);
+  const target = measure.benchmark != null ? Math.round(measure.benchmark * 100) : null;
+  const aboveTarget = target !== null ? rate >= target : rate >= 80;
+  const defaultTarget = 80;
+  const targetPct = target ?? defaultTarget;
+
+  // Color thresholds: green ≥ target, amber within 10 pts below, red otherwise
+  let barColor: string;
+  let statusClass: string;
+  let statusText: string;
+  if (aboveTarget) {
+    barColor = C.emerald;
+    statusClass = "text-emerald-700 bg-emerald-50 border border-emerald-200";
+    statusText = "Above Target";
+  } else if (rate >= targetPct - 10) {
+    barColor = C.amber;
+    statusClass = "text-amber-700 bg-amber-50 border border-amber-200";
+    statusText = "Near Target";
+  } else {
+    barColor = C.red;
+    statusClass = "text-red-700 bg-red-50 border border-red-200";
+    statusText = "Below Target";
+  }
+
+  // Target marker position as percentage of 100
+  const markerLeft = Math.min(targetPct, 100);
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow">
+      {/* Measure name + status badge */}
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <span className="text-[11px] font-bold text-primary font-mono tracking-wide">
+            {measure.measure_id}
+          </span>
+          <p className="text-[13px] font-semibold text-foreground mt-0.5 leading-snug">
+            {measure.name}
+          </p>
+        </div>
+        <span className={`flex-shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${statusClass}`}>
+          {statusText}
+        </span>
+      </div>
+
+      {/* Progress bar with target marker */}
+      <div className="relative">
+        <div className="relative h-2.5 rounded-full bg-slate-100 overflow-visible">
+          {/* Filled bar */}
+          <div
+            className="qs-progress-bar absolute inset-y-0 left-0 rounded-full"
+            style={{ width: `${Math.min(rate, 100)}%`, background: barColor, transition: "width 0.6s cubic-bezier(0.22,1,0.36,1)" }}
+          />
+          {/* Target marker — rendered outside overflow:hidden parent */}
+          <div
+            className="absolute top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-full bg-slate-600 opacity-60 z-10"
+            style={{ left: `${markerLeft}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Rate / target text row */}
+      <div className="flex items-center justify-between text-[12px]">
+        <span className="font-bold" style={{ color: barColor }}>
+          {rate}%
+          {target !== null && (
+            <span className="font-normal text-muted-foreground ml-1">/ {target}% target</span>
+          )}
+        </span>
+        {measure.gap > 0 && (
+          <span className="text-muted-foreground">
+            <span className="font-semibold text-foreground">{measure.gap.toLocaleString()}</span> open gaps
+          </span>
+        )}
+        {measure.gap === 0 && (
+          <span className="flex items-center gap-1 text-emerald-700 font-medium">
+            <CheckCircle size={12} />
+            No gaps
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ── Summary Tab ───────────────────────────────────────────────────────────────
 function SummaryTab({
@@ -122,9 +207,9 @@ function SummaryTab({
 
       {/* Compliance distribution bar */}
       {total > 0 && (
-        <div className="premium-card premium-shadow hover-lift qs-fade-in qs-fade-in-1 rounded-xl" style={T.card}>
+        <div className="premium-card premium-shadow hover-lift qs-fade-in qs-fade-in-1 rounded-xl border border-border bg-card p-6">
           <SectionHeader title="Compliance Rate Distribution" icon={<Activity size={18} />} />
-          <div className="flex overflow-hidden rounded-lg h-8 mb-3.5" style={{ boxShadow: "inset 0 1px 3px rgba(0,0,0,0.08)" }}>
+          <div className="flex overflow-hidden rounded-lg h-8 mb-3.5 shadow-inner">
             {[
               { pct: (green / total) * 100, color: C.emerald },
               { pct: (amber / total) * 100, color: C.amber },
@@ -132,15 +217,10 @@ function SummaryTab({
             ].map((seg, i) => (
               <div
                 key={i}
+                className="flex items-center justify-center text-[11px] font-bold text-white"
                 style={{
                   width: `${seg.pct}%`,
                   background: seg.color,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: tokens.white,
                   minWidth: seg.pct > 0 ? 30 : 0,
                 }}
               >
@@ -165,13 +245,25 @@ function SummaryTab({
         </div>
       )}
 
+      {/* HEDIS measure cards grid */}
+      {measures.length > 0 && (
+        <div className="qs-fade-in qs-fade-in-2">
+          <SectionHeader title="HEDIS Measures Overview" icon={<Activity size={18} />} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
+            {measures.map((m) => (
+              <MeasureProgressCard key={m.measure_id} measure={m} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Empty state when no measures are loaded yet */}
       {total === 0 && (
-        <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 p-5 text-sm text-warning-foreground">
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
           <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" />
           <div>
             <div className="font-semibold mb-0.5">No measure data to display</div>
-            <div className="text-xs text-muted-foreground">
+            <div className="text-xs text-amber-700">
               Compliance distribution will appear once HEDIS measures have been ingested for this plan year.
             </div>
           </div>
@@ -298,13 +390,12 @@ export default function QualityPage() {
         return (
           <div
             role="status"
-            className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 p-4 text-sm mb-4"
-            style={{ color: tokens.warningText }}
+            className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm mb-4 text-amber-800"
           >
             <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" />
             <div>
               <div className="font-semibold mb-0.5">No HEDIS measures available — this is unusual</div>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-amber-700">
                 STARS ratings depend on HEDIS measure data. Verify the quality pipeline is running
                 and that measure data has been ingested for this plan year.
               </div>
@@ -331,13 +422,12 @@ export default function QualityPage() {
         return (
           <div
             role="status"
-            className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 p-4 text-sm"
-            style={{ color: tokens.warningText }}
+            className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
           >
             <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" />
             <div>
               <div className="font-semibold mb-0.5">No STARS data available — this is unusual</div>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-amber-700">
                 STARS estimates are required for CMS bonus payments and quality bonuses.
                 Verify STARS calculation pipeline is configured.
               </div>
@@ -390,10 +480,6 @@ export default function QualityPage() {
         @keyframes qs-progressGrow {
           from { width: 0%; }
         }
-        @keyframes qs-shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
-        }
         @keyframes qs-gaugeStroke {
           from { stroke-dashoffset: 400; }
           to { stroke-dashoffset: 0; }
@@ -411,29 +497,11 @@ export default function QualityPage() {
         @media (max-width: 640px) {
           .qs-kpi-strip { grid-template-columns: 1fr !important; }
         }
-        .qs-measure-table tr:hover td { background: ${tokens.primarySoft} !important; }
-        .qs-tab-btn { cursor: pointer; transition: all 0.2s ease; position: relative; }
-        .qs-tab-btn:hover { color: ${tokens.primary} !important; }
-        .qs-tab-btn::after {
-          content: '';
-          position: absolute;
-          bottom: -2px;
-          left: 50%;
-          width: 0;
-          height: 2px;
-          background: ${tokens.primary};
-          transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
-          transform: translateX(-50%);
-        }
-        .qs-tab-btn:hover::after { width: 100%; }
-        .qs-tab-active::after { width: 100% !important; }
-        .qs-tab-btn:focus-visible { outline: 2px solid ${tokens.primary}; outline-offset: 2px; border-radius: 4px; }
+        .qs-measure-table tr:hover td { background: hsl(var(--primary) / 0.06) !important; }
         .qs-star-icon { transition: transform 0.2s ease; }
         .qs-star-icon:hover { animation: qs-starPulse 0.4s ease; }
         .qs-progress-bar { animation: qs-progressGrow 0.8s cubic-bezier(0.22, 1, 0.36, 1) both; }
         .qs-card-enter { animation: qs-fadeInUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
-        .qs-priority-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
-        .qs-priority-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
         .qs-gauge-path { animation: qs-gaugeStroke 1.2s cubic-bezier(0.22, 1, 0.36, 1) both; }
       `}</style>
 
@@ -459,35 +527,26 @@ export default function QualityPage() {
 
       {/* ── Top stripe: current STARS summary ── */}
       {currentStars > 0 && (
-        <div
-          className="premium-card premium-shadow mesh-pattern qs-fade-in flex items-center gap-7 mb-7 flex-wrap rounded-xl"
-          style={{
-            ...T.card,
-            background: `linear-gradient(135deg, ${tokens.slate900} 0%, ${tokens.slate800} 50%, ${tokens.slate900} 100%)`,
-            border: "1px solid rgba(255,255,255,0.06)",
-          }}
-        >
+        <div className="premium-card premium-shadow mesh-pattern qs-fade-in flex items-center gap-7 mb-7 flex-wrap rounded-xl bg-slate-900 border border-white/5 p-6">
           <StarsGauge rating={currentStars} />
           <div className="flex-1 min-w-[200px]">
-            <div
-              className="text-xs font-bold uppercase tracking-widest mb-2"
-              style={{ color: tokens.slate400 }}
-            >
+            <div className="text-xs font-bold uppercase tracking-widest mb-3 text-slate-400">
               Estimated STARS Rating
+            </div>
+            {/* Star icons row */}
+            <div className="mb-2">
+              {renderStars(currentStars)}
             </div>
             <div className="flex items-center gap-2 mb-2">
               {diffUp
-                ? <TrendingUp size={16} color={tokens.success} />
-                : <TrendingDown size={16} color={tokens.riskHigh} />}
-              <span
-                className="font-bold text-sm"
-                style={{ color: diffUp ? tokens.success : tokens.riskHigh }}
-              >
+                ? <TrendingUp size={16} className="text-emerald-400" />
+                : <TrendingDown size={16} className="text-red-400" />}
+              <span className={`font-bold text-sm ${diffUp ? "text-emerald-400" : "text-red-400"}`}>
                 {diffUp ? "+" : ""}{(diff ?? 0).toFixed(2)} projected change
               </span>
             </div>
             {summaryQ.data && (
-              <div className="text-xs" style={{ color: tokens.slate500 }}>
+              <div className="text-xs text-slate-500">
                 {summaryQ.data.total_measures} measures tracked &middot;{" "}
                 {summaryQ.data.measures_above_benchmark} above benchmark
               </div>
@@ -497,37 +556,28 @@ export default function QualityPage() {
       )}
 
       {/* ── Tab Bar ── */}
-      <div
-        className="qs-fade-in qs-fade-in-2 overflow-x-auto mb-6"
-        style={{
-          WebkitOverflowScrolling: "touch",
-          borderBottom: `2px solid ${C.borderLight}`,
-        } as React.CSSProperties}
-      >
+      <div className="qs-fade-in qs-fade-in-2 overflow-x-auto mb-6 border-b-2 border-slate-100">
         <div className="flex min-w-max">
-          {TABS.map((tab) => (
-            <button
-              key={tab}
-              className={`qs-tab-btn ${activeTab === tab ? "qs-tab-active" : ""}`}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                padding: "12px 22px",
-                fontSize: 14,
-                fontWeight: 600,
-                color: activeTab === tab ? C.primary : C.textMuted,
-                background: activeTab === tab ? `${C.primary}08` : "none",
-                border: "none",
-                borderBottom: activeTab === tab ? `2px solid ${C.primary}` : "2px solid transparent",
-                borderRadius: "8px 8px 0 0",
-                marginBottom: -2,
-                cursor: "pointer",
-                letterSpacing: "0.01em",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {tab}
-            </button>
-          ))}
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab;
+            return (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={[
+                  "relative px-[22px] py-3 text-[14px] font-semibold tracking-[0.01em] whitespace-nowrap",
+                  "rounded-tl-lg rounded-tr-lg -mb-0.5 border-none cursor-pointer transition-all duration-200",
+                  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 focus-visible:rounded",
+                  "after:content-[''] after:absolute after:bottom-[-2px] after:left-1/2 after:-translate-x-1/2 after:h-0.5 after:bg-primary after:transition-all after:duration-200",
+                  isActive
+                    ? "text-primary bg-primary/[0.03] after:w-full"
+                    : "text-slate-500 bg-transparent hover:text-primary after:w-0 hover:after:w-full",
+                ].join(" ")}
+              >
+                {tab}
+              </button>
+            );
+          })}
         </div>
       </div>
 

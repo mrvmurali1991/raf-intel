@@ -18,6 +18,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { TrendingDown, TrendingUp, DollarSign, ChevronRight } from "lucide-react";
 import { C, rafScoreColor } from "./shared";
 import type { ExtendedRafBreakdown } from "./shared";
+import { formatCurrency } from "@/lib/format";
 
 // ---- count-up hook ----------------------------------------------------------
 
@@ -67,9 +68,7 @@ function fmt(n: number | null | undefined, decimals = 3): string {
 
 function fmtDollar(n: number | null | undefined): string {
   if (n == null) return "—";
-  const abs = Math.abs(n);
-  const sign = n < 0 ? "-" : "+";
-  return `${sign}$${abs.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  return formatCurrency(Math.round(n), { showSign: n > 0 });
 }
 
 // CMS rough payment factor: ~$10,000 per 1.0 RAF per member per year

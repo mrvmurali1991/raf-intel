@@ -21,7 +21,7 @@ export interface ConfidenceTier {
   /** Tailwind text utility, e.g. "text-emerald-600 dark:text-emerald-400". */
   text: string;
   /** Tailwind color name used by components that need to parametrize gauges. */
-  color: "emerald" | "amber" | "red";
+  color: "emerald" | "amber" | "slate";
 }
 
 export function confidenceTier(pct: number): ConfidenceTier {
@@ -45,13 +45,15 @@ export function confidenceTier(pct: number): ConfidenceTier {
       color: "amber",
     };
   }
+  // Low confidence is gray — it signals uncertainty, not an error or danger.
+  // Red is reserved for actual validation failures / RADV blockers.
   return {
     tone: "low",
     label: "Low confidence",
-    ring: "ring-red-500/25",
-    bar: "bg-red-500",
-    text: "text-red-600 dark:text-red-400",
-    color: "red",
+    ring: "ring-slate-400/25",
+    bar: "bg-slate-400",
+    text: "text-slate-500 dark:text-slate-400",
+    color: "slate",
   };
 }
 

@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { C, formatDate, rafScoreColor, WithTooltip } from "./shared";
 import { calculateAge } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format";
 import type { Patient } from "@/types";
 import type { PatientProfile } from "@/lib/api";
 
@@ -772,13 +773,7 @@ export function HeroStrip({
                     count={revenueAtRisk}
                     label="Revenue at Risk"
                     borderColor="#0d9488"
-                    formatFn={(n) => {
-                      const abs = Math.abs(n);
-                      const sign = n < 0 ? "-" : "+";
-                      if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
-                      if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(0)}k`;
-                      return `${sign}$${abs.toFixed(0)}`;
-                    }}
+                    formatFn={(n) => formatCurrency(Math.round(n), { compact: true, showSign: n > 0 })}
                   />
                 </div>
               </WithTooltip>

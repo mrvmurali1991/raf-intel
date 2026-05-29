@@ -4,9 +4,9 @@ import React, { useState, useMemo, useEffect } from "react";
 import type { AnalysisResult, AIDiagnosis } from "@/types";
 import type { PatientEncountersResponse } from "@/lib/api";
 import {
-  EmptyState,
   ConfidencePill,
 } from "@/components/healthcare-ui";
+import { SectionBanner } from "@/components/ui/section-banner";
 import {
   C,
   formatDate,
@@ -95,14 +95,11 @@ export function EncountersTab({ encounters, encountersLoading, analyzeMutation, 
             >{yr}</button>
           ))}
         </div>
-        <EmptyState
-          title={`No encounters found${yearFilter !== "all" ? ` for ${yearFilter}` : ""}`}
-          icon={
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          }
-        />
+        <div className="px-4 py-3">
+          <SectionBanner
+            message={`No encounters found${yearFilter !== "all" ? ` for ${yearFilter}` : ""}.`}
+          />
+        </div>
       </Card>
     );
   }

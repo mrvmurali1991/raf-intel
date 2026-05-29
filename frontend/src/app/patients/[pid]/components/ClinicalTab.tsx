@@ -14,9 +14,9 @@ import type {
   VitalsLatest,
 } from "@/lib/api";
 import {
-  EmptyState,
   DataRow,
 } from "@/components/healthcare-ui";
+import { SectionBanner } from "@/components/ui/section-banner";
 import {
   C,
   formatDate,
@@ -500,7 +500,7 @@ export function ClinicalTab({
         {activeSection === "medications" && (
           <ClinicalSection title="Active Medications" loading={medsLoading}>
             {!medItems.length ? (
-              <EmptyState title="No active medications" />
+              <SectionBanner message="No active medications on record." />
             ) : (
               <SimpleTable
                 headers={["Drug", "Dose", "Frequency", "Date"]}
@@ -519,7 +519,7 @@ export function ClinicalTab({
           <ClinicalSection title="Vitals" loading={vitalsLoading}>
             {(() => {
               const v = (vitalsSuspects as ClinicalFindingsResponse)?.latest_vitals || (profile?.vitals?.latest as VitalsLatest | undefined);
-              if (!v) return <EmptyState title="No vitals recorded" />;
+              if (!v) return <SectionBanner message="No vitals recorded for this patient." />;
               const wt = v.weight != null ? Number(v.weight) : null;
               const ht = v.height != null ? Number(v.height) : null;
               const bmi = wt && ht ? (wt / ((ht / 100) ** 2)).toFixed(1) : null;
@@ -566,7 +566,7 @@ export function ClinicalTab({
               // labSuspects may carry a labs.results field not in the typed interface (extended backend response)
               type LabResultItem = { id?: number; result_text?: string; date?: string; encounter?: number };
               const labResults: LabResultItem[] = ((labSuspects as ClinicalFindingsResponse & { labs?: { results?: LabResultItem[] } })?.labs?.results ?? []);
-              if (!labResults.length && !labItems.length) return <EmptyState title="No lab results" />;
+              if (!labResults.length && !labItems.length) return <SectionBanner message="No lab results on record." />;
               const parsed = labResults.map((l) => {
                 const rt = l.result_text || "";
                 const nameMatch = rt.match(/^([^:]+):/);
@@ -619,7 +619,7 @@ export function ClinicalTab({
         {activeSection === "allergies" && (
           <ClinicalSection title="Allergies" loading={allergiesLoading}>
             {!allergyItems.length ? (
-              <EmptyState title="No allergies documented" />
+              <SectionBanner message="No allergies documented." />
             ) : (
               <FindingsList
                 items={allergyItems.map(
@@ -636,7 +636,7 @@ export function ClinicalTab({
         {activeSection === "immunizations" && (
           <ClinicalSection title="Immunizations" loading={immunizationsLoading}>
             {!immunizationItems.length ? (
-              <EmptyState title="No immunizations documented" />
+              <SectionBanner message="No immunizations documented." />
             ) : (
               <SimpleTable
                 headers={["Vaccine", "Date"]}
@@ -652,7 +652,7 @@ export function ClinicalTab({
         {activeSection === "family" && (
           <ClinicalSection title="Family History" loading={familyHistoryLoading}>
             {!familyItems.length ? (
-              <EmptyState title="No family history documented" />
+              <SectionBanner message="No family history documented." />
             ) : (
               <FindingsList
                 items={familyItems.map((fh: FamilyHistoryItem) => ({
@@ -667,7 +667,7 @@ export function ClinicalTab({
         {activeSection === "sdoh" && (
           <ClinicalSection title="Social Determinants of Health" loading={sdohLoading}>
             {!sdohItems.length ? (
-              <EmptyState title="No SDOH data available" />
+              <SectionBanner message="No SDOH data available." />
             ) : (
               <FindingsList
                 items={sdohItems.map(
@@ -684,7 +684,7 @@ export function ClinicalTab({
         {activeSection === "medgaps" && (
           <ClinicalSection title="Medication-Derived Gaps" loading={medGapsLoading}>
             {!medGapItems.length ? (
-              <EmptyState title="No medication gaps identified" />
+              <SectionBanner message="No medication gaps identified." />
             ) : (
               <FindingsList
                 items={medGapItems.map((g: MedicationGapItem) => ({

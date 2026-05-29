@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import type { MEATGap, MeatFilter } from "../_shared";
-import { EmptyState } from "../common/EmptyState";
 import { MEATRow } from "./MEATRow";
 
 /**
@@ -42,11 +41,26 @@ export function MEATSection({
   // Without knowing the HCC count locally we default to the neutral copy.
   if (!gaps.length)
     return (
-      <EmptyState
-        variant="neutral"
-        title="No HCCs require MEAT documentation"
-        subtitle="Either this patient has no risk-adjusted conditions for the selected year, or the panel is still loading. Switch year filter if expected HCCs are missing."
-      />
+      <div
+        role="note"
+        className="flex items-center gap-2 rounded-md bg-sky-50 dark:bg-sky-950/30 border border-sky-100 dark:border-sky-900 px-3 py-2 text-[12px] text-sky-800 dark:text-sky-200"
+      >
+        <svg
+          className="h-3.5 w-3.5 flex-shrink-0 text-sky-500"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <span>This patient has no open HCC documentation requirements for the selected year.</span>
+      </div>
     );
 
   const filtered = gaps

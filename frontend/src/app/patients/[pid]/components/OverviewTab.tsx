@@ -14,11 +14,12 @@ import type {
 import {
   RiskGauge,
   SectionHeader,
-  EmptyState,
   DataRow,
   ProgressBar,
 } from "@/components/healthcare-ui";
+import { SectionBanner } from "@/components/ui/section-banner";
 import { calculateAge } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format";
 import {
   C,
   formatDate,
@@ -197,7 +198,7 @@ function HCCPanel({ breakdown }: { breakdown: ExtendedRafBreakdown | undefined }
 
               {/* Right: weight + MEAT + Why? */}
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
-                <WithTooltip tip={`RAF coefficient: +${coeff.toFixed(3)}. Estimated annual revenue impact: $${Math.round(coeff * 10_000).toLocaleString()} per member per year at CMS rate.`}>
+                <WithTooltip tip={`RAF coefficient: +${coeff.toFixed(3)}. Estimated annual revenue impact: ${formatCurrency(Math.round(coeff * 10_000))} per member per year at CMS rate.`}>
                   <span
                     style={{
                       fontFamily: "monospace", fontSize: 14, fontWeight: 800,
@@ -1029,21 +1030,9 @@ export function OverviewTab({
               skeleton={<SkeletonRows count={5} twoCol={false} />}
             >
             {!encounters?.encounters?.length ? (
-              <EmptyState
-                title="No encounters found"
-                icon={
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                  </svg>
-                }
-              />
+              <div className="px-4 py-3">
+                <SectionBanner message="No encounters on record for this patient." />
+              </div>
             ) : (
               <div>
                 {encounters.encounters.slice(0, 5).map((enc: EncounterItem) => {
@@ -1161,19 +1150,20 @@ export function OverviewTab({
               skeleton={<SkeletonRows count={4} />}
             >
             {!recaptureItems.length ? (
-              <EmptyState
-                state={(profile?.data_completeness?.completeness_pct ?? 100) < 60 ? "no-data" : "complete"}
-                title={
-                  (profile?.data_completeness?.completeness_pct ?? 100) < 60
-                    ? "clinical notes missing — upload notes to find gaps"
-                    : `all conditions documented for ${selectedYear}`
-                }
-                cta={
-                  (profile?.data_completeness?.completeness_pct ?? 100) < 60
-                    ? { label: "Upload Notes", href: "#documents" }
-                    : undefined
-                }
-              />
+              <div className="px-4 py-3">
+                <SectionBanner
+                  message={
+                    (profile?.data_completeness?.completeness_pct ?? 100) < 60
+                      ? "Clinical notes incomplete — upload notes to detect documentation gaps."
+                      : `No open HCC documentation requirements for ${selectedYear}.`
+                  }
+                  variant={
+                    (profile?.data_completeness?.completeness_pct ?? 100) < 60
+                      ? "info"
+                      : "success"
+                  }
+                />
+              </div>
             ) : (
               <div>
                 {recaptureItems.map(

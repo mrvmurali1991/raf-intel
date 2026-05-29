@@ -335,13 +335,11 @@ export function MetricCard({
       }
       aria-label={isInteractive ? `${label}: ${value}. Click to drill down.` : undefined}
       className={cn(
-        // Spring hover lift — cubic-bezier(0.34, 1.56, 0.64, 1) gives the
-        // spring overshoot. Multi-layer shadow builds depth.
-        "transition-[box-shadow,transform] duration-200",
-        "hover:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.08),0_16px_40px_rgba(0,0,0,0.06)]",
-        "hover:-translate-y-0.5 hover:scale-[1.005]",
-        "active:translate-y-0 active:scale-100",
-        "[transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)]",
+        // Gentle hover lift — stays within shadow-sm budget.
+        "transition-[box-shadow,transform] duration-[180ms] ease-[ease]",
+        "hover:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.06)]",
+        "hover:-translate-y-px",
+        "active:translate-y-0",
         // Per-intent ring
         intentRing[intent],
         // Subtle left border accent — signals semantic intent at a glance

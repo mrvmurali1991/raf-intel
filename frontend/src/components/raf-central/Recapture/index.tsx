@@ -3,6 +3,7 @@
 import type { RecaptureCard as RecaptureCardType } from "../_shared";
 import { EmptyState } from "../common/EmptyState";
 import { RecaptureCard } from "./RecaptureCard";
+import { formatCurrency } from "@/lib/format";
 
 /**
  * RecaptureSection — HCC leakage view: prior-year HCCs missing in the
@@ -59,7 +60,7 @@ export function RecaptureSection({
       <div className={`flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2 text-xs ${rateTone}`}>
         <div>
           <strong>{leakagePct}%</strong> Y/Y leakage —{" "}
-          <strong>${totalRisk.toLocaleString()}</strong> revenue at risk across {deduped.length} gap
+          <strong>{formatCurrency(Math.round(totalRisk))}</strong> revenue at risk across {deduped.length} gap
           {deduped.length === 1 ? "" : "s"}.
         </div>
         <div className="text-[10px] opacity-80">

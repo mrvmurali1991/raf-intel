@@ -34,6 +34,7 @@ import { useMemo, useState, useCallback, useId } from "react";
 import { Button } from "@/components/ui/button";
 import { RefreshCcw, Sliders } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format";
 import type { SuspectCard, RecaptureCard } from "./_shared";
 
 export interface WhatIfSimulatorProps {
@@ -53,7 +54,7 @@ function fmtRaf(n: number): string {
 
 function fmtUsd(n: number): string {
   if (!Number.isFinite(n)) return "—";
-  return `$${Math.round(n).toLocaleString()}`;
+  return formatCurrency(Math.round(n));
 }
 
 /** Confidence-band half-width as a fraction of projected_raf. */

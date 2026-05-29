@@ -28,6 +28,7 @@ import {
   type HccGapPatient,
   type HccGapPatientsResponse,
 } from "@/lib/api";
+import { humanizeEvidence } from "@/lib/evidence-labels";
 
 // ---------------------------------------------------------------------------
 // Local design tokens (match providers/page.tsx)
@@ -475,7 +476,7 @@ function PatientRow({ patient }: { patient: HccGapPatient }) {
             <Chip
               bg={C.gray100}
               fg={C.gray600}
-              label={String(patient.evidence_type)}
+              label={humanizeEvidence(patient.evidence_type)}
             />
           )}
           {patient.last_encounter_date && (

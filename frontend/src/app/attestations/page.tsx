@@ -3,14 +3,11 @@
 /**
  * /attestations — Provider Attestation Queue
  *
- * Renders the full list of provider attestations with KPI summary cards,
- * status filter tabs, and a sortable table.
- *
  * Data:
- *   GET /api/attestations/dashboard  → { pending, attested, rejected, deferred, total, attestation_rate }
+ *   GET /api/attestations/dashboard  → { total, by_status: { pending, attested, rejected, deferred }, attestation_rate_pct }
  *   GET /api/attestations            → { count, offset, attestations: [...] }
  *
- * Attestation row fields (from provider_attestations table):
+ * Attestation row fields (provider_attestations table):
  *   id, patient_id, hcc_code, hcc_description, icd10_code, icd10_description,
  *   provider_npi, status, source, created_at, updated_at, attestation_type,
  *   reject_reason, clinical_justification, deferred_until
@@ -31,10 +28,10 @@ import {
   ChevronRight,
   RefreshCw,
   FileSignature,
+  Eye,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
-import { MetricCard } from "@/components/ui/metric-card";
 import {
   Table,
   TableHeader,
@@ -80,7 +77,6 @@ interface DashboardStats {
   rejected: number;
   deferred: number;
   attestation_rate: number;
-  avg_turnaround_hours?: number;
 }
 
 type StatusFilter = "all" | "pending" | "attested" | "rejected" | "deferred";
@@ -91,22 +87,58 @@ type StatusFilter = "all" | "pending" | "attested" | "rejected" | "deferred";
 
 const PAGE_SIZE = 25;
 
-const STATUS_TABS: { value: StatusFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "pending", label: "Pending" },
-  { value: "attested", label: "Attested" },
-  { value: "rejected", label: "Rejected" },
-  { value: "deferred", label: "Deferred" },
+const STATUS_TABS: {
+  value: StatusFilter;
+  label: string;
+  activeClass: string;
+}[] = [
+  {
+    value: "all",
+    label: "All",
+    activeClass: "bg-foreground text-background",
+  },
+  {
+    value: "pending",
+    label: "Pending",
+    activeClass: "bg-amber-500 text-white",
+  },
+  {
+    value: "attested",
+    label: "Completed",
+    activeClass: "bg-emerald-600 text-white",
+  },
+  {
+    value: "rejected",
+    label: "Rejected",
+    activeClass: "bg-red-600 text-white",
+  },
+  {
+    value: "deferred",
+    label: "Deferred",
+    activeClass: "bg-indigo-600 text-white",
+  },
 ];
 
 const STATUS_BADGE: Record<
   AttestationRow["status"],
   { label: string; className: string }
 > = {
-  pending:  { label: "Pending",  className: "bg-amber-100 text-amber-800" },
-  attested: { label: "Attested", className: "bg-emerald-100 text-emerald-800" },
-  rejected: { label: "Rejected", className: "bg-red-100 text-red-800" },
-  deferred: { label: "Deferred", className: "bg-indigo-100 text-indigo-800" },
+  pending: {
+    label: "Pending",
+    className: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  },
+  attested: {
+    label: "Completed",
+    className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+  },
+  rejected: {
+    label: "Rejected",
+    className: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+  },
+  deferred: {
+    label: "Deferred",
+    className: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300",
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -116,9 +148,13 @@ const STATUS_BADGE: Record<
 async function fetchDashboard(): Promise<DashboardStats> {
   const { data } = await api.get<{
     total: number;
-    by_status: { pending: number; attested: number; rejected: number; deferred: number };
+    by_status: {
+      pending: number;
+      attested: number;
+      rejected: number;
+      deferred: number;
+    };
     attestation_rate_pct: number;
-    avg_turnaround_hours?: number;
   }>("/api/attestations/dashboard", { timeout: 15_000 });
   return {
     total: data.total,
@@ -127,7 +163,6 @@ async function fetchDashboard(): Promise<DashboardStats> {
     rejected: data.by_status?.rejected ?? 0,
     deferred: data.by_status?.deferred ?? 0,
     attestation_rate: (data.attestation_rate_pct ?? 0) / 100,
-    avg_turnaround_hours: data.avg_turnaround_hours,
   };
 }
 
@@ -145,6 +180,82 @@ async function fetchAttestations(
     { timeout: 15_000 }
   );
   return data;
+}
+
+// ---------------------------------------------------------------------------
+// KPI strip
+// ---------------------------------------------------------------------------
+
+interface KpiStripProps {
+  stats: DashboardStats | undefined;
+  loading: boolean;
+}
+
+function KpiStrip({ stats, loading }: KpiStripProps) {
+  const items = [
+    {
+      label: "Pending",
+      value: stats?.pending ?? 0,
+      className: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-900/20 dark:border-amber-800",
+      icon: <Clock size={13} aria-hidden="true" />,
+    },
+    {
+      label: "Completed",
+      value: stats?.attested ?? 0,
+      className: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-900/20 dark:border-emerald-800",
+      icon: <CheckCircle2 size={13} aria-hidden="true" />,
+    },
+    {
+      label: "Rejected",
+      value: stats?.rejected ?? 0,
+      className: "text-red-700 bg-red-50 border-red-200 dark:text-red-300 dark:bg-red-900/20 dark:border-red-800",
+      icon: <XCircle size={13} aria-hidden="true" />,
+    },
+    {
+      label: "Deferred",
+      value: stats?.deferred ?? 0,
+      className: "text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-300 dark:bg-indigo-900/20 dark:border-indigo-800",
+      icon: <AlertCircle size={13} aria-hidden="true" />,
+    },
+    {
+      label: "Total",
+      value: stats?.total ?? 0,
+      className: "text-foreground bg-muted border-border",
+      icon: <ClipboardCheck size={13} aria-hidden="true" />,
+    },
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex flex-wrap gap-2 mb-5" aria-busy="true" aria-label="Loading KPIs">
+        {items.map((item) => (
+          <div
+            key={item.label}
+            className="h-7 w-24 rounded-full bg-muted animate-pulse"
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2 mb-5" role="list" aria-label="Attestation summary">
+      {items.map((item) => (
+        <div
+          key={item.label}
+          role="listitem"
+          className={[
+            "inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[12px] font-semibold leading-none whitespace-nowrap",
+            item.className,
+          ].join(" ")}
+        >
+          {item.icon}
+          <span>{item.label}:</span>
+          <span className="tabular-nums">{item.value}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -237,71 +348,36 @@ export default function AttestationsPage() {
         }
       />
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4 mb-6">
-        <MetricCard
-          label="Total"
-          value={statsLoading ? "—" : (stats?.total ?? 0) === 0 ? "None yet" : String(stats!.total)}
-          subtitle={(stats?.total ?? 0) === 0 && !statsLoading ? "Accept suspects to create attestations" : undefined}
-          icon={<ClipboardCheck size={18} />}
-          loading={statsLoading}
-        />
-        <MetricCard
-          label="Pending"
-          value={statsLoading ? "—" : (stats?.pending ?? 0) === 0 ? "0 of " + String(stats?.total ?? 0) : String(stats!.pending)}
-          icon={<Clock size={18} />}
-          intent="warning"
-          loading={statsLoading}
-        />
-        <MetricCard
-          label="Attested"
-          value={statsLoading ? "—" : (stats?.attested ?? 0) === 0 ? "0 of " + String(stats?.total ?? 0) : String(stats!.attested)}
-          icon={<CheckCircle2 size={18} />}
-          intent="success"
-          loading={statsLoading}
-        />
-        <MetricCard
-          label="Rejected"
-          value={statsLoading ? "—" : String(stats?.rejected ?? 0)}
-          icon={<XCircle size={18} />}
-          intent="danger"
-          loading={statsLoading}
-        />
-        <MetricCard
-          label="Deferred"
-          value={statsLoading ? "—" : String(stats?.deferred ?? 0)}
-          icon={<AlertCircle size={18} />}
-          loading={statsLoading}
-        />
-        <MetricCard
-          label="Attestation Rate"
-          value={statsLoading ? "—" : (stats?.total ?? 0) === 0 ? "Not yet started" : `${((stats?.attestation_rate ?? 0) * 100).toFixed(1)}%`}
-          subtitle={(stats?.total ?? 0) === 0 && !statsLoading ? "Begin by accepting suspects" : undefined}
-          icon={<CheckCircle2 size={18} />}
-          intent="success"
-          loading={statsLoading}
-        />
-      </div>
+      {/* Compact KPI strip */}
+      <KpiStrip stats={stats} loading={statsLoading} />
 
       {/* Filters row */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        {/* Status tabs */}
-        <div className="flex gap-1 bg-muted rounded-lg p-1">
-          {STATUS_TABS.map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => handleStatusTab(tab.value)}
-              aria-pressed={statusFilter === tab.value}
-              className={[
-                "px-3.5 py-1.5 rounded-md border-none text-[13px] cursor-pointer transition-all",
-                statusFilter === tab.value
-                  ? "bg-card shadow font-semibold text-foreground"
-                  : "bg-transparent font-normal text-muted-foreground hover:text-foreground",
-              ].join(" ")}
-            >
-              {tab.label}
-            </button>
-          ))}
+        {/* Status tabs — pill style */}
+        <div
+          className="flex flex-wrap gap-1.5"
+          role="tablist"
+          aria-label="Filter by status"
+        >
+          {STATUS_TABS.map((tab) => {
+            const isActive = statusFilter === tab.value;
+            return (
+              <button
+                key={tab.value}
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => handleStatusTab(tab.value)}
+                className={[
+                  "px-3.5 py-1.5 rounded-full border text-[12px] font-semibold leading-none cursor-pointer transition-all whitespace-nowrap",
+                  isActive
+                    ? tab.activeClass + " border-transparent shadow-sm"
+                    : "bg-card border-border text-muted-foreground hover:text-foreground hover:bg-muted",
+                ].join(" ")}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Search */}
@@ -358,63 +434,103 @@ export default function AttestationsPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted hover:bg-muted">
-                {["Patient ID", "HCC", "ICD-10", "Provider NPI", "Source", "Status", "Created"].map(
-                  (h) => (
-                    <TableHead
-                      key={h}
-                      scope="col"
-                      className="px-3.5 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap border-b border-border"
-                    >
-                      {h}
-                    </TableHead>
-                  )
-                )}
+                {[
+                  "Patient",
+                  "Condition",
+                  "Provider NPI",
+                  "Submitted",
+                  "Status",
+                  "Action",
+                ].map((h) => (
+                  <TableHead
+                    key={h}
+                    scope="col"
+                    className="px-3.5 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap border-b border-border"
+                  >
+                    {h}
+                  </TableHead>
+                ))}
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.map((row, idx) => {
-                const badge = STATUS_BADGE[row.status] ?? STATUS_BADGE.pending;
+                const badge =
+                  STATUS_BADGE[row.status] ?? STATUS_BADGE.pending;
                 return (
                   <TableRow
                     key={row.id}
-                    className={idx % 2 === 1 ? "bg-muted/40" : "bg-card"}
+                    className={
+                      idx % 2 === 1
+                        ? "bg-muted/40 hover:bg-muted/70"
+                        : "bg-card hover:bg-muted/30"
+                    }
                   >
-                    <TableCell className="px-3.5 py-2.5 text-[13px] text-foreground align-top">
-                      {row.patient_id}
+                    {/* Patient */}
+                    <TableCell className="px-3.5 py-2.5 align-middle">
+                      <span className="text-[13px] font-semibold text-foreground">
+                        Patient {row.patient_id}
+                      </span>
                     </TableCell>
-                    <TableCell className="px-3.5 py-2.5 align-top">
-                      <span className="text-[13px] font-semibold text-foreground">{row.hcc_code}</span>
+
+                    {/* Condition — HCC + ICD-10 stacked */}
+                    <TableCell className="px-3.5 py-2.5 align-middle max-w-[260px]">
+                      <span className="text-[13px] font-semibold text-foreground">
+                        HCC {row.hcc_code}
+                      </span>
                       {row.hcc_description && (
-                        <div className="text-[11px] text-muted-foreground mt-0.5">
+                        <div className="text-[11px] text-muted-foreground mt-0.5 leading-snug truncate">
                           {row.hcc_description}
                         </div>
                       )}
-                    </TableCell>
-                    <TableCell className="px-3.5 py-2.5 align-top">
-                      <span className="font-mono text-[13px] text-foreground">{row.icd10_code}</span>
-                      {row.icd10_description && (
-                        <div className="text-[11px] text-muted-foreground mt-0.5">
-                          {row.icd10_description}
+                      {row.icd10_code && (
+                        <div className="text-[11px] font-mono text-muted-foreground mt-0.5">
+                          {row.icd10_code}
+                          {row.icd10_description && (
+                            <span className="font-sans ml-1 non-italic">
+                              — {row.icd10_description}
+                            </span>
+                          )}
                         </div>
                       )}
                     </TableCell>
-                    <TableCell className="px-3.5 py-2.5 font-mono text-[12px] text-foreground align-top">
-                      {row.provider_npi}
-                    </TableCell>
-                    <TableCell className="px-3.5 py-2.5 align-top">
-                      <span className="px-2 py-0.5 rounded bg-muted text-[11px] text-muted-foreground">
-                        {row.source}
+
+                    {/* Provider NPI */}
+                    <TableCell className="px-3.5 py-2.5 align-middle">
+                      <span className="font-mono text-[12px] text-foreground">
+                        {row.provider_npi}
                       </span>
                     </TableCell>
-                    <TableCell className="px-3.5 py-2.5 align-top">
+
+                    {/* Date submitted */}
+                    <TableCell className="px-3.5 py-2.5 text-[12px] text-muted-foreground whitespace-nowrap align-middle">
+                      {new Date(row.created_at).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </TableCell>
+
+                    {/* Status badge */}
+                    <TableCell className="px-3.5 py-2.5 align-middle">
                       <span
-                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${badge.className}`}
+                        className={[
+                          "inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold",
+                          badge.className,
+                        ].join(" ")}
                       >
                         {badge.label}
                       </span>
                     </TableCell>
-                    <TableCell className="px-3.5 py-2.5 text-[12px] text-muted-foreground whitespace-nowrap align-top">
-                      {new Date(row.created_at).toLocaleDateString()}
+
+                    {/* Action */}
+                    <TableCell className="px-3.5 py-2.5 align-middle">
+                      <button
+                        aria-label={`Review attestation for patient ${row.patient_id}`}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-[12px] font-medium text-foreground cursor-pointer hover:bg-muted transition-colors whitespace-nowrap"
+                      >
+                        <Eye size={13} aria-hidden="true" />
+                        Review
+                      </button>
                     </TableCell>
                   </TableRow>
                 );

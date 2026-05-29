@@ -18,9 +18,9 @@ import {
 const card: React.CSSProperties = {
   background: "hsl(var(--card))",
   border: "1px solid hsl(var(--border))",
-  borderRadius: 14,
-  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-  padding: 24,
+  borderRadius: 12,
+  boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+  padding: 20,
 };
 
 // ---------------------------------------------------------------------------
@@ -103,7 +103,9 @@ export function TopOpportunitiesTile({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          paddingBottom: 16,
           marginBottom: 16,
+          borderBottom: "1px solid hsl(var(--border))",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

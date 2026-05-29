@@ -72,6 +72,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { humanizeEvidence } from "@/lib/evidence-labels";
 
 // ── Dynamic import: defer SuspectDrawer expanded-row detail (~30 kB) ──
 const SuspectDrawerDynamic = dynamic(
@@ -165,13 +166,16 @@ function evidenceIcon(type: string | undefined, size = 12) {
 }
 
 function evidenceLabelShort(type: string | undefined): string {
+  if (!type) return "Clinical";
+  // Known values get fixed short labels; everything else goes through humanizeEvidence
+  // which maps backend field names (evidence_v1, etc.) to readable strings.
   switch (type) {
     case "medication": return "Medication";
     case "lab": return "Lab";
     case "imaging": return "Imaging";
     case "referral": return "Referral";
     case "historical": return "Historical";
-    default: return "Clinical";
+    default: return humanizeEvidence(type);
   }
 }
 
@@ -230,9 +234,9 @@ function SkeletonRows() {
           style={{ animationDelay: `${i * 80}ms` }}
         >
           {/* Patient */}
-          <TableCell className="py-4 pl-6">
+          <TableCell className="py-2.5 pl-6">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-muted shrink-0" />
+              <div className="w-8 h-8 rounded-lg bg-muted shrink-0" />
               <div className="flex flex-col gap-1.5 flex-1 min-w-0">
                 <div className="h-3 w-2/3 rounded bg-muted" />
                 <div className="h-2.5 w-1/2 rounded bg-muted/70" />
@@ -240,37 +244,37 @@ function SkeletonRows() {
             </div>
           </TableCell>
           {/* Condition */}
-          <TableCell className="py-4">
+          <TableCell className="py-2.5">
             <div className="flex flex-col gap-1.5">
               <div className="h-3 w-4/5 rounded bg-muted" />
               <div className="h-2.5 w-3/5 rounded bg-muted/70" />
             </div>
           </TableCell>
           {/* Evidence */}
-          <TableCell className="py-4">
+          <TableCell className="py-2.5">
             <div className="h-5 w-24 rounded-full bg-muted" />
           </TableCell>
           {/* Confidence */}
-          <TableCell className="py-4">
+          <TableCell className="py-2.5">
             <div className="flex items-center gap-2">
               <div className="flex-1 h-1.5 rounded bg-muted" />
               <div className="w-14 h-3 rounded bg-muted" />
             </div>
           </TableCell>
           {/* RAF */}
-          <TableCell className="py-4 text-right">
+          <TableCell className="py-2.5 text-right">
             <div className="h-3.5 w-14 rounded bg-muted ml-auto" />
           </TableCell>
           {/* Revenue */}
-          <TableCell className="py-4 text-right">
+          <TableCell className="py-2.5 text-right">
             <div className="h-3.5 w-16 rounded bg-muted ml-auto" />
           </TableCell>
           {/* Status */}
-          <TableCell className="py-4 text-right">
+          <TableCell className="py-2.5 text-right">
             <div className="h-5 w-20 rounded-full bg-muted ml-auto" />
           </TableCell>
           {/* Actions */}
-          <TableCell className="py-4 pr-6 text-right">
+          <TableCell className="py-2.5 pr-6 text-right">
             <div className="h-7 w-16 rounded-lg bg-muted ml-auto" />
           </TableCell>
         </TableRow>
@@ -753,69 +757,105 @@ export default function SuspectsPage() {
           actions={<HelpButton />}
         />
 
-        {/* ── Hero Stats Strip ───────────────────────────────────── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-          {[
-            {
-              label: "Open Suspects",
-              value: isLoading ? "—" : heroStats.openCount.toLocaleString(),
-              sub: `In MY ${measurementYear}`,
-              icon: ClipboardList,
-              tone: C.blue,
-            },
-            {
-              label: "Est. RAF Uplift",
-              value: isLoading ? "—" : heroStats.totalUplift > 0 ? `+${heroStats.totalUplift.toFixed(2)}` : "Not yet started",
-              sub: heroStats.totalUplift > 0 ? "Sum of coefficients" : "Accept suspects to calculate",
-              icon: TrendingUp,
-              tone: C.brand,
-            },
-            {
-              label: "Est. Annual Revenue",
-              value: isLoading ? "—" : formatCurrency(heroStats.totalRevenue),
-              sub: heroStats.totalRevenue > 0 ? `at $${REVENUE_PER_RAF.toLocaleString()}/RAF point` : "Accept suspects to calculate",
-              icon: DollarSign,
-              tone: C.low,
-            },
-            {
-              label: "Avg Confidence",
-              value: isLoading ? "—" : heroStats.avgConf > 0 ? `${(heroStats.avgConf * 100).toFixed(0)}%` : "—",
-              sub: heroStats.openCount > 0 ? "Across open suspects" : "No open suspects",
-              icon: Activity,
-              tone: C.medium,
-            },
-          ].map(({ label, value, sub, icon: Icon, tone }) => (
-            <div
-              key={label}
-              className="bg-card border border-border rounded-lg px-4 py-3.5 flex items-center gap-3.5 shadow-sm"
-            >
-              <div
-                className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-                style={{ backgroundColor: `${tone}18`, color: tone }}
-              >
-                <Icon size={17} strokeWidth={2.25} aria-hidden="true" />
-              </div>
-              <div className="min-w-0 flex flex-col gap-0.5">
-                <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  {label}
-                </span>
-                <span className="text-xl font-bold text-foreground leading-tight tabular-nums tracking-tight">
-                  {value}
-                </span>
-                <span className="text-[11px] text-muted-foreground tabular-nums">
-                  {sub}
-                </span>
-              </div>
-            </div>
-          ))}
+        {/* ── Hero Stats Strip — compact KPI pill row ─────────────── */}
+        <div
+          className="flex items-center gap-1.5 flex-wrap mb-5 px-4 py-2.5 bg-card border border-border rounded-lg shadow-sm"
+          aria-label="Key performance indicators"
+        >
+          {isLoading ? (
+            <div className="h-4 w-64 rounded bg-muted animate-pulse" />
+          ) : (
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-foreground cursor-default">
+                    <ClipboardList size={13} style={{ color: C.blue }} aria-hidden="true" />
+                    <span className="text-muted-foreground">Open:</span>
+                    <span className="tabular-nums font-bold">{heroStats.openCount.toLocaleString()}</span>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Open suspects in MY {measurementYear}</TooltipContent>
+              </Tooltip>
+
+              <span className="text-muted-foreground/40 text-[12px] select-none" aria-hidden="true">|</span>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-foreground cursor-default">
+                    <Activity size={13} style={{ color: C.medium }} aria-hidden="true" />
+                    <span className="text-muted-foreground">High Confidence:</span>
+                    <span className="tabular-nums font-bold">
+                      {allSuspects.filter((s) => (s.confidence_score ?? 0) >= 0.85 && (s.status || "open") === "open").length}
+                    </span>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Open suspects with confidence score &ge;85%</TooltipContent>
+              </Tooltip>
+
+              <span className="text-muted-foreground/40 text-[12px] select-none" aria-hidden="true">|</span>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-foreground cursor-default">
+                    <DollarSign size={13} style={{ color: C.low }} aria-hidden="true" />
+                    <span className="text-muted-foreground">Revenue at Risk:</span>
+                    <span className="tabular-nums font-bold" style={{ color: C.low }}>
+                      {heroStats.totalRevenue > 0
+                        ? `$${Math.round(heroStats.totalRevenue / 1000)}K`
+                        : "—"}
+                    </span>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  Estimated annual revenue = RAF uplift &times; ${REVENUE_PER_RAF.toLocaleString()}/point (CMS V28, 2026)
+                </TooltipContent>
+              </Tooltip>
+
+              <span className="text-muted-foreground/40 text-[12px] select-none" aria-hidden="true">|</span>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-foreground cursor-default">
+                    <TrendingUp size={13} style={{ color: C.brand }} aria-hidden="true" />
+                    <span className="text-muted-foreground">Avg Confidence:</span>
+                    <span className="tabular-nums font-bold">
+                      {heroStats.avgConf > 0 ? `${(heroStats.avgConf * 100).toFixed(0)}%` : "—"}
+                    </span>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Average AI confidence score across open suspects</TooltipContent>
+              </Tooltip>
+            </>
+          )}
         </div>
 
         {/* ── Filter Strip ───────────────────────────────────────── */}
         <div className="flex items-center gap-2 flex-wrap mb-3.5">
 
+          {/* Search — first in visual order */}
+          <div className="relative shrink-0">
+            <Search
+              size={13}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+              aria-hidden="true"
+            />
+            <input
+              type="text"
+              placeholder="Search suspects…"
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
+              onKeyDown={(e) => e.stopPropagation()}
+              aria-label="Search suspects"
+              className="h-8 w-[200px] rounded-lg border border-border bg-card pl-7 pr-3 text-[12px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary transition-all"
+            />
+          </div>
+
+          {/* Divider */}
+          <div className="w-px h-5 bg-border shrink-0" aria-hidden="true" />
+
           {/* Primary status chips */}
           <div
-            className="inline-flex items-center bg-card border border-border rounded-lg p-0.5 gap-0.5 h-9"
+            className="inline-flex items-center bg-card border border-border rounded-lg p-0.5 gap-0.5 h-8"
             role="group"
             aria-label="Status filter"
           >
@@ -834,7 +874,7 @@ export default function SuspectsPage() {
                       onKeyDown={(e) => e.stopPropagation()}
                       aria-pressed={active}
                       className={cn(
-                        "inline-flex items-center gap-1.5 h-7 px-3 rounded-md text-[12px] font-semibold transition-all duration-150 border-0 cursor-pointer whitespace-nowrap",
+                        "inline-flex items-center gap-1.5 h-6 px-3 rounded-md text-[12px] font-semibold transition-all duration-150 border-0 cursor-pointer whitespace-nowrap",
                         active
                           ? "bg-foreground text-background"
                           : "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -874,7 +914,7 @@ export default function SuspectsPage() {
                   aria-controls={`${moreMenuId}-menu`}
                   onClick={() => setMoreOpen((o) => !o)}
                   className={cn(
-                    "inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg border text-[12px] font-semibold transition-all duration-150 cursor-pointer",
+                    "inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border text-[12px] font-semibold transition-all duration-150 cursor-pointer",
                     moreActiveCount > 0
                       ? "border-primary/30 bg-primary/8 text-primary"
                       : "border-border bg-card text-muted-foreground hover:bg-muted"
@@ -1070,7 +1110,7 @@ export default function SuspectsPage() {
             <TooltipTrigger asChild>
               <button
                 onClick={() => setSortField((f) => f === "confidence" ? "raf" : f === "raf" ? "patient" : "confidence")}
-                className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg border border-border bg-card text-muted-foreground text-[12px] font-semibold cursor-pointer hover:bg-muted transition-colors"
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-card text-muted-foreground text-[12px] font-semibold cursor-pointer hover:bg-muted transition-colors"
               >
                 Sort: {sortField === "confidence" ? "Confidence" : sortField === "raf" ? "RAF lift" : "Patient"}
               </button>
@@ -1087,38 +1127,17 @@ export default function SuspectsPage() {
           {hasActiveFilters && (
             <button
               onClick={clearAllFilters}
-              className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full border border-dashed border-border bg-transparent text-muted-foreground text-[12px] font-semibold cursor-pointer hover:border-foreground/30 transition-colors"
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-dashed border-border bg-transparent text-muted-foreground text-[12px] font-semibold cursor-pointer hover:border-foreground/30 transition-colors"
             >
               <X size={12} aria-hidden="true" /> Clear filters
             </button>
           )}
 
-          {/* Divider */}
-          <div className="w-px h-6 bg-border shrink-0 mx-1" aria-hidden="true" />
-
-          {/* Search */}
-          <div className="relative shrink-0">
-            <Search
-              size={14}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-              aria-hidden="true"
-            />
-            <input
-              type="text"
-              placeholder="Search suspects…"
-              value={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
-              onKeyDown={(e) => e.stopPropagation()}
-              aria-label="Search suspects"
-              className="h-9 w-[220px] rounded-lg border border-border bg-card pl-8 pr-3 text-[12px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary transition-all"
-            />
-          </div>
-
           {/* Export */}
           <Button
             onClick={exportSuspectsCSV}
             aria-label="Export suspects as CSV"
-            className="h-9 gap-1.5 text-[12px] font-semibold shrink-0"
+            className="h-8 gap-1.5 text-[12px] font-semibold shrink-0"
             size="sm"
           >
             <FileDown size={13} aria-hidden="true" />
@@ -1126,32 +1145,34 @@ export default function SuspectsPage() {
           </Button>
         </div>
 
-        {/* Count indicator */}
-        <p className="text-[12px] font-semibold text-muted-foreground tabular-nums mb-2">
-          Showing {filteredSorted.length.toLocaleString()} of {allSuspects.length.toLocaleString()}
-        </p>
-
-        {/* ── Keyboard hints ─────────────────────────────────────── */}
+        {/* ── Meta row: count + keyboard hints ──────────────────── */}
         <div
-          className="flex items-center gap-4 flex-wrap mb-2 text-[11px] text-muted-foreground"
+          className="flex items-center justify-between flex-wrap gap-2 mb-2"
           aria-label="Keyboard shortcuts: use Up/Down or J/K to navigate rows, then A to accept, D to dismiss, R to open chart"
         >
-          <span className="font-semibold text-foreground/70">Keyboard shortcuts:</span>
-          {(
-            [
-              ["Up/Down", "Navigate rows"],
-              ["A", "Accept focused"],
-              ["D", "Dismiss focused"],
-              ["R", "Open chart"],
-            ] as [string, string][]
-          ).map(([key, desc]) => (
-            <span key={key} className="inline-flex items-center gap-1">
-              <kbd className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded border border-border bg-muted font-mono text-[11px] font-bold text-muted-foreground shadow-[0_1px_1px_rgba(0,0,0,0.06)]">
-                {key}
-              </kbd>
-              <span>{desc}</span>
-            </span>
-          ))}
+          <p className="text-[12px] font-semibold text-muted-foreground tabular-nums">
+            Showing {Math.min(filteredSorted.length, (page + 1) * PAGE_SIZE).toLocaleString()} of {filteredSorted.length.toLocaleString()}
+            {filteredSorted.length !== allSuspects.length && (
+              <span className="font-normal"> (filtered from {allSuspects.length.toLocaleString()})</span>
+            )}
+          </p>
+          <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+            {(
+              [
+                ["↑↓", "Navigate"],
+                ["A", "Accept"],
+                ["D", "Dismiss"],
+                ["R", "Chart"],
+              ] as [string, string][]
+            ).map(([key, desc]) => (
+              <span key={key} className="inline-flex items-center gap-1">
+                <kbd className="inline-flex items-center justify-center min-w-[20px] h-4.5 px-1 rounded border border-border bg-muted font-mono text-[10px] font-bold text-muted-foreground shadow-[0_1px_1px_rgba(0,0,0,0.06)]">
+                  {key}
+                </kbd>
+                <span>{desc}</span>
+              </span>
+            ))}
+          </div>
         </div>
 
         {/* ── Suspects Table ─────────────────────────────────────── */}
@@ -1302,7 +1323,7 @@ export default function SuspectsPage() {
                       }}
                     >
                       {/* Patient cell */}
-                      <TableCell className="py-4 pl-6">
+                      <TableCell className="py-2.5 pl-6">
                         <div className="flex items-center gap-3 min-w-0">
                           {isOpen ? (
                             <input
@@ -1318,7 +1339,7 @@ export default function SuspectsPage() {
                           )}
                           <div
                             aria-hidden="true"
-                            className="w-9 h-9 rounded-xl flex items-center justify-center text-[12px] font-bold text-white shrink-0 shadow-inner"
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white shrink-0 shadow-inner"
                             style={{
                               background: `linear-gradient(135deg, ${aColor}, ${aColor}CC)`,
                             }}
@@ -1337,7 +1358,7 @@ export default function SuspectsPage() {
                       </TableCell>
 
                       {/* Condition + rationale */}
-                      <TableCell className="py-4 min-w-0 max-w-[320px]">
+                      <TableCell className="py-2.5 min-w-0 max-w-[320px]">
                         <div className="flex flex-col gap-1 min-w-0">
                           <span
                             className="text-[14px] font-semibold text-foreground truncate tracking-[-0.005em]"
@@ -1387,7 +1408,7 @@ export default function SuspectsPage() {
                       </TableCell>
 
                       {/* Evidence pill */}
-                      <TableCell className="py-4">
+                      <TableCell className="py-2.5">
                         {(() => {
                           const evidenceTooltips: Record<string, string> = {
                             medication: "Medication — a prescribed drug suggests this condition may be active",
@@ -1412,7 +1433,7 @@ export default function SuspectsPage() {
                       </TableCell>
 
                       {/* Confidence bar */}
-                      <TableCell className="py-4 min-w-[140px]">
+                      <TableCell className="py-2.5 min-w-[140px]">
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div className="flex flex-col gap-1 min-w-0 cursor-help">
@@ -1461,7 +1482,7 @@ export default function SuspectsPage() {
                       </TableCell>
 
                       {/* RAF lift */}
-                      <TableCell className="py-4 text-right">
+                      <TableCell className="py-2.5 text-right">
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div className="inline-flex flex-col items-end gap-0.5 cursor-help">
@@ -1483,7 +1504,7 @@ export default function SuspectsPage() {
                       </TableCell>
 
                       {/* Revenue — bold, teal for positive $ */}
-                      <TableCell className="py-4 text-right">
+                      <TableCell className="py-2.5 text-right">
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <span
@@ -1502,7 +1523,7 @@ export default function SuspectsPage() {
                       </TableCell>
 
                       {/* Status pill */}
-                      <TableCell className="py-4 text-right">
+                      <TableCell className="py-2.5 text-right">
                         <span
                           className="inline-flex items-center gap-1.5 h-[22px] px-2.5 rounded-full border text-[11px] font-bold tracking-[0.02em]"
                           style={{
@@ -1523,7 +1544,7 @@ export default function SuspectsPage() {
 
                       {/* Actions */}
                       <TableCell
-                        className="py-4 pr-6 text-right"
+                        className="py-2.5 pr-6 text-right"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="inline-flex items-center gap-1.5 justify-end">
@@ -1641,30 +1662,40 @@ export default function SuspectsPage() {
 
         {/* ── Pagination ─────────────────────────────────────────── */}
         {!isLoading && filteredSorted.length > PAGE_SIZE && (
-          <div className="flex items-center justify-center gap-4 mt-5">
-            <Button
-              variant="outline"
-              size="icon"
-              disabled={page === 0}
-              onClick={() => setPage((p) => p - 1)}
-              aria-label="Previous page"
-              className="w-9 h-9"
-            >
-              <ChevronLeft size={16} aria-hidden="true" />
-            </Button>
-            <span className="text-[13px] font-semibold text-muted-foreground tabular-nums">
-              Page {page + 1} of {totalPages}
+          <div className="flex items-center justify-between mt-4 px-1">
+            <span className="text-[12px] text-muted-foreground tabular-nums">
+              Showing{" "}
+              <span className="font-semibold text-foreground">
+                {(page * PAGE_SIZE + 1).toLocaleString()}–{Math.min((page + 1) * PAGE_SIZE, filteredSorted.length).toLocaleString()}
+              </span>
+              {" "}of{" "}
+              <span className="font-semibold text-foreground">{filteredSorted.length.toLocaleString()}</span>
             </span>
-            <Button
-              variant="outline"
-              size="icon"
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage((p) => p + 1)}
-              aria-label="Next page"
-              className="w-9 h-9"
-            >
-              <ChevronRight size={16} aria-hidden="true" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                disabled={page === 0}
+                onClick={() => setPage((p) => p - 1)}
+                aria-label="Previous page"
+                className="w-8 h-8"
+              >
+                <ChevronLeft size={15} aria-hidden="true" />
+              </Button>
+              <span className="text-[12px] font-semibold text-muted-foreground tabular-nums min-w-[72px] text-center">
+                {page + 1} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage((p) => p + 1)}
+                aria-label="Next page"
+                className="w-8 h-8"
+              >
+                <ChevronRight size={15} aria-hidden="true" />
+              </Button>
+            </div>
           </div>
         )}
 

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, ThumbsUp, ThumbsDown, MessageSquareWarning } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import {
   useAcceptSuspectCentral,
@@ -58,16 +58,14 @@ export function SuspectCardView({
   const [queryText, setQueryText] = useState("");
   const [querySubmitting, setQuerySubmitting] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
-  const queryTriggerRef = useRef<HTMLButtonElement | null>(null);
   const queryTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const queryCloseBtnRef = useRef<HTMLButtonElement | null>(null);
   const queryDialogRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
 
-  // Focus management for the Request-docs dialog (UX review blocker #2):
+  // Focus management for the Request-docs dialog:
   //   - Esc closes the dialog
   //   - Tab is trapped between the textarea, Cancel, and Send buttons
-  //   - Focus returns to the originating "Request docs" button on close
   useEffect(() => {
     if (!queryDialogOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -104,13 +102,6 @@ export function SuspectCardView({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [queryDialogOpen, querySubmitting]);
-
-  useEffect(() => {
-    if (queryDialogOpen) return;
-    // Restore focus to the trigger after close so keyboard users don't
-    // dump back to <body>.
-    queryTriggerRef.current?.focus();
-  }, [queryDialogOpen]);
 
   // Mutations — invalidate raf-central query key on success
   const acceptMut = useAcceptSuspectCentral(patientId);
@@ -360,6 +351,7 @@ export function SuspectCardView({
         label={suspect.label}
         confidence={suspect.confidence ?? 0}
         meat={suspect.meat}
+        meatStatus={suspect.meat_status}
         revenueDollars={suspect.expected_dollar_impact}
         evidenceSource={suspect.evidence_type}
         taxonomyBadge={taxonomyMeta}
@@ -370,63 +362,12 @@ export function SuspectCardView({
         onAccept={handleAcceptClick}
         onDismiss={() => setShowDismissDialog(true)}
         onWhy={() => setShowExplain(true)}
+        onRequestDocs={() => setQueryDialogOpen(true)}
+        onForceAccept={() => setShowForceAcceptDialog(true)}
+        onFeedbackHelpful={() => sendFeedback("helpful")}
+        onFeedbackIncorrect={() => sendFeedback("incorrect")}
+        feedbackSent={feedbackSent}
       />
-
-      {/* ── Secondary action strip: Force Accept, Request Docs, Feedback ── */}
-      <div className="flex items-center gap-1 px-4 pb-2 flex-wrap">
-        {isMeatMissing && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setShowForceAcceptDialog(true)}
-            disabled={busy !== null}
-            title="Force-accept despite missing MEAT — logs a RADV-risk audit event"
-            className="h-7 text-xs text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-200 px-2"
-          >
-            Force accept (RADV risk)
-          </Button>
-        )}
-        <Button
-          size="sm"
-          variant="ghost"
-          ref={queryTriggerRef}
-          onClick={() => setQueryDialogOpen(true)}
-          disabled={busy !== null}
-          aria-label="Request documentation from the provider"
-          title="Open a structured query to the PCP asking for documentation. Status tracked Pending → Replied → Closed."
-          className="h-7 text-xs text-muted-foreground hover:text-foreground px-2"
-        >
-          <MessageSquareWarning className="h-3 w-3 mr-1" aria-hidden />
-          Request docs
-        </Button>
-        {/* Feedback affordance — persisted via POST /api/suspects/{id}/feedback. */}
-        <div
-          className="ml-auto flex items-center gap-0.5"
-          role="group"
-          aria-label="Suggestion feedback"
-        >
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => sendFeedback("helpful")}
-            disabled={busy !== null || feedbackSent}
-            aria-label="Suggestion was helpful"
-            className="h-7 w-7 p-0 text-muted-foreground hover:text-emerald-600 disabled:opacity-40"
-          >
-            <ThumbsUp className="h-3.5 w-3.5" aria-hidden />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => sendFeedback("incorrect")}
-            disabled={busy !== null || feedbackSent}
-            aria-label="Suggestion was incorrect"
-            className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600 disabled:opacity-40"
-          >
-            <ThumbsDown className="h-3.5 w-3.5" aria-hidden />
-          </Button>
-        </div>
-      </div>
 
       {/* ── Dialogs and panels (portal-rendered, always present in DOM) ── */}
       <ExplainPanel
@@ -436,6 +377,8 @@ export function SuspectCardView({
         open={showExplain}
         onClose={() => setShowExplain(false)}
         busy={busy}
+        suspectMeat={suspect.meat ?? null}
+        suspectDollarImpact={suspect.expected_dollar_impact ?? null}
         onAccept={async () => {
           setShowExplain(false);
           // Route through the gate — gate will call acceptSuspect on confirm.

@@ -19,6 +19,7 @@
  */
 
 import type { FinancialImpact } from "../_shared";
+import { formatCurrency } from "@/lib/format";
 
 export interface RAFReconciliationProps {
   /** Engine-calculated RAF as of this panel render (sum of accepted +
@@ -48,7 +49,7 @@ function fmt(n: number, digits = 3): string {
 }
 
 function fmtUsd(n: number): string {
-  return `$${Math.round(n).toLocaleString()}`;
+  return formatCurrency(Math.round(n));
 }
 
 export function RAFReconciliationCard({

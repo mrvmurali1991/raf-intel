@@ -56,27 +56,40 @@ function formatValue(metric: GoalMetric, value: number): string {
 
 /**
  * Color thresholds (relative to expected pace):
- *   >= 80 % of pace → teal (on track)
- *   50 – 79 % of pace → amber (slight lag)
- *   < 50 % of pace → red (at risk)
- *   >= 100 % complete → teal regardless
+ *   >= 80% of pace → teal (on track)
+ *   50–79% of pace → amber (slight lag)
+ *   < 50% of pace  → red (at risk)
+ *   >= 100% complete → teal regardless
  */
-function paceColor(pct: number, pace: number): string {
-  if (pct >= 100) return "bg-teal-500";
-  if (pace === 0) return "bg-teal-500"; // quarter hasn't started yet
+function paceColor(pct: number, pace: number): "teal" | "amber" | "red" {
+  if (pct >= 100) return "teal";
+  if (pace === 0) return "teal";
   const ratio = pct / pace;
-  if (ratio >= 0.8) return "bg-teal-500";
-  if (ratio >= 0.5) return "bg-amber-400";
-  return "bg-red-500";
+  if (ratio >= 0.8) return "teal";
+  if (ratio >= 0.5) return "amber";
+  return "red";
 }
+
+const FILL_CLASS: Record<"teal" | "amber" | "red", string> = {
+  teal: "bg-teal-500",
+  amber: "bg-amber-400",
+  red: "bg-red-500",
+};
+
+const TEXT_CLASS: Record<"teal" | "amber" | "red", string> = {
+  teal: "text-teal-600",
+  amber: "text-amber-600",
+  red: "text-red-600",
+};
 
 function GoalProgressBar({ pct, pace }: { pct: number; pace: number }) {
   const color = paceColor(pct, pace);
+  const clampedWidth = Math.min(Math.max(pct, 0), 100);
   return (
     <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
       <div
-        className={`h-2.5 rounded-full transition-all duration-500 ${color}`}
-        style={{ width: `${Math.min(pct, 100)}%` }}
+        className={`h-2.5 rounded-full transition-all duration-500 ${FILL_CLASS[color]}`}
+        style={{ width: `${clampedWidth}%` }}
         role="progressbar"
         aria-valuenow={pct}
         aria-valuemin={0}
@@ -100,10 +113,10 @@ function GoalCardSkeleton() {
         </div>
         <div className="h-5 w-16 rounded-full bg-muted animate-pulse" />
       </div>
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <div className="flex justify-between">
-          <div className="h-3.5 w-14 rounded bg-muted animate-pulse" />
-          <div className="h-3.5 w-10 rounded bg-muted animate-pulse" />
+          <div className="h-3.5 w-20 rounded bg-muted animate-pulse" />
+          <div className="h-3.5 w-16 rounded bg-muted animate-pulse" />
         </div>
         <div className="w-full bg-muted rounded-full h-2.5 animate-pulse" />
         <div className="flex justify-between">
@@ -111,9 +124,9 @@ function GoalCardSkeleton() {
           <div className="h-3 w-20 rounded bg-muted animate-pulse" />
         </div>
       </div>
-      <div className="pt-1 border-t border-border flex justify-between">
-        <div className="h-3 w-24 rounded bg-muted animate-pulse" />
-        <div className="h-3 w-16 rounded bg-muted animate-pulse" />
+      <div className="pt-2 border-t border-border flex justify-between">
+        <div className="h-5 w-24 rounded-full bg-muted animate-pulse" />
+        <div className="h-5 w-20 rounded-full bg-muted animate-pulse" />
       </div>
     </div>
   );
@@ -126,79 +139,80 @@ function GoalCardSkeleton() {
 function GoalCard({ goal }: { goal: RafGoal }) {
   const isComplete = goal.percent_complete >= 100;
   const pace = goal.pace_expected ?? 0;
-  const ratio = pace > 0 ? goal.percent_complete / pace : 1;
-  const isRed = !isComplete && ratio < 0.5;
-  const isAmber = !isComplete && !isRed && ratio < 0.8;
+  const color = paceColor(goal.percent_complete, pace);
+
+  const statusLabel = isComplete
+    ? "Goal met"
+    : color === "red"
+    ? "At risk"
+    : color === "amber"
+    ? "Behind pace"
+    : "On track";
+
+  const StatusIcon = isComplete || color === "teal" ? CheckCircle : AlertTriangle;
 
   return (
     <div className="bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm hover:shadow-md transition-shadow">
+      {/* Header row: metric name + period badge */}
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 text-foreground font-medium">
-          <span className="p-1.5 bg-primary/10 rounded-lg text-primary">
+        <div className="flex items-center gap-2">
+          <span className="p-1.5 bg-primary/10 rounded-lg text-primary shrink-0">
             {METRIC_ICONS[goal.metric]}
           </span>
-          {METRIC_LABELS[goal.metric]}
+          <span className="text-sm font-bold text-foreground leading-tight">
+            {METRIC_LABELS[goal.metric]}
+          </span>
         </div>
-        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground whitespace-nowrap">
           {goal.period}
         </span>
       </div>
 
-      <div className="space-y-1.5">
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Progress</span>
-          <span
-            className={`font-semibold ${
-              isComplete
-                ? "text-teal-600"
-                : isRed
-                ? "text-red-600"
-                : isAmber
-                ? "text-amber-600"
-                : "text-teal-600"
-            }`}
-          >
-            {goal.percent_complete}%
+      {/* Progress section */}
+      <div className="space-y-2">
+        {/* Percent + target row */}
+        <div className="flex items-baseline justify-between gap-2">
+          <span className={`text-xl font-bold ${TEXT_CLASS[color]}`}>
+            {goal.percent_complete}%{" "}
+            <span className="text-xs font-normal text-muted-foreground">
+              complete
+            </span>
+          </span>
+          <span className="text-xs text-muted-foreground">
+            Target:{" "}
+            <span className="font-semibold text-foreground">
+              {formatValue(goal.metric, goal.target_value)}
+            </span>
           </span>
         </div>
+
+        {/* Full-width teal-fill progress bar */}
         <GoalProgressBar pct={goal.percent_complete} pace={pace} />
+
+        {/* Actual vs target sub-labels */}
         <div className="flex justify-between text-xs text-muted-foreground">
           <span>{formatValue(goal.metric, goal.actual_value)} actual</span>
           <span>{formatValue(goal.metric, goal.target_value)} target</span>
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">
-        <span className="flex items-center gap-1">
-          <Calendar className="h-3.5 w-3.5" />
+      {/* Footer row: days badge + on-track indicator */}
+      <div className="flex items-center justify-between pt-2 border-t border-border gap-2">
+        {/* Days remaining badge */}
+        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+          <Calendar className="h-3 w-3 shrink-0" />
           {goal.days_remaining > 0
             ? `${goal.days_remaining}d remaining`
             : "Quarter ended"}
         </span>
-        {isComplete && (
-          <span className="flex items-center gap-1 text-teal-600 font-medium">
-            <CheckCircle className="h-3.5 w-3.5" />
-            Goal met
-          </span>
-        )}
-        {isRed && (
-          <span className="flex items-center gap-1 text-red-600 font-medium">
-            <AlertTriangle className="h-3.5 w-3.5" />
-            At risk
-          </span>
-        )}
-        {isAmber && (
-          <span className="flex items-center gap-1 text-amber-600 font-medium">
-            <AlertTriangle className="h-3.5 w-3.5" />
-            Behind pace
-          </span>
-        )}
-        {!isComplete && !isRed && !isAmber && (
-          <span className="flex items-center gap-1 text-teal-600 font-medium">
-            <CheckCircle className="h-3.5 w-3.5" />
-            On track
-          </span>
-        )}
+
+        {/* On-track / status indicator */}
+        <span
+          className={`inline-flex items-center gap-1 text-xs font-semibold ${TEXT_CLASS[color]}`}
+        >
+          <StatusIcon className="h-3.5 w-3.5 shrink-0" />
+          {statusLabel}
+        </span>
       </div>
     </div>
   );
@@ -213,6 +227,9 @@ interface SetGoalModalProps {
   onSave: (payload: GoalCreatePayload) => void;
   saving: boolean;
 }
+
+const INPUT_CLASS =
+  "w-full border border-border rounded-lg px-3 py-2.5 sm:py-2 text-sm bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px] sm:min-h-0 transition-shadow";
 
 function SetGoalModal({ onClose, onSave, saving }: SetGoalModalProps) {
   const [period, setPeriod] = useState(currentQuarter());
@@ -234,6 +251,7 @@ function SetGoalModal({ onClose, onSave, saving }: SetGoalModalProps) {
       aria-labelledby="set-goal-title"
     >
       <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5 mx-4">
+        {/* Modal header */}
         <div className="flex items-center justify-between">
           <h2
             id="set-goal-title"
@@ -252,11 +270,9 @@ function SetGoalModal({ onClose, onSave, saving }: SetGoalModalProps) {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Quarter field */}
           <div className="space-y-1.5">
-            <label
-              htmlFor="period"
-              className="text-sm font-medium text-foreground"
-            >
+            <label htmlFor="period" className="text-sm font-medium text-foreground">
               Quarter
             </label>
             <input
@@ -267,25 +283,23 @@ function SetGoalModal({ onClose, onSave, saving }: SetGoalModalProps) {
               placeholder="2026-Q2"
               pattern="\d{4}-Q[1-4]"
               required
-              className="w-full border border-border rounded-lg px-3 py-2.5 sm:py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px] sm:min-h-0"
+              className={INPUT_CLASS}
             />
             <p className="text-xs text-muted-foreground">
               Format: YYYY-QN (e.g. 2026-Q2)
             </p>
           </div>
 
+          {/* Metric field */}
           <div className="space-y-1.5">
-            <label
-              htmlFor="metric"
-              className="text-sm font-medium text-foreground"
-            >
+            <label htmlFor="metric" className="text-sm font-medium text-foreground">
               Metric
             </label>
             <select
               id="metric"
               value={metric}
               onChange={(e) => setMetric(e.target.value as GoalMetric)}
-              className="w-full border border-border rounded-lg px-3 py-2.5 sm:py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground min-h-[44px] sm:min-h-0"
+              className={INPUT_CLASS}
             >
               {(Object.keys(METRIC_LABELS) as GoalMetric[]).map((m) => (
                 <option key={m} value={m}>
@@ -295,11 +309,9 @@ function SetGoalModal({ onClose, onSave, saving }: SetGoalModalProps) {
             </select>
           </div>
 
+          {/* Target value field */}
           <div className="space-y-1.5">
-            <label
-              htmlFor="target"
-              className="text-sm font-medium text-foreground"
-            >
+            <label htmlFor="target" className="text-sm font-medium text-foreground">
               Target Value
             </label>
             <input
@@ -311,24 +323,25 @@ function SetGoalModal({ onClose, onSave, saving }: SetGoalModalProps) {
               onChange={(e) => setTarget(e.target.value)}
               placeholder={metric === "revenue" ? "500000" : "200"}
               required
-              className="w-full border border-border rounded-lg px-3 py-2.5 sm:py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground min-h-[44px] sm:min-h-0"
+              className={INPUT_CLASS}
             />
           </div>
 
+          {/* Action buttons: Cancel (outline) + Create (teal solid) */}
           <div className="flex flex-col-reverse sm:flex-row gap-3 pt-1">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2.5 sm:py-2 text-sm font-medium border border-border rounded-lg hover:bg-muted transition-colors min-h-[44px] sm:min-h-0"
+              className="flex-1 px-4 py-2.5 sm:py-2 text-sm font-medium border border-border rounded-lg text-foreground hover:bg-muted transition-colors min-h-[44px] sm:min-h-0"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 px-4 py-2.5 sm:py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity min-h-[44px] sm:min-h-0"
+              className="flex-1 px-4 py-2.5 sm:py-2 text-sm font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-colors min-h-[44px] sm:min-h-0"
             >
-              {saving ? "Saving..." : "Save Goal"}
+              {saving ? "Creating..." : "Create"}
             </button>
           </div>
         </form>
@@ -371,7 +384,7 @@ export default function GoalsPage() {
     <>
       <button
         onClick={() => setShowModal(true)}
-        className="flex items-center gap-2 px-4 py-2 min-h-[44px] sm:min-h-0 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+        className="flex items-center gap-2 px-4 py-2 min-h-[44px] sm:min-h-0 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors"
         aria-label="Set a new quarterly goal"
       >
         <Plus className="h-4 w-4" />
@@ -433,12 +446,12 @@ export default function GoalsPage() {
               </p>
               <p className="text-sm text-muted-foreground max-w-xs">
                 Define targets for RAF captures, revenue, or gaps closed to
-                track your team's progress each quarter.
+                track your team&apos;s progress each quarter.
               </p>
             </div>
             <button
               onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+              className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors"
             >
               <Plus className="h-4 w-4" />
               Create your first goal
@@ -458,7 +471,7 @@ export default function GoalsPage() {
                   No goals set for {currentPeriod}.{" "}
                   <button
                     onClick={() => setShowModal(true)}
-                    className="text-primary hover:underline font-medium"
+                    className="text-teal-600 hover:underline font-medium"
                   >
                     Set one now.
                   </button>

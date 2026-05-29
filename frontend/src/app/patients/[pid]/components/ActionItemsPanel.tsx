@@ -1,5 +1,7 @@
 "use client";
 
+import { formatCurrency } from "@/lib/format";
+
 /**
  * ActionItemsPanel — "Today's action items" two-column layout.
  *
@@ -30,6 +32,7 @@ import {
 } from "@/components/AcceptConfirmDialog";
 import { DismissReasonDialog } from "@/components/raf-central/Suspects/DismissReasonDialog";
 import { ConfidencePill } from "@/components/healthcare-ui";
+import { humanizeEvidence } from "@/lib/evidence-labels";
 
 // ---- small helpers ----------------------------------------------------------
 
@@ -85,9 +88,9 @@ function DollarPill({ coefficient }: { coefficient?: number | null }) {
         fontSize: 10,
         fontWeight: 700,
       }}
-      aria-label={`Estimated annual value: $${annual.toLocaleString()}`}
+      aria-label={`Estimated annual value: ${formatCurrency(annual)}`}
     >
-      ${annual.toLocaleString()}/yr
+      {formatCurrency(annual)}/yr
     </span>
   );
 }
@@ -418,7 +421,7 @@ function HccCard({
                 lineHeight: 1.3,
               }}
             >
-              {s.suspected_condition || s.condition || s.evidence_type || "—"}
+              {s.suspected_condition || s.condition || (s.evidence_type ? humanizeEvidence(s.evidence_type) : null) || "—"}
             </div>
 
             {/* Chips row */}

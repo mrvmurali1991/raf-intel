@@ -11,9 +11,9 @@ import type {
 import { lookupICD10Crosswalk } from "@/lib/api";
 import {
   SectionHeader,
-  EmptyState,
   ConfidencePill,
 } from "@/components/healthcare-ui";
+import { SectionBanner } from "@/components/ui/section-banner";
 import {
   Tooltip,
   TooltipTrigger,
@@ -33,6 +33,7 @@ import {
   WithTooltip,
 } from "./shared";
 import { MA_PAYMENT_PER_RAF } from "@/lib/constants";
+import { formatCurrency } from "@/lib/format";
 import type {
   ExtendedRafBreakdown,
   HCCDetail,
@@ -95,7 +96,7 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
   if (!breakdown) {
     return (
       <div className="animate-slide-up stagger-1">
-        <Card><EmptyState title="No RAF breakdown available" /></Card>
+        <SectionBanner message="No RAF breakdown available for the selected year." />
       </div>
     );
   }
@@ -115,7 +116,7 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
   const grandTotal = breakdown.final_raf ?? breakdown.raf_score ?? breakdown.total_raf ?? componentSum;
 
   const fmtScore = (v: number) => v.toFixed(3);
-  const fmtPay = (v: number) => `$${Math.round(v).toLocaleString("en-US")}`;
+  const fmtPay = (v: number) => formatCurrency(Math.round(v));
 
   return (
     <div className="animate-slide-up stagger-1" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -275,7 +276,7 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
 
         {/* Footer note */}
         <div className="text-muted-foreground" style={{ padding: "8px 20px", fontSize: 10 }}>
-          * Based on CMS {new Date().getFullYear()} rate of ${MA_PAYMENT_PER_RAF.toLocaleString("en-US")}/RAF point
+          * Based on CMS {new Date().getFullYear()} rate of {formatCurrency(MA_PAYMENT_PER_RAF)}/RAF point
         </div>
       </Card>
 
@@ -733,7 +734,7 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
           <div>
             <div className="text-muted-foreground" style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Current RAF</div>
             <div className="text-foreground font-mono" style={{ fontSize: 24, fontWeight: 800 }}>{currentRaf.toFixed(3)}</div>
-            <div className="text-xs text-muted-foreground">${Math.round(currentRaf * MA_PAYMENT_PER_RAF).toLocaleString()}/yr</div>
+            <div className="text-xs text-muted-foreground">{formatCurrency(Math.round(currentRaf * MA_PAYMENT_PER_RAF))}/yr</div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
             <span className="text-xl text-teal-700">{"\u2192"}</span>
@@ -745,8 +746,8 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
             <div className="text-emerald-600 dark:text-emerald-400" style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Projected RAF</div>
             <div className="text-emerald-600 dark:text-emerald-400 font-mono" style={{ fontSize: 24, fontWeight: 800 }}>{projectedRaf.toFixed(3)}</div>
             <div className="text-xs text-emerald-600">
-              ${Math.round(projectedRaf * MA_PAYMENT_PER_RAF).toLocaleString()}/yr
-              <span style={{ fontWeight: 700, marginLeft: 4 }}>(+${Math.round(extraCoeffSum * MA_PAYMENT_PER_RAF).toLocaleString()})</span>
+              {formatCurrency(Math.round(projectedRaf * MA_PAYMENT_PER_RAF))}/yr
+              <span style={{ fontWeight: 700, marginLeft: 4 }}>(+{formatCurrency(Math.round(extraCoeffSum * MA_PAYMENT_PER_RAF))})</span>
             </div>
           </div>
         </div>
@@ -837,7 +838,11 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
             })}
           </>
         )}
-        {hasSearched && !results.length && !loading && <EmptyState title="No crosswalk results found" />}
+        {hasSearched && !results.length && !loading && (
+          <div className="px-4 pb-3 pt-1">
+            <SectionBanner message="No crosswalk results found for these codes." />
+          </div>
+        )}
       </Card>
 
       {/* Smart Suggestions */}
@@ -904,7 +909,7 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
 function RAFHistoryBars({ history }: { history: RafHistoryResponse | ScoreHistoryEntry[] | undefined }) {
   const scores: ScoreHistoryEntry[] | undefined = Array.isArray(history) ? history : (history as RafHistoryResponse | undefined)?.scores ?? (history as RafHistoryResponse | undefined)?.history;
   if (!scores || !Array.isArray(scores) || scores.length === 0) {
-    return <EmptyState title="No historical scores available" />;
+    return <SectionBanner message="No historical RAF scores recorded yet." />;
   }
 
   const maxScore = Math.max(
@@ -1026,11 +1031,16 @@ export function RAFTab({
         {recaptureLoading ? (
           <SectionLoader />
         ) : !recaptureItems.length ? (
-          <EmptyState
-            state={breakdown ? "complete" : "no-data"}
-            title={breakdown ? `no gaps after analysis for ${selectedYear}` : "no analysis run yet"}
-            description={breakdown ? undefined : "Run RAF analysis to detect recapture opportunities"}
-          />
+          <div className="px-4 py-3">
+            <SectionBanner
+              message={
+                breakdown
+                  ? `No open HCC documentation requirements for ${selectedYear}.`
+                  : "No analysis run yet — analyze an encounter to detect recapture opportunities."
+              }
+              variant={breakdown ? "success" : "info"}
+            />
+          </div>
         ) : (
           <div>
             <div

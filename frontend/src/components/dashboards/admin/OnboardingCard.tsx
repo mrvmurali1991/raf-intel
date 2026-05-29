@@ -20,9 +20,9 @@ import {
 const card: React.CSSProperties = {
   background: "hsl(var(--card))",
   border: "1px solid hsl(var(--border))",
-  borderRadius: 14,
-  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-  padding: 24,
+  borderRadius: 12,
+  boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+  padding: 20,
 };
 
 // ---------------------------------------------------------------------------

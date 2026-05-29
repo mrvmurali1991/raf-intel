@@ -10,15 +10,16 @@ import { useRouter } from "next/navigation";
 import {
   RefreshCw,
   Download,
-  Calendar,
   Search,
   ChevronLeft,
   ChevronRight,
-  ArrowUpDown,
   AlertTriangle,
   CalendarClock,
 } from "lucide-react";
-import { getRecaptureGapsReport, getRevenueOpportunity, useMetricFormula } from "@/lib/api";
+import {
+  listRecaptureGaps,
+  RecaptureGapRow,
+} from "@/lib/api";
 import { downloadCSV } from "@/lib/csv-export";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -31,22 +32,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { HelpButton } from "@/components/HelpPanel";
-import { MetricCard } from "@/components/ui/metric-card";
-import FeatureFlag from "@/components/FeatureFlag";
 import DataQualityBanner from "@/components/DataQualityBanner";
-import { tokens } from "@/styles/tokens";
-import { KgGapBadge } from "@/components/kg/KgGapBadge";
-import { HccChipWithPopover } from "@/components/kg/HccExplainCard";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 // Feature-flagged secondary sections are lazy-loaded to defer ~60 kB
-// (CfoExecutiveSummary, BonusLeaderboard, OutreachSummaryCards, AuditReadinessCard,
-// RecaptureVelocityKpis, RecaptureDecayChart) that are hidden behind feature flags.
 const RecaptureFeatureSections = dynamic(
   () => import("./RecaptureFeatureSections"),
   {
@@ -55,94 +43,192 @@ const RecaptureFeatureSections = dynamic(
   }
 );
 
-// ─── Types ──────────────────────────────────────────────────────────────────
-
-interface Gap {
-  pid: string;
-  first_name: string;
-  last_name: string;
-  condition: string;
-  icd_code: string;
-  onset_date: string;
-  /** Optional KG fields surfaced for the evidence-chain badge. */
-  id?: number;
-  hcc_code?: string;
-  evidence_type?: string;
-}
-
-interface TopCondition {
-  icd_code: string;
-  condition: string;
-  gap_count: number;
-}
-
-interface RecaptureReport {
-  measurement_year: number;
-  total_gaps: number;
-  patients_affected: number;
-  gaps: Gap[];
-  top_conditions: TopCondition[];
-}
-
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const REVENUE_PER_GAP = 3000;
 const PAGE_SIZE = 25;
 
+// At-risk = gaps that are open AND have fewer than 90 days remaining in the year
+const AT_RISK_DAYS_THRESHOLD = 90;
+
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+type StatusFilter = "all" | "open" | "recaptured" | "dismissed";
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function daysSince(dateStr: string): number {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  return Math.floor(diff / (1000 * 60 * 60 * 24));
-}
-
-interface Priority {
-  label: string;
-  rank: number;
-  badgeClass: string;
-  borderClass: string;
-  borderStyle: string;
-}
-
-function priorityFromDays(days: number): Priority {
-  if (days > 365) {
-    return {
-      label: "High",
-      rank: 3,
-      badgeClass: "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-      borderClass: "border-l-4 border-l-red-500",
-      borderStyle: tokens.dangerStrong,
-    };
-  }
-  if (days >= 180) {
-    return {
-      label: "Medium",
-      rank: 2,
-      badgeClass: "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-      borderClass: "border-l-4 border-l-amber-500",
-      borderStyle: tokens.warningStrong,
-    };
-  }
-  return {
-    label: "Low",
-    rank: 1,
-    badgeClass: "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-    borderClass: "border-l-4 border-l-emerald-500",
-    borderStyle: tokens.successStrong,
-  };
+/** Days remaining until Dec 31 of the given payment year. */
+function daysRemainingInYear(paymentYear: number): number {
+  const endOfYear = new Date(paymentYear, 11, 31); // Dec 31
+  const today = new Date();
+  const diff = endOfYear.getTime() - today.getTime();
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
 function formatCurrency(n: number): string {
+  if (n >= 1_000_000) return "$" + (n / 1_000_000).toFixed(1) + "M";
+  if (n >= 1_000) return "$" + Math.round(n / 1_000) + "K";
   return "$" + n.toLocaleString("en-US");
 }
 
-function revenueColor(amount: number): string {
-  if (amount >= 50000) return "text-red-600 dark:text-red-400";
-  if (amount >= 15000) return "text-amber-600 dark:text-amber-400";
-  return "text-emerald-600 dark:text-emerald-400";
+/** Urgency color classes based on days remaining in the payment year. */
+function urgencyClasses(daysLeft: number): {
+  pill: string;
+  dot: string;
+  label: string;
+} {
+  if (daysLeft <= 30) {
+    return {
+      pill: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+      dot: "bg-red-500",
+      label: `${daysLeft}d left`,
+    };
+  }
+  if (daysLeft <= 90) {
+    return {
+      pill: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+      dot: "bg-amber-500",
+      label: `${daysLeft}d left`,
+    };
+  }
+  return {
+    pill: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+    dot: "bg-emerald-500",
+    label: `${daysLeft}d left`,
+  };
 }
 
-type SortKey = "priority" | "name" | "condition";
+function statusBadgeClasses(status: RecaptureGapRow["status"]): string {
+  if (status === "recaptured")
+    return "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400";
+  if (status === "dismissed")
+    return "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground";
+  // open
+  return "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
+}
+
+function statusLabel(status: RecaptureGapRow["status"]): string {
+  if (status === "recaptured") return "Recaptured";
+  if (status === "dismissed") return "Dismissed";
+  return "Open";
+}
+
+// ─── Summary Pill Bar ────────────────────────────────────────────────────────
+
+interface SummaryPillBarProps {
+  total: number;
+  open: number;
+  recaptured: number;
+  atRisk: number;
+  revenue: number;
+}
+
+function SummaryPillBar({ total, open, recaptured, atRisk, revenue }: SummaryPillBarProps) {
+  const pills: { label: string; value: string; colorClass: string }[] = [
+    {
+      label: "Total",
+      value: total.toLocaleString(),
+      colorClass: "text-foreground",
+    },
+    {
+      label: "Open",
+      value: open.toLocaleString(),
+      colorClass: "text-amber-700 dark:text-amber-400",
+    },
+    {
+      label: "Recaptured",
+      value: recaptured.toLocaleString(),
+      colorClass: "text-emerald-700 dark:text-emerald-400",
+    },
+    {
+      label: "At Risk",
+      value: atRisk.toLocaleString(),
+      colorClass: "text-red-700 dark:text-red-400",
+    },
+    {
+      label: "Revenue",
+      value: formatCurrency(revenue),
+      colorClass: "text-foreground font-bold",
+    },
+  ];
+
+  return (
+    <div
+      className="flex flex-wrap items-center gap-2 mb-6 px-4 py-3 rounded-lg border border-border bg-muted/40"
+      role="status"
+      aria-label="Recapture gap summary"
+    >
+      {pills.map((pill, idx) => (
+        <React.Fragment key={pill.label}>
+          <span className="inline-flex items-center gap-1.5 text-sm">
+            <span className="text-muted-foreground">{pill.label}:</span>
+            <span className={`font-semibold tabular-nums ${pill.colorClass}`}>
+              {pill.value}
+            </span>
+          </span>
+          {idx < pills.length - 1 && (
+            <span className="text-muted-foreground/40 select-none" aria-hidden="true">
+              |
+            </span>
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+// ─── Status Filter Tabs ──────────────────────────────────────────────────────
+
+const STATUS_TABS: { key: StatusFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "open", label: "Open" },
+  { key: "recaptured", label: "Recaptured" },
+  { key: "dismissed", label: "Dismissed" },
+];
+
+interface StatusTabsProps {
+  active: StatusFilter;
+  onChange: (v: StatusFilter) => void;
+  counts: Record<StatusFilter, number>;
+}
+
+function StatusTabs({ active, onChange, counts }: StatusTabsProps) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Filter by gap status"
+      className="flex gap-1 bg-muted rounded-full p-0.5 w-fit"
+    >
+      {STATUS_TABS.map((tab) => {
+        const isActive = active === tab.key;
+        return (
+          <button
+            key={tab.key}
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onChange(tab.key)}
+            className={[
+              "btn-press px-3 py-1 rounded-full text-xs font-semibold cursor-pointer transition-all border-none",
+              isActive
+                ? "bg-primary text-white shadow-sm"
+                : "bg-transparent text-muted-foreground hover:text-foreground",
+            ].join(" ")}
+          >
+            {tab.label}
+            <span
+              className={[
+                "ml-1.5 tabular-nums",
+                isActive ? "opacity-80" : "opacity-60",
+              ].join(" ")}
+            >
+              {counts[tab.key]}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -151,107 +237,116 @@ export default function RecapturePage() {
   const { paymentYear: year, setPaymentYear: setYear } = usePaymentYear();
   const isHistoricalPY = useIsHistoricalPY();
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<SortKey>("priority");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, isError, refetch } = useQuery<RecaptureReport>({
-    queryKey: ["recapture-gaps", year],
-    queryFn: () => getRecaptureGapsReport(year) as unknown as Promise<RecaptureReport>,
-    // perf(demo): 60s staleTime keeps the recapture table cached so the
-    // recapture -> dashboard -> recapture demo flow paints instantly.
+  const { data: gaps = [], isLoading, isError, refetch } = useQuery<RecaptureGapRow[]>({
+    queryKey: ["recapture-gaps-list", year],
+    queryFn: () => listRecaptureGaps({ limit: 500 }),
     staleTime: 60_000,
   });
 
-  // Revenue meta — stale-while-revalidate; provides formula tooltip for CFO.
-  const { data: revData } = useQuery({
-    queryKey: ["revenue-opportunity", year],
-    queryFn: () => getRevenueOpportunity(year),
-    staleTime: 5 * 60 * 1000,
-  });
-  const revenueAtRiskMeta =
-    useMetricFormula(revData as Record<string, unknown> | null | undefined, "estimated_annual_revenue") ??
-    revData?._meta ??
-    null;
+  // ── Derived statistics ────────────────────────────────────────────────────
 
-  // ── Derived data ────────────────────────────────────────────────────────
+  const stats = useMemo(() => {
+    const daysLeft = daysRemainingInYear(year);
+    const open = gaps.filter((g) => g.status === "open");
+    const recaptured = gaps.filter((g) => g.status === "recaptured");
+    const atRisk = open.filter(() => daysLeft <= AT_RISK_DAYS_THRESHOLD);
+    const revenue = open.reduce(
+      (sum, g) => sum + (g.revenue_impact ?? REVENUE_PER_GAP),
+      0
+    );
+    return {
+      total: gaps.length,
+      open: open.length,
+      recaptured: recaptured.length,
+      dismissed: gaps.filter((g) => g.status === "dismissed").length,
+      atRisk: atRisk.length,
+      revenue,
+    };
+  }, [gaps, year]);
 
-  const enrichedGaps = useMemo(() => {
-    if (!data?.gaps?.length) return [];
-    return data.gaps.map((g) => {
-      const days = daysSince(g.onset_date);
-      return { ...g, days, priority: priorityFromDays(days) };
-    });
-  }, [data]);
+  const tabCounts: Record<StatusFilter, number> = useMemo(
+    () => ({
+      all: stats.total,
+      open: stats.open,
+      recaptured: stats.recaptured,
+      dismissed: stats.dismissed,
+    }),
+    [stats]
+  );
+
+  // ── Filtered + searched list ──────────────────────────────────────────────
 
   const filtered = useMemo(() => {
-    let list = enrichedGaps;
+    let list = gaps;
+    if (statusFilter !== "all") {
+      list = list.filter((g) => g.status === statusFilter);
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(
         (g) =>
-          g.first_name.toLowerCase().includes(q) ||
-          g.last_name.toLowerCase().includes(q)
+          (g.patient_name ?? "").toLowerCase().includes(q) ||
+          (g.hcc_code ?? "").toLowerCase().includes(q) ||
+          (g.hcc_description ?? "").toLowerCase().includes(q) ||
+          (g.icd10_code ?? "").toLowerCase().includes(q)
       );
     }
-    list = [...list].sort((a, b) => {
-      if (sortBy === "priority") return b.priority.rank - a.priority.rank;
-      if (sortBy === "name")
-        return `${a.last_name} ${a.first_name}`.localeCompare(
-          `${b.last_name} ${b.first_name}`
-        );
-      return a.condition.localeCompare(b.condition);
+    // Open gaps first, then sort by revenue impact descending
+    return [...list].sort((a, b) => {
+      if (a.status === "open" && b.status !== "open") return -1;
+      if (b.status === "open" && a.status !== "open") return 1;
+      return (b.revenue_impact ?? REVENUE_PER_GAP) - (a.revenue_impact ?? REVENUE_PER_GAP);
     });
-    return list;
-  }, [enrichedGaps, search, sortBy]);
+  }, [gaps, statusFilter, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // Reset page on filter change
+  // Reset page on filter/search/year change
   React.useEffect(() => {
     setPage(1);
-  }, [search, sortBy, year]);
+  }, [search, statusFilter, year]);
 
-  // ── CSV Export ──────────────────────────────────────────────────────────
+  // ── CSV export ────────────────────────────────────────────────────────────
 
   function exportCSV() {
     if (!filtered.length) return;
     downloadCSV(
       filtered.map((g) => ({
-        Patient: `${g.last_name}, ${g.first_name}`,
-        Condition: g.condition,
-        "ICD-10": g.icd_code,
-        "Last Coded": g.onset_date,
-        "Days Since": g.days,
-        Priority: g.priority.label,
+        Patient: g.patient_name ?? g.patient_id,
+        "HCC Code": g.hcc_code,
+        Condition: g.hcc_description ?? "",
+        "ICD-10": g.icd10_code ?? "",
+        Status: statusLabel(g.status),
+        "Prior Year": g.current_year ?? "",
+        "Revenue Impact": g.revenue_impact ?? REVENUE_PER_GAP,
       })),
       "recapture-gaps"
     );
   }
 
-  // ── Loading state ────────────────────────────────────────────────────────
+  // ── Loading state ─────────────────────────────────────────────────────────
 
   if (isLoading) {
     return (
       <div className="p-6">
         <PageHeader
           title="Recapture Gaps"
-          subtitle="Loading recapture opportunities…"
+          subtitle="Loading recapture opportunities..."
           icon={<RefreshCw size={22} />}
         />
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="premium-card shimmer h-24 rounded-lg" />
-          ))}
-        </div>
+        <div className="premium-card shimmer h-12 rounded-lg mb-6" />
         <div className="premium-card shimmer h-72 rounded-lg" />
       </div>
     );
   }
 
-  // ── Error state ──────────────────────────────────────────────────────────
+  // ── Error state ───────────────────────────────────────────────────────────
 
-  if (isError || !data) {
+  if (isError) {
     return (
       <div className="p-6">
         <PageHeader title="Recapture Gaps" icon={<RefreshCw size={22} />} />
@@ -275,32 +370,7 @@ export default function RecapturePage() {
     );
   }
 
-  // ── Derived view data ────────────────────────────────────────────────────
-
-  const maxConditionCount =
-    (data.top_conditions ?? []).length > 0
-      ? Math.max(...(data.top_conditions ?? []).map((c) => c.gap_count))
-      : 1;
-
-  const sortOptions: { key: SortKey; label: string; tooltip: string }[] = [
-    {
-      key: "priority",
-      label: "Priority",
-      tooltip: "Sort by urgency: High (>365 days uncoded) first, then Medium, then Low",
-    },
-    {
-      key: "name",
-      label: "Patient Name",
-      tooltip: "Sort alphabetically by patient last name, then first name",
-    },
-    {
-      key: "condition",
-      label: "Condition",
-      tooltip: "Sort alphabetically by chronic condition diagnosis name",
-    },
-  ];
-
-  const totalRevenue = (data.total_gaps ?? 0) * REVENUE_PER_GAP;
+  const daysLeft = daysRemainingInYear(year);
 
   return (
     <div className="p-6 max-w-[1200px] mx-auto overflow-x-hidden rci-page-pad-desktop">
@@ -320,7 +390,7 @@ export default function RecapturePage() {
               <select
                 value={year}
                 onChange={(e) => setYear(Number(e.target.value))}
-                aria-label="Measurement year"
+                aria-label="Payment year"
                 className="px-3 py-2 rounded-lg border border-border text-sm font-semibold text-foreground bg-card cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
                 {Array.from({ length: 3 }, (_, i) => new Date().getFullYear() - i).map(
@@ -337,519 +407,220 @@ export default function RecapturePage() {
         />
       </div>
 
-      {/* Summary Strip — 3-column metric cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="animate-fade-in stagger-1">
-          <MetricCard
-            label="Estimated Revenue at Risk"
-            value={
-              (data.total_gaps ?? 0) === 0
-                ? "Awaiting data ingestion"
-                : formatCurrency(totalRevenue)
-            }
-            subtitle={
-              (data.total_gaps ?? 0) === 0
-                ? "No open recapture gaps detected yet"
-                : "Unrecaptured chronic conditions × prior-year RAF dollars"
-            }
-            intent="danger"
-            icon={<ArrowUpDown size={18} />}
-            meta={revenueAtRiskMeta ?? undefined}
-            freshness={revData?.last_computed_at ?? undefined}
-            labelTestId="revenue-at-risk-label"
-            valueTestId="revenue-at-risk-value"
-            labelTooltip="Projected revenue loss if uncaptured chronic conditions are not re-coded before year-end. Calculated as total gaps × $3,000 average RAF revenue per gap."
-          />
-        </div>
-        <div className="animate-fade-in stagger-2">
-          <MetricCard
-            label="Total Recapture Gaps"
-            value={
-              (data.total_gaps ?? 0) === 0
-                ? "0 — all clear"
-                : (data.total_gaps ?? 0).toLocaleString()
-            }
-            subtitle={
-              (data.total_gaps ?? 0) === 0
-                ? "All chronic conditions recaptured this year"
-                : undefined
-            }
-            intent="warning"
-            icon={<RefreshCw size={18} />}
-            labelTooltip="Number of chronic conditions documented in a prior year that have not yet been re-coded in the current measurement year. Each gap requires a qualifying encounter."
-          />
-        </div>
-        <div className="animate-fade-in stagger-3">
-          <MetricCard
-            label="Patients Affected"
-            value={
-              (data.patients_affected ?? 0) === 0
-                ? "0 — none yet"
-                : (data.patients_affected ?? 0).toLocaleString()
-            }
-            subtitle={
-              (data.patients_affected ?? 0) === 0
-                ? "Begin by importing patient encounter data"
-                : undefined
-            }
-            icon={<Calendar size={18} />}
-            labelTooltip="Distinct patients who have at least one open recapture gap this measurement year. One patient may have multiple gaps across different HCC categories."
-          />
-        </div>
+      {/* Summary pill bar */}
+      <div className="animate-fade-in stagger-1">
+        <SummaryPillBar
+          total={stats.total}
+          open={stats.open}
+          recaptured={stats.recaptured}
+          atRisk={stats.atRisk}
+          revenue={stats.revenue}
+        />
       </div>
 
-      {/* Main row: Worklist (2fr) + Top Conditions (1fr) */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 mb-6 items-start">
+      {/* Main gap table */}
+      <div className="premium-card animate-slide-up stagger-2 p-6 mb-6">
+        {/* Table toolbar */}
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+          <StatusTabs
+            active={statusFilter}
+            onChange={setStatusFilter}
+            counts={tabCounts}
+          />
 
-        {/* Left: Patient Worklist */}
-        <div className="premium-card animate-slide-up stagger-5 p-6 min-w-0">
-          {/* Worklist header */}
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-            <h3 className="gradient-text m-0 text-base font-bold">
-              Patients Requiring Recapture
-            </h3>
-            <div className="flex items-center gap-3 flex-wrap">
-              {/* Search */}
-              <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="relative">
-                      <Search
-                        size={14}
-                        className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Search patient..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        aria-label="Search patients by name or ICD code"
-                        data-testid="recapture-search"
-                        className="pl-8 pr-3 py-1.5 rounded-full border border-border text-sm text-foreground bg-card w-48 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                      />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6} data-testid="search-tooltip">
-                    Filter by patient name or ICD code
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-
-              {/* Sort Pills */}
-              <div className="flex gap-1 bg-muted rounded-full p-0.5">
-                {sortOptions.map((opt) => (
-                  <TooltipProvider key={opt.key} delayDuration={200}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          onClick={() => setSortBy(opt.key)}
-                          className="btn-press px-3 py-1 rounded-full border-none text-xs font-semibold cursor-pointer transition-all"
-                          aria-pressed={sortBy === opt.key}
-                          data-testid={`sort-${opt.key}`}
-                          style={{
-                            background: sortBy === opt.key ? tokens.primary : "transparent",
-                            color: sortBy === opt.key ? tokens.white : tokens.slate600,
-                            boxShadow:
-                              sortBy === opt.key
-                                ? "0 1px 3px rgba(37,99,235,0.3)"
-                                : "none",
-                          }}
-                        >
-                          {opt.label}
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent
-                        side="bottom"
-                        sideOffset={6}
-                        data-testid={`sort-${opt.key}-tooltip`}
-                      >
-                        {opt.tooltip}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Table or empty state */}
-          {filtered.length === 0 ? (
-            <EmptyState
-              state="filtered-out"
-              icon={<CalendarClock size={24} />}
-              title="No recapture gaps found"
-              description={
-                search.trim()
-                  ? "No patients match your search. Try a different name."
-                  : "All chronic conditions have been recaptured for the selected year."
-              }
-              cta={
-                search.trim()
-                  ? { label: "Clear search", onClick: () => setSearch("") }
-                  : undefined
-              }
+          {/* Search */}
+          <div className="relative">
+            <Search
+              size={14}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
             />
-          ) : (
-            <>
-              {/* Shared DataTable from @/components/ui/table */}
-              <div className="rounded-lg border border-border overflow-hidden">
-                <Table aria-label="Patients requiring recapture">
-                  <TableHeader>
-                    <TableRow className="bg-muted/40 hover:bg-muted/40">
-                      <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground pl-4">
-                        Patient
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Condition
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        <TooltipProvider delayDuration={200}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span
-                                className="cursor-help border-b border-dotted border-muted-foreground"
-                                tabIndex={0}
-                                data-testid="col-icd10"
-                              >
-                                ICD-10
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent
-                              side="top"
-                              sideOffset={6}
-                              data-testid="col-icd10-tooltip"
-                            >
-                              ICD-10-CM diagnosis code. Hover any code in the table to see
-                              its full description and RAF coefficient.
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Last Coded
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        <TooltipProvider delayDuration={200}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span
-                                className="cursor-help border-b border-dotted border-muted-foreground"
-                                tabIndex={0}
-                                data-testid="col-days-since"
-                              >
-                                Days Since
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent
-                              side="top"
-                              sideOffset={6}
-                              data-testid="col-days-since-tooltip"
-                            >
-                              Days since last billing encounter for this HCC. Higher values
-                              indicate more urgent recapture need.
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        <TooltipProvider delayDuration={200}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span
-                                className="cursor-help border-b border-dotted border-muted-foreground"
-                                tabIndex={0}
-                                data-testid="col-priority"
-                              >
-                                Priority
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent
-                              side="top"
-                              sideOffset={6}
-                              data-testid="col-priority-tooltip"
-                            >
-                              High: &gt;365 days uncoded · Medium: 180–365 days · Low:
-                              &lt;180 days
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground text-right pr-4">
-                        <TooltipProvider delayDuration={200}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span
-                                className="cursor-help border-b border-dotted border-muted-foreground"
-                                tabIndex={0}
-                              >
-                                Revenue Impact
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" sideOffset={6}>
-                              Estimated annual revenue at risk for this gap. Based on
-                              $3,000 average RAF revenue per uncaptured condition.
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paged.map((g, i) => (
+            <input
+              type="text"
+              placeholder="Search by patient, HCC, or condition..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search gaps by patient name, HCC code, or condition"
+              data-testid="recapture-search"
+              className="pl-8 pr-3 py-1.5 rounded-full border border-border text-sm text-foreground bg-card w-64 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+            />
+          </div>
+        </div>
+
+        {/* Table or empty */}
+        {filtered.length === 0 ? (
+          <EmptyState
+            state="filtered-out"
+            icon={<CalendarClock size={24} />}
+            title="No recapture gaps found"
+            description={
+              search.trim()
+                ? "No gaps match your search. Try a different term."
+                : statusFilter !== "all"
+                ? `No ${statusFilter} gaps for the selected year.`
+                : "All chronic conditions have been recaptured for the selected year."
+            }
+            cta={
+              search.trim()
+                ? { label: "Clear search", onClick: () => setSearch("") }
+                : statusFilter !== "all"
+                ? { label: "Show all", onClick: () => setStatusFilter("all") }
+                : undefined
+            }
+          />
+        ) : (
+          <>
+            <div className="rounded-lg border border-border overflow-hidden">
+              <Table aria-label="Recapture gaps worklist">
+                <TableHeader>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40">
+                    <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground pl-4">
+                      HCC / Condition
+                    </TableHead>
+                    <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Patient
+                    </TableHead>
+                    <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Prior Year
+                    </TableHead>
+                    <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Days Remaining
+                    </TableHead>
+                    <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Status
+                    </TableHead>
+                    <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground text-right pr-4">
+                      Revenue Impact
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paged.map((g, i) => {
+                    const urgency = urgencyClasses(daysLeft);
+                    return (
                       <TableRow
-                        key={`${g.pid}-${g.icd_code}-${i}`}
+                        key={`${g.id}-${i}`}
                         tabIndex={0}
-                        aria-label={`${g.last_name}, ${g.first_name} — ${g.condition}, ${g.priority.label} priority`}
-                        onClick={() => router.push(`/patients/${g.pid}`)}
+                        aria-label={`${g.patient_name ?? "Patient"} — ${g.hcc_description ?? g.hcc_code}, ${statusLabel(g.status)}`}
+                        onClick={() => router.push(`/patients/${g.patient_id}`)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            router.push(`/patients/${g.pid}`);
+                            router.push(`/patients/${g.patient_id}`);
                           }
                         }}
                         className="cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
                         style={{
-                          borderLeft: `3px solid ${g.priority.borderStyle}`,
-                          background: i % 2 === 0 ? undefined : "hsl(var(--muted)/0.3)",
+                          background: i % 2 !== 0 ? "hsl(var(--muted)/0.3)" : undefined,
                         }}
                       >
-                        {/* Patient name */}
-                        <TableCell className="pl-4 font-semibold text-primary">
-                          <TooltipProvider delayDuration={200}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span
-                                  className="cursor-pointer"
-                                  data-testid={`patient-name-${g.pid}`}
-                                >
-                                  {g.last_name}, {g.first_name}
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent
-                                side="right"
-                                sideOffset={6}
-                                data-testid="patient-row-tooltip"
-                              >
-                                Open patient chart
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                        {/* HCC + Condition */}
+                        <TableCell className="pl-4">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-xs font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary tabular-nums">
+                              {g.hcc_code}
+                            </span>
+                            <span className="text-sm font-medium text-foreground">
+                              {g.hcc_description ?? g.icd10_code ?? "—"}
+                            </span>
+                          </div>
+                          {g.icd10_code && (
+                            <span className="mt-0.5 text-xs text-muted-foreground font-mono">
+                              {g.icd10_code}
+                            </span>
+                          )}
                         </TableCell>
 
-                        {/* Condition */}
+                        {/* Patient */}
                         <TableCell>
-                          <span className="inline-flex items-center gap-2 flex-wrap">
-                            {g.hcc_code ? (
-                              <FeatureFlag
-                                flagKey="kg_evidence_panel"
-                                fallback={<span>{g.condition}</span>}
-                              >
-                                <HccChipWithPopover hccCode={g.hcc_code}>
-                                  <span>{g.condition}</span>
-                                </HccChipWithPopover>
-                              </FeatureFlag>
-                            ) : (
-                              <span>{g.condition}</span>
-                            )}
-                            <FeatureFlag flagKey="kg_evidence_panel">
-                              <TooltipProvider delayDuration={200}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span>
-                                      <KgGapBadge
-                                        evidenceType={g.evidence_type ?? "kg_rule"}
-                                        suspectId={g.id ?? undefined}
-                                        hccCode={g.hcc_code}
-                                        patientId={Number(g.pid) || undefined}
-                                      />
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent
-                                    side="top"
-                                    sideOffset={6}
-                                    data-testid="kg-badge-tooltip"
-                                  >
-                                    Knowledge graph rule matched — see evidence panel for
-                                    source citations and supporting clinical signals
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </FeatureFlag>
+                          <span
+                            className="text-sm font-semibold text-primary cursor-pointer"
+                            data-testid={`patient-name-${g.patient_id}`}
+                          >
+                            {g.patient_name ?? `Patient #${g.patient_id}`}
                           </span>
                         </TableCell>
 
-                        {/* ICD-10 */}
-                        <TableCell className="font-mono text-xs tabular-nums">
-                          <TooltipProvider delayDuration={200}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span
-                                  className="cursor-help border-b border-dotted border-muted-foreground"
-                                  data-testid={`icd-code-${g.icd_code}`}
-                                >
-                                  {g.icd_code}
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent
-                                side="top"
-                                sideOffset={6}
-                                data-testid="icd-code-tooltip"
-                              >
-                                <span className="font-semibold">{g.icd_code}</span> —{" "}
-                                {g.condition}
-                                <br />
-                                <span className="text-[10px] opacity-70">
-                                  RAF coefficient determined by CMS HCC model for this
-                                  diagnosis category.
-                                </span>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </TableCell>
-
-                        {/* Last Coded */}
-                        <TableCell className="tabular-nums text-muted-foreground text-sm">
-                          {new Date(g.onset_date).toLocaleDateString()}
-                        </TableCell>
-
-                        {/* Days Since */}
-                        <TableCell className="tabular-nums font-semibold text-sm">
-                          {g.days}
-                        </TableCell>
-
-                        {/* Priority badge */}
+                        {/* Prior Year badge */}
                         <TableCell>
-                          <TooltipProvider delayDuration={200}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span
-                                  className={g.priority.badgeClass}
-                                  data-testid={`priority-pill-${g.pid}`}
-                                >
-                                  {g.priority.label}
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent
-                                side="left"
-                                sideOffset={6}
-                                data-testid="priority-tooltip"
-                              >
-                                {g.priority.label === "High"
-                                  ? "High — condition uncoded for >365 days. Immediate outreach recommended."
-                                  : g.priority.label === "Medium"
-                                  ? "Medium — condition uncoded 180–365 days. Schedule within 30 days."
-                                  : "Low — condition uncoded <180 days. Standard scheduling applies."}
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                          {g.current_year ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground tabular-nums">
+                              {g.current_year}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
                         </TableCell>
 
-                        {/* Revenue Impact — prominent, color-coded */}
-                        <TableCell className="pr-4 text-right">
+                        {/* Days Remaining — only meaningful for open gaps */}
+                        <TableCell>
+                          {g.status === "open" ? (
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold ${urgency.pill}`}
+                              aria-label={`${daysLeft} days remaining in payment year`}
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${urgency.dot}`}
+                                aria-hidden="true"
+                              />
+                              {urgency.label}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </TableCell>
+
+                        {/* Status badge */}
+                        <TableCell>
                           <span
-                            className={`tabular-nums font-bold text-sm ${revenueColor(REVENUE_PER_GAP)}`}
+                            className={statusBadgeClasses(g.status)}
+                            data-testid={`status-badge-${g.id}`}
                           >
-                            {formatCurrency(REVENUE_PER_GAP)}
+                            {statusLabel(g.status)}
+                          </span>
+                        </TableCell>
+
+                        {/* Revenue Impact */}
+                        <TableCell className="pr-4 text-right">
+                          <span className="tabular-nums font-bold text-sm text-foreground">
+                            {formatCurrency(g.revenue_impact ?? REVENUE_PER_GAP)}
                           </span>
                         </TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {/* Pagination — consistent with other pages */}
-              <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
-                <span className="tabular-nums">
-                  Showing {(page - 1) * PAGE_SIZE + 1}–
-                  {Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
-                </span>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    aria-label="Previous page"
-                    className="btn-press p-1.5 rounded-md border border-border bg-card hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center"
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
-                  <span className="tabular-nums px-2 font-semibold text-foreground">
-                    {page} / {totalPages}
-                  </span>
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    aria-label="Next page"
-                    className="btn-press p-1.5 rounded-md border border-border bg-card hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center"
-                  >
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Right: Top Conditions chart */}
-        {(data.top_conditions ?? []).length > 0 && (
-          <div className="premium-card animate-slide-up stagger-4 p-6 min-w-0">
-            <h3 className="gradient-text m-0 mb-4 text-base font-bold">
-              Most Common Uncaptured Conditions
-            </h3>
-            <div className="flex flex-col gap-2.5">
-              {(data.top_conditions ?? []).slice(0, 10).map((c, idx) => (
-                <div
-                  key={c.icd_code}
-                  className="hover-lift flex items-center gap-3 px-3 py-2 rounded-lg transition-all"
-                  style={{
-                    background: idx % 2 === 0 ? "hsl(var(--muted)/0.4)" : "transparent",
-                  }}
-                >
-                  <span className="w-6 text-center text-xs font-bold text-muted-foreground flex-shrink-0">
-                    {idx + 1}
-                  </span>
-                  <span className="flex-1 min-w-0 max-w-[220px] text-sm text-foreground font-medium truncate">
-                    {c.condition}
-                  </span>
-                  <TooltipProvider delayDuration={200}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span
-                          className="flex-shrink-0 text-xs font-semibold text-primary font-mono cursor-help border-b border-dotted border-primary"
-                          tabIndex={0}
-                          data-testid={`top-condition-chip-${c.icd_code}`}
-                        >
-                          {c.icd_code}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent
-                        side="left"
-                        sideOffset={6}
-                        data-testid="top-condition-tooltip"
-                      >
-                        <span className="font-semibold">{c.icd_code}</span> — {c.condition}
-                        <br />
-                        <span className="text-[10px] opacity-70">
-                          {c.gap_count} open gap{c.gap_count !== 1 ? "s" : ""} across your
-                          patient panel
-                        </span>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  {/* Progress bar */}
-                  <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
-                      style={{ width: `${(c.gap_count / maxConditionCount) * 100}%` }}
-                    />
-                  </div>
-                  <span className="tabular-nums w-10 text-xs font-bold text-foreground text-right flex-shrink-0">
-                    {c.gap_count}
-                  </span>
-                </div>
-              ))}
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </div>
-          </div>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+              <span className="tabular-nums">
+                Showing {(page - 1) * PAGE_SIZE + 1}–
+                {Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  aria-label="Previous page"
+                  className="btn-press p-1.5 rounded-md border border-border bg-card hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <span className="tabular-nums px-2 font-semibold text-foreground">
+                  {page} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  aria-label="Next page"
+                  className="btn-press p-1.5 rounded-md border border-border bg-card hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </div>
 
@@ -863,8 +634,8 @@ export default function RecapturePage() {
             Schedule Wellness Visits
           </p>
           <p className="mt-1 mb-0 text-xs text-muted-foreground">
-            Prioritize patients with high-priority recapture gaps for annual wellness visits
-            to ensure chronic conditions are documented.
+            Prioritize patients with open recapture gaps for annual wellness visits to
+            ensure chronic conditions are documented before year-end.
           </p>
         </div>
         <button

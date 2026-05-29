@@ -62,14 +62,14 @@ export function KPIStrip({ stats, onHighClick, onUnscoredClick }: KPIStripProps)
           backgroundColor: C.bgCard,
           border: `1px solid ${C.borderSoft}`,
           borderTop: `3px solid ${tokens.riskHigh}`,
-          borderRadius: 14,
-          padding: "18px 22px",
+          borderRadius: 12,
+          padding: 20,
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
           gap: 8,
-          boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
-          minHeight: 132,
+          boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+          minHeight: 120,
           cursor: stats.high > 0 ? "pointer" : "default",
           transition: "border-color 0.15s ease",
         }}
@@ -108,17 +108,17 @@ export function KPIStrip({ stats, onHighClick, onUnscoredClick }: KPIStripProps)
         </div>
         <div
           style={{
-            fontSize: 36,
-            fontWeight: 800,
+            fontSize: 24,
+            fontWeight: 700,
             color: stats.high > 0 ? tokens.riskHigh : C.text,
             fontVariantNumeric: "tabular-nums",
-            letterSpacing: "-0.025em",
+            letterSpacing: "-0.02em",
             lineHeight: 1,
           }}
         >
           {stats.high}
         </div>
-        <div style={{ fontSize: 12, color: C.textSubtle }}>High-risk patients</div>
+        <div style={{ fontSize: 11, color: C.textSubtle, textTransform: "uppercase", letterSpacing: "0.04em" }}>High-risk patients</div>
       </div>
 
       {/* Unscored */}
@@ -126,14 +126,14 @@ export function KPIStrip({ stats, onHighClick, onUnscoredClick }: KPIStripProps)
         style={{
           backgroundColor: C.bgCard,
           border: `1px solid ${C.borderSoft}`,
-          borderRadius: 14,
-          padding: "18px 22px",
+          borderRadius: 12,
+          padding: 20,
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
           gap: 8,
-          boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
-          minHeight: 132,
+          boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+          minHeight: 120,
           cursor: stats.unscored > 0 ? "pointer" : "default",
         }}
         onClick={() => { if (stats.unscored > 0 && onUnscoredClick) onUnscoredClick(); }}
@@ -175,17 +175,17 @@ export function KPIStrip({ stats, onHighClick, onUnscoredClick }: KPIStripProps)
         </div>
         <div
           style={{
-            fontSize: 36,
-            fontWeight: 800,
+            fontSize: 24,
+            fontWeight: 700,
             color: C.text,
             fontVariantNumeric: "tabular-nums",
-            letterSpacing: "-0.025em",
+            letterSpacing: "-0.02em",
             lineHeight: 1,
           }}
         >
           {stats.unscored}
         </div>
-        <div style={{ fontSize: 12, color: C.textSubtle }}>Pending analysis</div>
+        <div style={{ fontSize: 11, color: C.textSubtle, textTransform: "uppercase", letterSpacing: "0.04em" }}>Pending analysis</div>
       </div>
 
       {/* Average RAF */}
@@ -193,14 +193,14 @@ export function KPIStrip({ stats, onHighClick, onUnscoredClick }: KPIStripProps)
         style={{
           backgroundColor: C.bgCard,
           border: `1px solid ${C.borderSoft}`,
-          borderRadius: 14,
-          padding: "18px 22px",
+          borderRadius: 12,
+          padding: 20,
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
           gap: 8,
-          boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
-          minHeight: 132,
+          boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+          minHeight: 120,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -227,17 +227,17 @@ export function KPIStrip({ stats, onHighClick, onUnscoredClick }: KPIStripProps)
         </div>
         <div
           style={{
-            fontSize: 36,
-            fontWeight: 800,
+            fontSize: 24,
+            fontWeight: 700,
             color: C.text,
             fontVariantNumeric: "tabular-nums",
-            letterSpacing: "-0.025em",
+            letterSpacing: "-0.02em",
             lineHeight: 1,
           }}
         >
           {stats.avgRaf > 0 ? stats.avgRaf.toFixed(2) : "—"}
         </div>
-        <div style={{ fontSize: 12, color: C.textSubtle }}>
+        <div style={{ fontSize: 11, color: C.textSubtle, textTransform: "uppercase", letterSpacing: "0.04em" }}>
           {stats.avgRaf > 0
             ? `${stats.avgRaf.toFixed(3)} mean across panel`
             : "No scored patients yet"}
@@ -249,14 +249,14 @@ export function KPIStrip({ stats, onHighClick, onUnscoredClick }: KPIStripProps)
         style={{
           backgroundColor: C.bgCard,
           border: `1px solid ${C.borderSoft}`,
-          borderRadius: 14,
-          padding: "18px 22px",
+          borderRadius: 12,
+          padding: 20,
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
           gap: 8,
-          boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
-          minHeight: 132,
+          boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+          minHeight: 120,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -283,17 +283,17 @@ export function KPIStrip({ stats, onHighClick, onUnscoredClick }: KPIStripProps)
         </div>
         <div
           style={{
-            fontSize: 36,
-            fontWeight: 800,
+            fontSize: 24,
+            fontWeight: 700,
             color: C.text,
             fontVariantNumeric: "tabular-nums",
-            letterSpacing: "-0.025em",
+            letterSpacing: "-0.02em",
             lineHeight: 1,
           }}
         >
           {stats.hccTotal.toLocaleString()}
         </div>
-        <div style={{ fontSize: 12, color: C.textSubtle }}>
+        <div style={{ fontSize: 11, color: C.textSubtle, textTransform: "uppercase", letterSpacing: "0.04em" }}>
           {stats.all > 0
             ? `${(stats.hccTotal / stats.all).toFixed(1)} avg per patient`
             : "Across current view"}

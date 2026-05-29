@@ -265,8 +265,8 @@
 /* Allow inline style overrides only when the element provides its own focus-visible state */
 
 :root {
-  --kpi-card-min-h: 160px;
-  --kpi-card-pad: 24px;
+  --kpi-card-min-h: 140px;
+  --kpi-card-pad: 20px;
 
   /* ---- Typography scale ----
    * Companion to the tokens.ts typography exports.
@@ -678,7 +678,7 @@
   .text-body         { @apply text-sm leading-6; }
   .text-body-sm      { @apply text-xs leading-5; }
   .text-label        { @apply text-xs font-medium uppercase tracking-wider text-muted-foreground; }
-  .text-metric-value { @apply text-3xl font-bold tracking-tight tabular-nums; }
+  .text-metric-value { @apply text-2xl font-bold tracking-tight tabular-nums; }
 }
 
 /* ===== Design System Utility Classes ===== */
@@ -1035,22 +1035,20 @@
 .status-dot-info    { color: #3b82f6; }
 .status-dot-neutral { color: #94a3b8; }
 
-/* KPI card lift with multi-layer soft shadow */
+/* KPI card lift — shadow-sm maximum */
 .kpi-card-lift:hover {
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.04),
-    0 4px 12px rgba(0, 0, 0, 0.06),
-    0 16px 40px rgba(0, 0, 0, 0.06),
-    0 0 0 1px hsl(var(--primary) / 0.08);
+    0 4px 12px rgba(0, 0, 0, 0.06);
 }
 @media (prefers-reduced-motion: no-preference) {
   .kpi-card-lift {
     transition:
-      transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
-      box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      transform 0.18s ease,
+      box-shadow 0.18s ease;
   }
   .kpi-card-lift:hover {
-    transform: scale(1.012) translateY(-2px);
+    transform: translateY(-1px);
   }
 }
 
@@ -1885,6 +1883,10 @@ select.appearance-none {
   -webkit-overflow-scrolling: touch;
   scroll-snap-type: x proximity;
   scroll-padding-inline: 16px;
+}
+/* Hide scrollbar track on WebKit at all sizes — tab bar scrolls invisibly */
+.raf-tabbar-scroll::-webkit-scrollbar {
+  display: none;
 }
 .raf-tabbar-scroll > div > button {
   scroll-snap-align: start;

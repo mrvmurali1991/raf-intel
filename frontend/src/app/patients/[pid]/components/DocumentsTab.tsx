@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { formatCurrency } from "@/lib/format";
 import Link from "next/link";
 import {
   FileUp,
@@ -696,7 +697,7 @@ export function DocumentsTab({
                                 <div>
                                   <span className="text-xs font-semibold text-muted-foreground">Estimated Revenue Impact</span>
                                   <span className="tabular-nums text-emerald-600 dark:text-emerald-400" style={{ display: "block", fontSize: 22, fontWeight: 800 }}>
-                                    ${((dData.estimated_revenue_impact ?? dData.revenue_impact ?? 0)).toLocaleString()}
+                                    {formatCurrency(Math.round(dData.estimated_revenue_impact ?? dData.revenue_impact ?? 0))}
                                   </span>
                                 </div>
                               </div>

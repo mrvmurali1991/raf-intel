@@ -15,15 +15,12 @@ export interface SectionHeaderProps {
 
 export function SectionHeader({ title, icon, count, action }: SectionHeaderProps) {
   return (
-    <div className="flex items-center justify-between mb-4">
+    <div className="flex items-center justify-between pb-4 mb-4 border-b border-border">
       <div className="flex items-center gap-2">
-        {icon && <span className="text-primary flex">{icon}</span>}
-        <div className="flex flex-col">
-          <h3 className="m-0 text-base font-bold text-foreground">{title}</h3>
-          <div className="w-8 h-[3px] rounded-sm bg-primary mt-1 opacity-70" />
-        </div>
+        {icon && <span className="text-muted-foreground flex">{icon}</span>}
+        <h3 className="m-0 text-sm font-semibold text-foreground">{title}</h3>
         {count !== undefined && (
-          <span className="text-[11px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+          <span className="text-[11px] font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
             {count}
           </span>
         )}
