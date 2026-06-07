@@ -1,0 +1,159 @@
+groups:
+  - name: raf_intelligence_alerts
+    rules:
+
+      # ------------------------------------------------------------------ #
+      # API availability
+      # ------------------------------------------------------------------ #
+
+      # More than 5 % of all HTTP responses are 5xx for 2 consecutive minutes.
+      - alert: APIHighErrorRate
+        expr: >
+          rate(http_requests_total{status=~"5.."}[5m])
+          /
+          rate(http_requests_total[5m])
+          > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "API error rate above 5 %"
+          description: >
+            The 5-minute rolling 5xx rate has exceeded 5 % for {{ $labels.instance }}.
+            Current value: {{ $value | humanizePercentage }}.
+          runbook: "ops/runbooks/api-high-error-rate.md"
+
+      # P95 response time above 2 s for 5 consecutive minutes.
+      - alert: APISlowRequests
+        expr: >
+          histogram_quantile(
+            0.95,
+            rate(http_request_duration_seconds_bucket[5m])
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "P95 API latency above 2 seconds"
+          description: >
+            The 95th-percentile request latency on {{ $labels.instance }} is
+            {{ $value | humanizeDuration }}. Investigate slow endpoints via
+            Grafana → RAF Backend → Latency by route.
+          runbook: "ops/runbooks/api-slow-requests.md"
+
+      # ------------------------------------------------------------------ #
+      # Database
+      # ------------------------------------------------------------------ #
+
+      # Health-check metric dropped to 0 — DB unreachable from the backend.
+      - alert: DatabaseDown
+        expr: raf_db_health_check == 0
+        for: 30s
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "RAF database health check failing"
+          description: >
+            raf_db_health_check has been 0 for {{ $labels.instance }} for at
+            least 30 s. MySQL may be down or unreachable from the application
+            container.
+          runbook: "ops/runbooks/database-down.md"
+
+      # Slow-query counter rising faster than 1 event/s (averaged over 5 min).
+      - alert: SlowQueries
+        expr: rate(slow_queries_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "High rate of slow SQL queries"
+          description: >
+            More than 1 slow query per second observed on {{ $labels.instance }}
+            over the last 5 minutes. Check EXPLAIN plans and index coverage.
+          runbook: "ops/runbooks/slow-queries.md"
+
+      # ------------------------------------------------------------------ #
+      # Celery task queue
+      # ------------------------------------------------------------------ #
+
+      # Queue backlog sustained above 100 active tasks for 10 minutes.
+      - alert: CeleryQueueBacklog
+        expr: celery_active_tasks > 100
+        for: 10m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "Celery task backlog above 100"
+          description: >
+            {{ $value }} tasks are currently active/pending in Celery on
+            {{ $labels.instance }}. Workers may be saturated or a worker
+            process may have died.
+          runbook: "ops/runbooks/celery-queue-backlog.md"
+
+      # ------------------------------------------------------------------ #
+      # Redis
+      # ------------------------------------------------------------------ #
+
+      # Redis memory usage above 85 % of the configured maxmemory.
+      - alert: RedisMemoryHigh
+        expr: >
+          redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "Redis memory usage above 85 %"
+          description: >
+            Redis on {{ $labels.instance }} is using
+            {{ $value | humanizePercentage }} of its configured maxmemory.
+            Risk of key eviction affecting session and cache data.
+          runbook: "ops/runbooks/redis-memory-high.md"
+
+      # ------------------------------------------------------------------ #
+      # RAF-specific pipeline
+      # ------------------------------------------------------------------ #
+
+      # No suspects generated in the last hour while the pipeline has run at
+      # least once — indicates a stalled or silently-failing pipeline run.
+      - alert: SuspectProcessingStalled
+        expr: >
+          rate(suspects_generated_total[1h]) == 0
+          AND
+          raf_pipeline_runs_total > 0
+        for: 2h
+        labels:
+          severity: warning
+          team: clinical-data
+        annotations:
+          summary: "RAF suspect generation appears stalled"
+          description: >
+            No suspects have been generated in the past hour on
+            {{ $labels.instance }}, even though pipeline runs have been
+            recorded. Check Celery worker logs for silent errors in the
+            suspect-generation task.
+          runbook: "ops/runbooks/suspect-processing-stalled.md"
+
+      # ------------------------------------------------------------------ #
+      # FHIR / EMR sync
+      # ------------------------------------------------------------------ #
+
+      # FHIR sync failure rate above 0.5 failures/s for 15 minutes.
+      - alert: FHIRSyncFailures
+        expr: rate(emr_sync_failures_total[15m]) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+          team: integrations
+        annotations:
+          summary: "Elevated FHIR/EMR sync failure rate"
+          description: >
+            The EMR sync failure rate on {{ $labels.instance }} is
+            {{ $value | humanize }} failures/s over the last 15 minutes.
+            Check OAuth2 token validity and OpenEMR FHIR endpoint reachability.
+          runbook: "ops/runbooks/fhir-sync-failures.md"

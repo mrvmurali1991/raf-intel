@@ -11,6 +11,9 @@ global:
     cluster: raf-intelligence
     env: ${PROM_ENV:-production}
 
+rule_files:
+  - "alert_rules.yml"
+
 scrape_configs:
 
   # FastAPI backend — /metrics is auth-gated by app/main.py middleware.
