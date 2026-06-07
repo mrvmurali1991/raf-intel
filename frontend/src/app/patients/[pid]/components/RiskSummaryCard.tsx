@@ -32,6 +32,14 @@ function useCountUp(target: number | null, durationMs = 800) {
       setDisplay(null);
       return;
     }
+
+    // Respect the OS/browser reduced-motion preference — skip animation entirely
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReducedMotion) {
+      setDisplay(target);
+      return;
+    }
+
     const start = performance.now();
     startRef.current = start;
 

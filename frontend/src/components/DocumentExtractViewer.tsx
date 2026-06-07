@@ -12,16 +12,13 @@
  * `page_number`. The currently selected extract is reflected in the URL
  * (`?document_id=...&extract_id=...`) so the view is deep-linkable.
  *
- * NOTE: react-pdf's worker is configured at module load via a CDN URL that
- * matches the bundled pdfjs version. This avoids the bundler having to
- * resolve `pdfjs-dist/build/pdf.worker.min.mjs` (which fails under Next 16
- * webpack without extra config).
+ * perf: react-pdf (pdf.js ~300 kB) is lazy-loaded via next/dynamic so it is
+ * excluded from the initial JS bundle. The PDF pane renders a skeleton until
+ * the chunk arrives, keeping first-paint fast on the Documents tab.
  */
 
 import React, { useCallback, useMemo, useState } from "react";
-import { Document, Page, pdfjs } from "react-pdf";
-import "react-pdf/dist/Page/AnnotationLayer.css";
-import "react-pdf/dist/Page/TextLayer.css";
+import nextDynamic from "next/dynamic";
 import {
   ChevronLeft,
   ChevronRight,
@@ -31,11 +28,32 @@ import {
   Tag,
 } from "lucide-react";
 
-// Wire up the pdfjs worker via CDN — version pinned to the bundled API
-// version so worker/main always match.
-if (typeof window !== "undefined" && !pdfjs.GlobalWorkerOptions.workerSrc) {
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
-}
+// ---------------------------------------------------------------------------
+// Lazy-load the heavy pdf.js bundle — excluded from initial JS payload.
+// DocumentPdfPane is the only component that imports react-pdf.
+// ---------------------------------------------------------------------------
+const DocumentPdfPane = nextDynamic(
+  () => import("./DocumentPdfPane"),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#1f2937",
+          color: "#fff",
+          fontSize: 13,
+          padding: 40,
+        }}
+      >
+        Loading PDF viewer…
+      </div>
+    ),
+  },
+);
 
 export interface DocumentExtract {
   id: string;
@@ -298,7 +316,7 @@ export default function DocumentExtractViewer({
           </div>
         </div>
 
-        {/* PDF body */}
+        {/* PDF body — react-pdf chunk loaded lazily */}
         <div
           style={{
             flex: 1,
@@ -310,50 +328,14 @@ export default function DocumentExtractViewer({
             padding: 16,
           }}
         >
-          {loadError ? (
-            <div
-              style={{
-                color: "#fff",
-                background: "#7f1d1d",
-                padding: "16px 20px",
-                borderRadius: 8,
-                fontSize: 13,
-                maxWidth: 480,
-                textAlign: "center",
-              }}
-            >
-              <strong>Could not load PDF</strong>
-              <p style={{ margin: "6px 0 0", fontSize: 12, opacity: 0.85 }}>{loadError}</p>
-            </div>
-          ) : (
-            <Document
-              file={fileUrl}
-              onLoadSuccess={onDocLoad}
-              onLoadError={onDocError}
-              loading={
-                <div style={{ color: "#fff", padding: 40, fontSize: 13 }}>
-                  Loading document...
-                </div>
-              }
-              error={
-                <div style={{ color: "#fff", padding: 40, fontSize: 13 }}>
-                  Failed to load document.
-                </div>
-              }
-            >
-              <Page
-                pageNumber={pageNumber}
-                scale={scale}
-                renderAnnotationLayer
-                renderTextLayer
-                loading={
-                  <div style={{ color: "#fff", padding: 20, fontSize: 12 }}>
-                    Rendering page {pageNumber}...
-                  </div>
-                }
-              />
-            </Document>
-          )}
+          <DocumentPdfPane
+            fileUrl={fileUrl}
+            pageNumber={pageNumber}
+            scale={scale}
+            loadError={loadError}
+            onDocLoad={onDocLoad}
+            onDocError={onDocError}
+          />
         </div>
       </div>
 

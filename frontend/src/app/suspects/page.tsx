@@ -19,6 +19,7 @@ import {
   undismissSuspect,
   bulkUpdateSuspects,
 } from "@/lib/api";
+import type { SuspectsResponse } from "@/lib/api";
 import type { DBSuspect } from "@/types";
 import { useToast } from "@/components/Toast";
 import { usePaymentYear, PAYMENT_YEARS } from "@/contexts/payment-year-context";
@@ -445,6 +446,29 @@ export default function SuspectsPage() {
 
   const undoTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
+  // The page-local query key — must match the useQuery above.
+  const pageQueryKey = ["suspects", statusFilter, measurementYear] as const;
+
+  /** Optimistically remove a suspect from the page-local cache and return a rollback snapshot. */
+  const optimisticRemove = useCallback(
+    async (suspectId: number) => {
+      await queryClient.cancelQueries({ queryKey: pageQueryKey });
+      const previous = queryClient.getQueryData<SuspectsResponse>(pageQueryKey);
+      queryClient.setQueryData<SuspectsResponse>(pageQueryKey, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          suspects: old.suspects.filter((s) => s.id !== suspectId),
+          count: Math.max(0, old.count - 1),
+        };
+      });
+      return previous;
+    },
+    // pageQueryKey identity is stable per render cycle; deps cover the values it encodes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [queryClient, statusFilter, measurementYear]
+  );
+
   const undoMut = useMutation({
     mutationFn: ({ id, kind }: { id: number; kind: "accept" | "dismiss" }) =>
       kind === "accept" ? unacceptSuspect(id) : undismissSuspect(id),
@@ -455,61 +479,72 @@ export default function SuspectsPage() {
     onError: () => toast.error("Undo Failed", "The undo window may have passed."),
   });
 
-  const handleAccept = useCallback(
-    (id: number) => {
-      acceptSuspect(id)
-        .then(() => {
-          queryClient.invalidateQueries({ queryKey: ["suspects"] });
-          const timer = setTimeout(() => { undoTimers.current.delete(id); }, 5500);
-          undoTimers.current.set(id, timer);
-          toast.success("Accepted", "Suspect accepted & written to OpenEMR.", {
-            duration: 5500,
-            action: {
-              label: "Undo",
-              onClick: () => {
-                const t = undoTimers.current.get(id);
-                if (t) { clearTimeout(t); undoTimers.current.delete(id); }
-                undoMut.mutate({ id, kind: "accept" });
-              },
-            },
-          });
-          const accepted = allSuspects.find((s) => s.id === id) ?? null;
-          setWriteBackSuspect(accepted);
-        })
-        .catch(() => toast.error("Error", "Failed to accept suspect."));
+  const acceptMut = useMutation({
+    mutationFn: (suspectId: number) => acceptSuspect(suspectId),
+    onMutate: async (suspectId) => {
+      const previous = await optimisticRemove(suspectId);
+      return { previous, suspectId };
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [queryClient, toast]
-  );
-
-  const handleDismiss = useCallback(
-    (id: number) => {
-      dismissSuspect(id)
-        .then(() => {
-          queryClient.invalidateQueries({ queryKey: ["suspects"] });
-          const timer = setTimeout(() => { undoTimers.current.delete(id); }, 5500);
-          undoTimers.current.set(id, timer);
-          toast.success("Dismissed", "Suspect condition dismissed.", {
-            duration: 5500,
-            action: {
-              label: "Undo",
-              onClick: () => {
-                const t = undoTimers.current.get(id);
-                if (t) { clearTimeout(t); undoTimers.current.delete(id); }
-                undoMut.mutate({ id, kind: "dismiss" });
-              },
-            },
-          });
-        })
-        .catch(() => toast.error("Error", "Failed to dismiss suspect."));
+    onError: (_err, _id, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(pageQueryKey, context.previous);
+      }
+      toast.error("Error", "Failed to accept suspect.");
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [queryClient, toast]
-  );
+    onSuccess: (_data, suspectId) => {
+      // Re-read from the pre-optimistic snapshot still held in allSuspects ref.
+      const accepted = allSuspects.find((s) => s.id === suspectId) ?? null;
+      setWriteBackSuspect(accepted);
+      const timer = setTimeout(() => { undoTimers.current.delete(suspectId); }, 5500);
+      undoTimers.current.set(suspectId, timer);
+      toast.success("Accepted", "Suspect accepted & written to OpenEMR.", {
+        duration: 5500,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            const t = undoTimers.current.get(suspectId);
+            if (t) { clearTimeout(t); undoTimers.current.delete(suspectId); }
+            undoMut.mutate({ id: suspectId, kind: "accept" });
+          },
+        },
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["suspects"] });
+    },
+  });
 
-  // Shim mutation objects so existing JSX that reads .isPending still compiles
-  const acceptMut = { isPending: false, mutate: handleAccept } as const;
-  const dismissMut = { isPending: false, mutate: handleDismiss } as const;
+  const dismissMut = useMutation({
+    mutationFn: (suspectId: number) => dismissSuspect(suspectId),
+    onMutate: async (suspectId) => {
+      const previous = await optimisticRemove(suspectId);
+      return { previous, suspectId };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(pageQueryKey, context.previous);
+      }
+      toast.error("Error", "Failed to dismiss suspect.");
+    },
+    onSuccess: (_data, suspectId) => {
+      const timer = setTimeout(() => { undoTimers.current.delete(suspectId); }, 5500);
+      undoTimers.current.set(suspectId, timer);
+      toast.success("Dismissed", "Suspect condition dismissed.", {
+        duration: 5500,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            const t = undoTimers.current.get(suspectId);
+            if (t) { clearTimeout(t); undoTimers.current.delete(suspectId); }
+            undoMut.mutate({ id: suspectId, kind: "dismiss" });
+          },
+        },
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["suspects"] });
+    },
+  });
 
   const bulkMut = useMutation({
     mutationFn: ({ action }: { action: "accept" | "dismiss" }) =>
@@ -834,18 +869,19 @@ export default function SuspectsPage() {
 
           {/* Search — first in visual order */}
           <div className="relative shrink-0">
+            <label htmlFor="suspects-search" className="sr-only">Search suspects</label>
             <Search
               size={13}
               className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
               aria-hidden="true"
             />
             <input
+              id="suspects-search"
               type="text"
               placeholder="Search suspects…"
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
               onKeyDown={(e) => e.stopPropagation()}
-              aria-label="Search suspects"
               className="h-8 w-[200px] rounded-lg border border-border bg-card pl-7 pr-3 text-[12px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary transition-all"
             />
           </div>

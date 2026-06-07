@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect, useRef, useTransition } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef, useTransition } from "react";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { FocusTrap } from "@/components/ui/focus-trap";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -255,6 +255,302 @@ function SkeletonRow() {
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// PatientRow — memoised so sibling rows don't re-render when hover state or
+// selection changes for a different row.  All data is passed via props; the
+// only local state is the hover animation on the chevron which is driven by
+// the `isHovered` prop from the parent.
+// ---------------------------------------------------------------------------
+
+interface PatientRowProps {
+  p: Patient;
+  rowIndex: number;
+  isHovered: boolean;
+  isSelected: boolean;
+  onHoverEnter: () => void;
+  onHoverLeave: () => void;
+  onToggleSelect: (pid: number) => void;
+}
+
+const PatientRow = React.memo(function PatientRow({
+  p,
+  rowIndex,
+  isHovered,
+  isSelected,
+  onHoverEnter,
+  onHoverLeave,
+  onToggleSelect,
+}: PatientRowProps) {
+  const pid = p.pid;
+  const age = p.DOB ? calculateAge(p.DOB) : null;
+  const score = p.raf_score ?? 0;
+  const hccCount = p.hcc_count ?? 0;
+  const scored = score > 0;
+  const fullName =
+    `${p.lname || ""}, ${p.fname || ""}`
+      .trim()
+      .replace(/^,\s*/, "")
+      .replace(/,\s*$/, "") || "•";
+  const initials = deriveInitials(p.fname, p.lname, pid);
+  const sexLabel =
+    p.sex === "Female" ? "F" :
+    p.sex === "Male" ? "M" :
+    p.sex ? p.sex[0] : "—";
+  const avatarColor = initialsColor(fullName);
+  const accent = riskAccentColor(scored ? score : null);
+  const tone = riskTone(scored ? score : null);
+  const toneFgAA =
+    tone.label === "High" ? "#B91C1C" :
+    tone.label === "Medium" ? "#B45309" :
+    tone.label === "Low" ? "#047857" :
+    tone.fg;
+  const location = formatLocation(p);
+
+  return (
+    <tr
+      key={p.pid != null ? `pid-${p.pid}` : `row-${rowIndex}`}
+      role="row"
+      aria-label={`${fullName}, ${age !== null ? `age ${age}` : "age unknown"}, RAF ${scored ? Number(score).toFixed(2) : "not calculated"}, ${tone.label} risk, ${hccCount} HCC${hccCount === 1 ? "" : "s"}`}
+      onMouseEnter={onHoverEnter}
+      onMouseLeave={onHoverLeave}
+      data-selected={isSelected ? "true" : undefined}
+      className="flex relative overflow-visible border-b border-slate-100 transition-colors duration-150"
+      style={{
+        height: 64,
+        minHeight: 64,
+        maxHeight: 64,
+        borderLeft: `3px solid ${accent}`,
+        backgroundColor: isHovered
+          ? tokens.slate50
+          : tone.label === "High"
+            ? tokens.riskHighSoft
+            : "#ffffff",
+        animation: `fadeSlideIn 0.25s ease-out ${Math.min(rowIndex, 12) * 0.025}s both`,
+      }}
+    >
+      {/* Checkbox cell */}
+      <td
+        role="gridcell"
+        className="flex items-center justify-center shrink-0 p-0"
+        style={{ width: 21 }}
+      >
+        <input
+          type="checkbox"
+          checked={typeof pid === "number" && isSelected}
+          onChange={(e) => {
+            e.stopPropagation();
+            if (typeof pid === "number") onToggleSelect(pid);
+          }}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`Select ${fullName} for bulk actions`}
+          className="w-3.5 h-3.5 shrink-0 cursor-pointer accent-teal-700 transition-opacity"
+          style={{
+            opacity: isHovered || isSelected ? 1 : 0,
+          }}
+          onFocus={(e) => { e.currentTarget.style.opacity = "1"; }}
+          onBlur={(e) => {
+            e.currentTarget.style.opacity = isHovered || isSelected ? "1" : "0";
+          }}
+        />
+      </td>
+
+      {/* Content cell — Link is the sole navigation target */}
+      <td role="gridcell" className="flex-1 min-w-0 p-0">
+        <Link
+          href={`/patients/${pid}`}
+          className="worklist-grid worklist-row-anchor grid items-center overflow-visible pl-2 pr-6 gap-0 cursor-pointer no-underline text-inherit outline-none focus:shadow-[inset_0_0_0_2px_rgba(13,148,136,0.15)]"
+          style={{
+            gridTemplateColumns: WORKLIST_COLS,
+            height: 64,
+          }}
+        >
+          {/* Patient: avatar + name + subtitle */}
+          <div
+            title={`${fullName} · PID ${pid}`}
+            className="flex items-center gap-2 min-w-0"
+          >
+            <div
+              className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold tracking-wide border"
+              style={{
+                background: `linear-gradient(135deg, ${avatarColor}1F 0%, ${avatarColor}0F 100%)`,
+                color: avatarColor,
+                borderColor: `${avatarColor}26`,
+              }}
+            >
+              {initials}
+            </div>
+            <div className="min-w-0 flex flex-col gap-0.5">
+              <span className="text-[14px] font-semibold text-slate-900 truncate leading-[1.2] tracking-[-0.005em]">
+                {fullName}
+              </span>
+              <span
+                className="text-[11px] text-slate-400 whitespace-nowrap tabular-nums tracking-wide"
+                style={{ fontFamily: FONT_MONO }}
+              >
+                {age !== null ? `${age}${sexLabel !== "—" ? sexLabel : ""}` : ""}
+                {age !== null && <span className="mx-1 text-slate-200">&middot;</span>}
+                {pid}
+                {location !== "—" && (
+                  <>
+                    <span className="mx-1 text-slate-200">&middot;</span>
+                    {location}
+                  </>
+                )}
+                {p.data_source === "upload" && (
+                  <>
+                    <span className="mx-1 text-slate-200">&middot;</span>
+                    <span className="text-[9px] font-semibold tracking-[0.04em] px-[5px] py-px rounded bg-sky-50 text-blue-500 border border-sky-200 uppercase">
+                      CSV
+                    </span>
+                  </>
+                )}
+              </span>
+            </div>
+          </div>
+
+          {/* Risk Level badge */}
+          <div>
+            {scored ? (
+              <span
+                className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[11.5px] font-bold whitespace-nowrap"
+                style={{ backgroundColor: tone.bg, color: toneFgAA }}
+              >
+                {tone.label === "High" ? "▲" : tone.label === "Medium" ? "●" : "▼"}{" "}
+                {tone.label}
+              </span>
+            ) : (
+              <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-slate-100 text-slate-500 text-[11.5px] font-semibold">
+                Unscored
+              </span>
+            )}
+          </div>
+
+          {/* RAF Score */}
+          <div title={`Total CMS-HCC RAF Score: ${scored ? Number(score).toFixed(4) : "Not yet calculated"}`}>
+            {scored ? (
+              <span className="text-[20px] font-bold text-slate-900 tabular-nums leading-none tracking-[-0.025em]">
+                {Number(score).toFixed(2)}
+              </span>
+            ) : (
+              <span className="text-[18px] text-slate-200 font-normal tabular-nums">&mdash;</span>
+            )}
+          </div>
+
+          {/* Risk Factors chips */}
+          <div className="risk-factors-cell flex flex-wrap gap-1 items-center">
+            {scored && (
+              (p.demographic_score != null && p.demographic_score > 0) ||
+              (p.disease_score != null && p.disease_score > 0) ||
+              (p.interaction_score != null && p.interaction_score > 0)
+            ) ? (
+              <>
+                {p.demographic_score != null && p.demographic_score > 0 && (
+                  <span
+                    title={`Demographic RAF component — age/sex/disability adjustment: ${Number(p.demographic_score).toFixed(4)}`}
+                    className="inline-flex items-center gap-0.5 h-[22px] px-[7px] rounded-md bg-slate-100 border border-slate-200 text-[10.5px] font-semibold tabular-nums whitespace-nowrap cursor-default"
+                  >
+                    <span className="text-slate-500">Demo</span>
+                    <span className="text-slate-900">{Number(p.demographic_score).toFixed(3)}</span>
+                  </span>
+                )}
+                {p.disease_score != null && p.disease_score > 0 && (
+                  <span
+                    title={`Disease RAF component — HCC condition category contributions: ${Number(p.disease_score).toFixed(4)}`}
+                    className="inline-flex items-center gap-0.5 h-[22px] px-[7px] rounded-md bg-slate-100 border border-slate-200 text-[10.5px] font-semibold tabular-nums whitespace-nowrap cursor-default"
+                  >
+                    <span className="text-slate-500">Disease</span>
+                    <span className="text-slate-900">{Number(p.disease_score).toFixed(3)}</span>
+                  </span>
+                )}
+                {p.interaction_score != null && p.interaction_score > 0 && (
+                  <span
+                    title={`Interaction RAF component — disease-disease interaction adjustments: ${Number(p.interaction_score).toFixed(4)}`}
+                    className="inline-flex items-center gap-0.5 h-[22px] px-[7px] rounded-md bg-slate-100 border border-slate-200 text-[10.5px] font-semibold tabular-nums whitespace-nowrap cursor-default"
+                  >
+                    <span className="text-slate-500">Interact</span>
+                    <span className="text-slate-900">{Number(p.interaction_score).toFixed(3)}</span>
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-[12px] text-slate-200">&mdash;</span>
+            )}
+          </div>
+
+          {/* HCC Count */}
+          <div
+            title={`${hccCount} Hierarchical Condition Categories identified`}
+            className="flex flex-col items-end gap-px"
+          >
+            {hccCount > 0 ? (
+              <>
+                <span className="text-[17px] font-bold text-slate-900 tabular-nums leading-none tracking-[-0.015em]">
+                  {hccCount}
+                </span>
+                <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-[0.08em]">
+                  {hccCount === 1 ? "HCC" : "HCCs"}
+                </span>
+              </>
+            ) : (
+              <span className="text-[17px] text-slate-200 font-normal">&mdash;</span>
+            )}
+          </div>
+
+          {/* Status pill */}
+          <div title={scored ? (tone.label === "High" ? "High risk — needs review" : "RAF score has been calculated") : "RAF score pending — patient needs analysis"}>
+            <span
+              className="inline-flex items-center gap-1.5 h-6 pl-2.5 pr-3 rounded-full text-[11.5px] font-semibold whitespace-nowrap tracking-[-0.005em] border"
+              style={{
+                backgroundColor:
+                  !scored ? tokens.slate50 :
+                  tone.label === "High" ? C.highSoft :
+                  C.lowSoft,
+                borderColor:
+                  !scored ? C.border :
+                  tone.label === "High" ? tokens.dangerBorder :
+                  tokens.emerald100,
+                color:
+                  !scored ? tokens.slate600 :
+                  tone.label === "High" ? "#B91C1C" :
+                  tokens.successDark,
+              }}
+            >
+              <span
+                className="w-1.5 h-1.5 rounded-full"
+                style={{
+                  backgroundColor:
+                    !scored ? tokens.slate300 :
+                    tone.label === "High" ? tokens.dangerMedium :
+                    tokens.success,
+                  boxShadow:
+                    !scored ? "none" :
+                    tone.label === "High" ? "0 0 0 2px rgba(239,68,68,0.18)" :
+                    "0 0 0 2px rgba(16,185,129,0.18)",
+                }}
+              />
+              {!scored ? "Pending" : tone.label === "High" ? "Needs Review" : "Analyzed"}
+            </span>
+          </div>
+
+          {/* Chevron */}
+          <ChevronRight
+            size={16}
+            className={[
+              "transition-all duration-150",
+              isHovered ? "text-teal-700 translate-x-0.5" : "text-slate-300",
+            ].join(" ")}
+          />
+
+          {/* Recent-activity hover card */}
+          {typeof pid === "number" && (
+            <WorklistRowHoverActivity patientId={pid} isHovered={isHovered} />
+          )}
+        </Link>
+      </td>
+    </tr>
+  );
+});
 
 // ---------------------------------------------------------------------------
 // Main page component
@@ -934,17 +1230,19 @@ export default function PatientsPage() {
               <div className="flex items-center gap-2.5 flex-wrap">
                 {/* Search */}
                 <div className="relative">
+                  <label htmlFor="patients-search" className="sr-only">Search patients</label>
                   <Search
                     size={16}
                     className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                    aria-hidden="true"
                   />
                   <input
+                    id="patients-search"
                     type="text"
                     title="Search patients by name or PID"
                     placeholder="Search patients…"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    aria-label="Search patients"
                     className="h-10 w-[min(320px,calc(100vw-180px))] rounded-[10px] border border-slate-200 bg-white pl-9 pr-3.5 text-[13px] text-slate-900 outline-none transition-all focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
                   />
                 </div>
@@ -1262,276 +1560,22 @@ export default function PatientsPage() {
               </div>
             )}
 
-            {/* ---- Patient rows ---- */}
+            {/* ---- Patient rows — rendered via memoised PatientRow ---- */}
             {rows.map((p, rowIndex) => {
               const pid = p.pid;
-              const age = p.DOB ? calculateAge(p.DOB) : null;
-              const score = p.raf_score ?? 0;
-              const hccCount = p.hcc_count ?? 0;
-              const scored = score > 0;
-              const fullName = `${p.lname || ""}, ${p.fname || ""}`.trim().replace(/^,\s*/, "").replace(/,\s*$/, "") || "•";
-              const initials = deriveInitials(p.fname, p.lname, pid);
-              const sexLabel =
-                p.sex === "Female" ? "F" :
-                p.sex === "Male" ? "M" :
-                p.sex ? p.sex[0] : "—";
-              const avatarColor = initialsColor(fullName);
               const isHovered = hoveredRow === pid;
-              const accent = riskAccentColor(scored ? score : null);
-              const tone = riskTone(scored ? score : null);
-              const toneFgAA =
-                tone.label === "High" ? "#B91C1C" :
-                tone.label === "Medium" ? "#B45309" :
-                tone.label === "Low" ? "#047857" :
-                tone.fg;
-              const location = formatLocation(p);
-
+              const isSelected = typeof pid === "number" && selectedPids.has(pid);
               return (
-                <tr
+                <PatientRow
                   key={p.pid != null ? `pid-${p.pid}` : `row-${rowIndex}`}
-                  role="row"
-                  aria-label={`${fullName}, ${age !== null ? `age ${age}` : "age unknown"}, RAF ${scored ? Number(score).toFixed(2) : "not calculated"}, ${tone.label} risk, ${hccCount} HCC${hccCount === 1 ? "" : "s"}`}
-                  onMouseEnter={() => setHoveredRow(pid)}
-                  onMouseLeave={() => setHoveredRow(null)}
-                  data-selected={selectedPids.has(Number(pid)) ? "true" : undefined}
-                  className="flex relative overflow-visible border-b border-slate-100 transition-colors duration-150"
-                  style={{
-                    height: 64,
-                    minHeight: 64,
-                    maxHeight: 64,
-                    borderLeft: `3px solid ${accent}`,
-                    backgroundColor: isHovered
-                      ? tokens.slate50
-                      : tone.label === "High"
-                        ? tokens.riskHighSoft
-                        : "#ffffff",
-                    animation: `fadeSlideIn 0.25s ease-out ${Math.min(rowIndex, 12) * 0.025}s both`,
-                  }}
-                >
-                  {/* Checkbox cell */}
-                  <td
-                    role="gridcell"
-                    className="flex items-center justify-center shrink-0 p-0"
-                    style={{ width: 21 }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={typeof pid === "number" && selectedPids.has(pid)}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        if (typeof pid === "number") togglePid(pid);
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      aria-label={`Select ${fullName} for bulk actions`}
-                      className="w-3.5 h-3.5 shrink-0 cursor-pointer accent-teal-700 transition-opacity"
-                      style={{
-                        opacity:
-                          isHovered || (typeof pid === "number" && selectedPids.has(pid))
-                            ? 1
-                            : 0,
-                      }}
-                      onFocus={(e) => { e.currentTarget.style.opacity = "1"; }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.opacity =
-                          isHovered || (typeof pid === "number" && selectedPids.has(pid)) ? "1" : "0";
-                      }}
-                    />
-                  </td>
-
-                  {/* Content cell — Link is the sole navigation target */}
-                  <td role="gridcell" className="flex-1 min-w-0 p-0">
-                    <Link
-                      href={`/patients/${pid}`}
-                      className="worklist-grid worklist-row-anchor grid items-center overflow-visible pl-2 pr-6 gap-0 cursor-pointer no-underline text-inherit outline-none focus:shadow-[inset_0_0_0_2px_rgba(13,148,136,0.15)]"
-                      style={{
-                        gridTemplateColumns: WORKLIST_COLS,
-                        height: 64,
-                      }}
-                    >
-                      {/* Patient: avatar + name + subtitle */}
-                      <div
-                        title={`${fullName} · PID ${pid}`}
-                        className="flex items-center gap-2 min-w-0"
-                      >
-                        <div
-                          className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold tracking-wide border"
-                          style={{
-                            background: `linear-gradient(135deg, ${avatarColor}1F 0%, ${avatarColor}0F 100%)`,
-                            color: avatarColor,
-                            borderColor: `${avatarColor}26`,
-                          }}
-                        >
-                          {initials}
-                        </div>
-                        <div className="min-w-0 flex flex-col gap-0.5">
-                          <span className="text-[14px] font-semibold text-slate-900 truncate leading-[1.2] tracking-[-0.005em]">
-                            {fullName}
-                          </span>
-                          <span
-                            className="text-[11px] text-slate-400 whitespace-nowrap tabular-nums tracking-wide"
-                            style={{ fontFamily: FONT_MONO }}
-                          >
-                            {age !== null ? `${age}${sexLabel !== "—" ? sexLabel : ""}` : ""}
-                            {age !== null && <span className="mx-1 text-slate-200">&middot;</span>}
-                            {pid}
-                            {location !== "—" && (
-                              <>
-                                <span className="mx-1 text-slate-200">&middot;</span>
-                                {location}
-                              </>
-                            )}
-                            {p.data_source === "upload" && (
-                              <>
-                                <span className="mx-1 text-slate-200">&middot;</span>
-                                <span className="text-[9px] font-semibold tracking-[0.04em] px-[5px] py-px rounded bg-sky-50 text-blue-500 border border-sky-200 uppercase">
-                                  CSV
-                                </span>
-                              </>
-                            )}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Risk Level badge */}
-                      <div>
-                        {scored ? (
-                          <span
-                            className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[11.5px] font-bold whitespace-nowrap"
-                            style={{ backgroundColor: tone.bg, color: toneFgAA }}
-                          >
-                            {tone.label === "High" ? "▲" : tone.label === "Medium" ? "●" : "▼"}{" "}
-                            {tone.label}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-slate-100 text-slate-500 text-[11.5px] font-semibold">
-                            Unscored
-                          </span>
-                        )}
-                      </div>
-
-                      {/* RAF Score */}
-                      <div title={`Total CMS-HCC RAF Score: ${scored ? Number(score).toFixed(4) : "Not yet calculated"}`}>
-                        {scored ? (
-                          <span className="text-[20px] font-bold text-slate-900 tabular-nums leading-none tracking-[-0.025em]">
-                            {Number(score).toFixed(2)}
-                          </span>
-                        ) : (
-                          <span className="text-[18px] text-slate-200 font-normal tabular-nums">&mdash;</span>
-                        )}
-                      </div>
-
-                      {/* Risk Factors chips */}
-                      <div className="risk-factors-cell flex flex-wrap gap-1 items-center">
-                        {scored && (
-                          (p.demographic_score != null && p.demographic_score > 0) ||
-                          (p.disease_score != null && p.disease_score > 0) ||
-                          (p.interaction_score != null && p.interaction_score > 0)
-                        ) ? (
-                          <>
-                            {p.demographic_score != null && p.demographic_score > 0 && (
-                              <span
-                                title={`Demographic RAF component — age/sex/disability adjustment: ${Number(p.demographic_score).toFixed(4)}`}
-                                className="inline-flex items-center gap-0.5 h-[22px] px-[7px] rounded-md bg-slate-100 border border-slate-200 text-[10.5px] font-semibold tabular-nums whitespace-nowrap cursor-default"
-                              >
-                                <span className="text-slate-500">Demo</span>
-                                <span className="text-slate-900">{Number(p.demographic_score).toFixed(3)}</span>
-                              </span>
-                            )}
-                            {p.disease_score != null && p.disease_score > 0 && (
-                              <span
-                                title={`Disease RAF component — HCC condition category contributions: ${Number(p.disease_score).toFixed(4)}`}
-                                className="inline-flex items-center gap-0.5 h-[22px] px-[7px] rounded-md bg-slate-100 border border-slate-200 text-[10.5px] font-semibold tabular-nums whitespace-nowrap cursor-default"
-                              >
-                                <span className="text-slate-500">Disease</span>
-                                <span className="text-slate-900">{Number(p.disease_score).toFixed(3)}</span>
-                              </span>
-                            )}
-                            {p.interaction_score != null && p.interaction_score > 0 && (
-                              <span
-                                title={`Interaction RAF component — disease-disease interaction adjustments: ${Number(p.interaction_score).toFixed(4)}`}
-                                className="inline-flex items-center gap-0.5 h-[22px] px-[7px] rounded-md bg-slate-100 border border-slate-200 text-[10.5px] font-semibold tabular-nums whitespace-nowrap cursor-default"
-                              >
-                                <span className="text-slate-500">Interact</span>
-                                <span className="text-slate-900">{Number(p.interaction_score).toFixed(3)}</span>
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          <span className="text-[12px] text-slate-200">&mdash;</span>
-                        )}
-                      </div>
-
-                      {/* HCC Count */}
-                      <div
-                        title={`${hccCount} Hierarchical Condition Categories identified`}
-                        className="flex flex-col items-end gap-px"
-                      >
-                        {hccCount > 0 ? (
-                          <>
-                            <span className="text-[17px] font-bold text-slate-900 tabular-nums leading-none tracking-[-0.015em]">
-                              {hccCount}
-                            </span>
-                            <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-[0.08em]">
-                              {hccCount === 1 ? "HCC" : "HCCs"}
-                            </span>
-                          </>
-                        ) : (
-                          <span className="text-[17px] text-slate-200 font-normal">&mdash;</span>
-                        )}
-                      </div>
-
-                      {/* Status pill */}
-                      <div title={scored ? (tone.label === "High" ? "High risk — needs review" : "RAF score has been calculated") : "RAF score pending — patient needs analysis"}>
-                        <span
-                          className="inline-flex items-center gap-1.5 h-6 pl-2.5 pr-3 rounded-full text-[11.5px] font-semibold whitespace-nowrap tracking-[-0.005em] border"
-                          style={{
-                            backgroundColor:
-                              !scored ? tokens.slate50 :
-                              tone.label === "High" ? C.highSoft :
-                              C.lowSoft,
-                            borderColor:
-                              !scored ? C.border :
-                              tone.label === "High" ? tokens.dangerBorder :
-                              tokens.emerald100,
-                            color:
-                              !scored ? tokens.slate600 :
-                              tone.label === "High" ? "#B91C1C" :
-                              tokens.successDark,
-                          }}
-                        >
-                          <span
-                            className="w-1.5 h-1.5 rounded-full"
-                            style={{
-                              backgroundColor:
-                                !scored ? tokens.slate300 :
-                                tone.label === "High" ? tokens.dangerMedium :
-                                tokens.success,
-                              boxShadow:
-                                !scored ? "none" :
-                                tone.label === "High" ? "0 0 0 2px rgba(239,68,68,0.18)" :
-                                "0 0 0 2px rgba(16,185,129,0.18)",
-                            }}
-                          />
-                          {!scored ? "Pending" : tone.label === "High" ? "Needs Review" : "Analyzed"}
-                        </span>
-                      </div>
-
-                      {/* Chevron */}
-                      <ChevronRight
-                        size={16}
-                        className={[
-                          "transition-all duration-150",
-                          isHovered ? "text-teal-700 translate-x-0.5" : "text-slate-300",
-                        ].join(" ")}
-                      />
-
-                      {/* Recent-activity hover card */}
-                      {typeof pid === "number" && (
-                        <WorklistRowHoverActivity patientId={pid} isHovered={isHovered} />
-                      )}
-                    </Link>
-                  </td>
-                </tr>
+                  p={p}
+                  rowIndex={rowIndex}
+                  isHovered={isHovered}
+                  isSelected={isSelected}
+                  onHoverEnter={() => setHoveredRow(pid)}
+                  onHoverLeave={() => setHoveredRow(null)}
+                  onToggleSelect={togglePid}
+                />
               );
             })}
 

@@ -28,13 +28,13 @@ export function QueryProvider({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // perf(demo): 60s staleTime keeps KPI strips & summaries cached
+            // perf(demo): 2 min staleTime keeps KPI strips & summaries cached
             // across navigations so re-entering a page feels instant.
-            staleTime: 60_000,
-            // perf(demo): keep cached results for 5 minutes after unmount so
+            staleTime: 2 * 60 * 1000,
+            // perf(demo): keep cached results for 10 minutes after unmount so
             // returning to a previously visited page paints from memory while
             // a background refresh runs.
-            gcTime: 5 * 60_000,
+            gcTime: 10 * 60 * 1000,
             retry: shouldRetry,
             refetchOnWindowFocus: false,
             refetchOnReconnect: false,

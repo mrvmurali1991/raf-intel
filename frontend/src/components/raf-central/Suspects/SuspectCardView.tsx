@@ -31,8 +31,12 @@ import { SuspectRow } from "@/components/ui/suspect-row";
  *
  * Uses React Query mutations (useAcceptSuspectCentral / useDismissSuspectCentral).
  * ExplainPanel is portal-rendered by ExplainPanel itself.
+ *
+ * perf: wrapped with React.memo — suspect list renders N cards; memoisation
+ * prevents all sibling cards from re-rendering when one card's mutation state
+ * changes (accept/dismiss pending flags are local to each card instance).
  */
-export function SuspectCardView({
+export const SuspectCardView = React.memo(function SuspectCardView({
   suspect,
   patientId,
   onChange,
@@ -649,4 +653,4 @@ export function SuspectCardView({
       )}
     </div>
   );
-}
+});

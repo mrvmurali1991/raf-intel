@@ -74,6 +74,7 @@ import { HeroStrip } from "./components/HeroStrip";
 import { RiskSummaryCard } from "./components/RiskSummaryCard";
 import { ActionItemsPanel } from "./components/ActionItemsPanel";
 import { useTenantBranding } from "@/lib/useTenantBranding";
+import { PageLoading } from "@/components/ui/page-loading";
 
 // perf(demo): non-default tabs are lazy-loaded so first paint only ships
 // OverviewTab. Each tab loads on demand when the user clicks it.
@@ -1088,20 +1089,26 @@ export default function PatientDetailPage({
                 </button>
               ))}
             </div>
-            {!rafMeatView && rafSubTab === "central" && <RAFCentralTab pid={pid} year={selectedYear} />}
+            {!rafMeatView && rafSubTab === "central" && (
+              <React.Suspense fallback={<PageLoading variant="detail" />}>
+                <RAFCentralTab pid={pid} year={selectedYear} />
+              </React.Suspense>
+            )}
             {!rafMeatView && rafSubTab === "details" && (
-              <RAFTab
-                breakdown={breakdown}
-                breakdownLoading={rafBreakdownQ.isLoading}
-                history={history}
-                historyLoading={rafHistoryQ.isLoading}
-                recapture={recaptureQ.data}
-                recaptureLoading={recaptureQ.isLoading}
-                rafScore={rafScore}
-                suspects={suspectsQ.data}
-                lastCalcResult={lastCalcResult}
-                selectedYear={selectedYear}
-              />
+              <React.Suspense fallback={<PageLoading variant="detail" />}>
+                <RAFTab
+                  breakdown={breakdown}
+                  breakdownLoading={rafBreakdownQ.isLoading}
+                  history={history}
+                  historyLoading={rafHistoryQ.isLoading}
+                  recapture={recaptureQ.data}
+                  recaptureLoading={recaptureQ.isLoading}
+                  rafScore={rafScore}
+                  suspects={suspectsQ.data}
+                  lastCalcResult={lastCalcResult}
+                  selectedYear={selectedYear}
+                />
+              </React.Suspense>
             )}
             {!rafMeatView && rafSubTab === "comparison" && (
               <div style={{ maxWidth: 1100 }}>
@@ -1110,11 +1117,13 @@ export default function PatientDetailPage({
             )}
             {!rafMeatView && rafSubTab === "v28-impact" && (
               <div style={{ maxWidth: 1100 }}>
-                <PatientV28ImpactPanel pid={pid} year={selectedYear} />
+                <React.Suspense fallback={<PageLoading variant="detail" />}>
+                  <PatientV28ImpactPanel pid={pid} year={selectedYear} />
+                </React.Suspense>
               </div>
             )}
             {rafMeatView && (
-              <>
+              <React.Suspense fallback={<PageLoading variant="detail" />}>
                 <SuspectsTab
                   suspects={suspectsQ.data}
                   suspectsLoading={suspectsQ.isLoading}
@@ -1122,29 +1131,33 @@ export default function PatientDetailPage({
                   dismissMutation={dismissMutation}
                 />
                 <PatientHedisStrip pid={pid} year={selectedYear} />
-              </>
+              </React.Suspense>
             )}
           </div>
         )}
 
         {activeTab === "encounters" && (
-          <EncountersTab
-            encounters={encountersQ.data}
-            encountersLoading={encountersQ.isLoading}
-            analyzeMutation={analyzeMutation}
-            lastAnalysisResult={lastAnalysisResult}
-            selectedYear={selectedYear}
-          />
+          <React.Suspense fallback={<PageLoading variant="detail" />}>
+            <EncountersTab
+              encounters={encountersQ.data}
+              encountersLoading={encountersQ.isLoading}
+              analyzeMutation={analyzeMutation}
+              lastAnalysisResult={lastAnalysisResult}
+              selectedYear={selectedYear}
+            />
+          </React.Suspense>
         )}
         {activeTab === "documents" && (
-          <DocumentsTab
-            pid={pid}
-            documents={documentsQ.data}
-            documentsLoading={documentsQ.isLoading}
-            rafScore={rafScore}
-            selectedYear={selectedYear}
-            patientName={patient ? `${patient.fname || patient.first_name || ""} ${patient.lname || patient.last_name || ""}`.trim() : ""}
-          />
+          <React.Suspense fallback={<PageLoading variant="detail" />}>
+            <DocumentsTab
+              pid={pid}
+              documents={documentsQ.data}
+              documentsLoading={documentsQ.isLoading}
+              rafScore={rafScore}
+              selectedYear={selectedYear}
+              patientName={patient ? `${patient.fname || patient.first_name || ""} ${patient.lname || patient.last_name || ""}`.trim() : ""}
+            />
+          </React.Suspense>
         )}
 
         {/* History tab — Audit + Activity merged */}
@@ -1173,14 +1186,20 @@ export default function PatientDetailPage({
               ))}
             </div>
             {historySubTab === "audit" && (
-              <AuditTab
-                audits={auditsQ.data}
-                auditsLoading={auditsQ.isLoading}
-                auditMutation={auditMutation}
-                selectedYear={selectedYear}
-              />
+              <React.Suspense fallback={<PageLoading variant="detail" />}>
+                <AuditTab
+                  audits={auditsQ.data}
+                  auditsLoading={auditsQ.isLoading}
+                  auditMutation={auditMutation}
+                  selectedYear={selectedYear}
+                />
+              </React.Suspense>
             )}
-            {historySubTab === "activity" && <ActivityTab pid={pid} />}
+            {historySubTab === "activity" && (
+              <React.Suspense fallback={<PageLoading variant="detail" />}>
+                <ActivityTab pid={pid} />
+              </React.Suspense>
+            )}
           </div>
         )}
       </div>
