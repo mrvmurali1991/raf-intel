@@ -36,8 +36,6 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
-from slowapi.util import get_remote_address
-
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.services import bulk_ingest_service
 from app.services.bulk_ingest_service import MAX_UPLOAD_BYTES, PROGRESS_CHANNEL_FMT

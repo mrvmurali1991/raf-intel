@@ -154,6 +154,49 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("All database connections healthy.")
 
+    # ------------------------------------------------------------------
+    # Startup dependency validation
+    # ------------------------------------------------------------------
+
+    # 1. RAF DB — critical. Log clearly so the operator knows immediately.
+    raf_db_ok = db_status.get("raf", False)
+    if not raf_db_ok:
+        logger.warning(
+            "STARTUP WARNING: RAF database is unreachable. "
+            "Most API endpoints will fail until the database is available."
+        )
+    else:
+        logger.info("Startup check [raf_db]: OK")
+
+    # 2. Redis — non-critical (used for caching / rate-limiting). Log but
+    #    do not prevent startup.
+    try:
+        import redis as _redis_module
+
+        _r = _redis_module.from_url(settings.redis_url, socket_timeout=3)
+        _r.ping()
+        logger.info("Startup check [redis]: OK")
+    except ImportError:
+        logger.info("Startup check [redis]: package not installed — skipped")
+    except Exception as _redis_exc:  # noqa: BLE001
+        logger.warning(
+            "Startup check [redis]: UNREACHABLE (%s). "
+            "Caching and rate-limiting features may be degraded.",
+            _redis_exc,
+        )
+
+    # 3. OpenEMR — non-critical. A warning is sufficient; the app operates in
+    #    a degraded state (no EMR data) until the connection is restored.
+    openemr_ok = db_status.get("openemr", False)
+    if not openemr_ok:
+        logger.warning(
+            "Startup check [openemr]: UNREACHABLE. "
+            "EMR-dependent features (FHIR sync, clinical notes) will be "
+            "unavailable until the OpenEMR database is reachable."
+        )
+    else:
+        logger.info("Startup check [openemr]: OK")
+
     _check_alembic_migrations()
 
     if settings.app_env in ("development", "demo"):

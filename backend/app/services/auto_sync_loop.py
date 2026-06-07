@@ -83,13 +83,37 @@ def _get_new_emr_pids() -> list[int]:
     if not emr_pids:
         return []
 
+    # Resolve the tenant this loop runs for.  The in-process loop is always
+    # tenant 1 (OpenEMR-bridged); guard against a missing env var gracefully.
+    try:
+        _loop_tenant_id = int(os.getenv("AUTO_SYNC_TENANT_ID", "1"))
+    except (TypeError, ValueError):
+        _loop_tenant_id = 1
+
     try:
         with raf_cursor() as cur:
             # "Already processed" = has at least one raf_scores row.
             # Since patient.id == emr_pid for OpenEMR-bridged tenants, we
             # query raf_scores.patient_id directly.
-            cur.execute("SELECT DISTINCT patient_id FROM raf_scores")
-            scored_pids = {int(row["patient_id"]) for row in cur.fetchall()}
+            # Fetch in batches of 1000 to avoid loading the entire table into
+            # memory, and scope to the tenant to prevent cross-tenant leakage.
+            scored_pids: set[int] = set()
+            _batch_size = 1000
+            _offset = 0
+            while True:
+                cur.execute(
+                    "SELECT DISTINCT patient_id FROM raf_scores "
+                    "WHERE tenant_id = %s LIMIT %s OFFSET %s",
+                    (_loop_tenant_id, _batch_size, _offset),
+                )
+                batch = cur.fetchall()
+                if not batch:
+                    break
+                scored_pids.update(int(row["patient_id"]) for row in batch)
+                if len(batch) < _batch_size:
+                    break
+                _offset += _batch_size
+
             cur.execute("SELECT emr_pid FROM auto_sync_failed_pids")
             failed_pids = {int(row["emr_pid"]) for row in cur.fetchall()}
     except Exception as exc:

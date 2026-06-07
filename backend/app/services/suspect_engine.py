@@ -221,11 +221,11 @@ def _coded_icd_set(patient_id: int, year: int | None = None) -> set[str]:
                 JOIN normalized_encounters ne
                     ON ne.encounter_id = nd.encounter_id
                 WHERE nd.patient_id = %s
-                  AND YEAR(ne.encounter_date) = %s
+                  AND ne.encounter_date >= %s AND ne.encounter_date < %s
                   AND nd.icd10_code IS NOT NULL
                   AND nd.icd10_code != ''
                 """,
-                (patient_id, year),
+                (patient_id, f"{year}-01-01", f"{year + 1}-01-01"),
             )
             rows = cur.fetchall()
         return {
@@ -777,10 +777,10 @@ def scan_note_vs_billing(patient_id: int, year: int | None = None) -> list[dict[
                       AND target_type   = 'encounter'
                       AND status        = 'completed'
                       AND result_summary IS NOT NULL
-                      AND YEAR(created_at) = %s
+                      AND created_at >= %s AND created_at < %s
                     ORDER BY created_at DESC
                     """,
-                    (patient_id, year),
+                    (patient_id, f"{year}-01-01", f"{year + 1}-01-01"),
                 )
             else:
                 cur.execute(
@@ -1494,11 +1494,11 @@ def accept_suspect(
                               FROM normalized_encounters
                              WHERE patient_id = %s
                                AND tenant_id  = %s
-                               AND YEAR(encounter_date) = %s
+                               AND encounter_date >= %s AND encounter_date < %s
                              ORDER BY encounter_date DESC
                              LIMIT 2
                             """,
-                            (_pid, _tenant, _year),
+                            (_pid, _tenant, f"{_year}-01-01", f"{_year + 1}-01-01"),
                         )
                         for fr in cur.fetchall() or []:
                             try:

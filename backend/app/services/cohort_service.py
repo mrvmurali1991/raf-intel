@@ -173,7 +173,7 @@ def _resolve_criteria_patient_ids(
         active_frag, active_params = active_patients_subquery(tid)
         with raf_cursor() as cur:
             cur.execute(
-                f"SELECT DISTINCT patient_id FROM raf_scores WHERE {where} AND {active_frag}",
+                f"SELECT DISTINCT patient_id FROM raf_scores WHERE {where} AND {active_frag} LIMIT 100000",
                 [*params, *active_params],
             )
             rows = cur.fetchall() or []

@@ -196,7 +196,13 @@ def _do_approve_and_score(
     diagnosis_ids: list[str] | None = None,
     tenant_id: str | None = None,
 ) -> dict[str, Any]:
-    """Approve all HCC-relevant diagnoses and recalculate RAF score."""
+    """Approve all HCC-relevant diagnoses and recalculate RAF score.
+
+    Uses a single cursor context for the entire approve + HCC-insert + document
+    status update so the operation is atomic — a mid-loop failure will not leave
+    partial state.  The HCC existence check is batched into one IN-list query
+    and inserts are issued with executemany instead of one round-trip per line.
+    """
     if tenant_id is None:
         raise ValueError("tenant_id is required for _do_approve_and_score")
     from datetime import date as _d
@@ -205,7 +211,15 @@ def _do_approve_and_score(
 
     year = _d.today().year
 
+    # ------------------------------------------------------------------
+    # Single cursor block: fetch lines → mark approved → batch-insert
+    # HCCs → update document status.  Everything runs inside one
+    # connection so a failure rolls back together.
+    # ------------------------------------------------------------------
+    inserted: list[str] = []
+
     with raf_cursor() as cur:
+        # 1. Fetch the diagnosis lines we need to approve.
         if diagnosis_ids:
             ph = ",".join(["%s"] * len(diagnosis_ids))
             cur.execute(
@@ -220,57 +234,73 @@ def _do_approve_and_score(
             )
         lines = cur.fetchall()
 
-    if not lines:
-        return {"approved": 0}
+        if not lines:
+            return {"approved": 0}
 
-    # Mark approved
-    ids = [l["id"] for l in lines]
-    with raf_cursor() as cur:
+        # 2. Mark all fetched lines as approved in one bulk update.
+        ids = [l["id"] for l in lines]
         cur.executemany(
             "UPDATE document_diagnosis_lines SET review_status='approved' WHERE id = %s",
             [(i,) for i in ids],
         )
 
-    # Insert into raf_patient_hcc
-    inserted = []
-    for l in lines:
-        hcc = l.get("hcc_code")
-        if not hcc:
-            continue
-        with raf_cursor() as cur:
+        # 3. Batch-check which HCC codes already exist for this patient/year
+        #    so we avoid per-row SELECT round-trips.
+        hcc_lines = [l for l in lines if l.get("hcc_code")]
+        if hcc_lines:
+            candidate_hccs = list({l["hcc_code"] for l in hcc_lines})
+            ph_hcc = ",".join(["%s"] * len(candidate_hccs))
             cur.execute(
-                "SELECT id FROM raf_patient_hcc WHERE patient_id=%s AND hcc_code=%s AND measurement_year=%s AND tenant_id=%s LIMIT 1",
-                (patient_id, hcc, year, tenant_id),
+                f"SELECT hcc_code FROM raf_patient_hcc "
+                f"WHERE patient_id = %s AND measurement_year = %s AND tenant_id = %s "
+                f"AND hcc_code IN ({ph_hcc})",
+                (patient_id, year, tenant_id, *candidate_hccs),
             )
-            if cur.fetchone():
-                continue
-            cur.execute(
-                "INSERT INTO raf_patient_hcc (patient_id, hcc_code, icd10_codes, hcc_description, measurement_year, source, tenant_id, model_version, created_at) "
-                "VALUES (%s,%s,%s,%s,%s,'document_analysis',%s,'V28',NOW())",
-                (
+            already_exists: set[str] = {r["hcc_code"] for r in cur.fetchall()}
+
+            # 4. Build the list of truly-new HCC rows and insert them all at once.
+            rows_to_insert = []
+            for l in hcc_lines:
+                hcc = l["hcc_code"]
+                if hcc in already_exists:
+                    continue
+                already_exists.add(hcc)  # guard against duplicates within this document
+                rows_to_insert.append((
                     patient_id,
                     hcc,
                     _json.dumps([l.get("icd10_code")] if l.get("icd10_code") else []),
                     l.get("description"),
                     year,
                     tenant_id,
-                ),
-            )
-            inserted.append(hcc)
+                ))
+                inserted.append(hcc)
 
-    # Recalculate RAF
+            if rows_to_insert:
+                cur.executemany(
+                    "INSERT INTO raf_patient_hcc "
+                    "(patient_id, hcc_code, icd10_codes, hcc_description, measurement_year, "
+                    " source, tenant_id, model_version, created_at) "
+                    "VALUES (%s, %s, %s, %s, %s, 'document_analysis', %s, 'V28', NOW())",
+                    rows_to_insert,
+                )
+
+        # 5. Mark the document itself as approved inside the same connection.
+        cur.execute(
+            "UPDATE documents SET status='approved' WHERE id = %s AND tenant_id = %s",
+            (document_id, tenant_id),
+        )
+
+    # ------------------------------------------------------------------
+    # Recalculate RAF score (manages its own connection internally).
+    # Run outside the cursor block so a scoring error does not roll back
+    # the already-committed approve state.
+    # ------------------------------------------------------------------
     try:
         raf_result = calculate_raf_score(patient_id, year, tenant_id=tenant_id)
         new_raf = raf_result.get("raf_score") or raf_result.get("final_raf", 0)
     except Exception:
         logger.debug("swallowed exception", exc_info=True)
         new_raf = None
-
-    with raf_cursor() as cur:
-        cur.execute(
-            "UPDATE documents SET status='approved' WHERE id=%s AND tenant_id=%s",
-            (document_id, tenant_id),
-        )
 
     return {"approved": len(ids), "new_hccs": inserted, "new_raf": new_raf}
 

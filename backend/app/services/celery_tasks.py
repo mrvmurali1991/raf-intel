@@ -57,6 +57,7 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 from datetime import datetime, timezone
 from typing import Any
 
@@ -409,7 +410,9 @@ def task_check_due_syncs(self) -> dict[str, Any]:
 
     except Exception as exc:
         task_logger.error("check_due_syncs failed: %s", exc, exc_info=True)
-        raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1))
+        base_delay = 30
+        countdown = base_delay * (self.request.retries + 1) + random.uniform(0, base_delay)
+        raise self.retry(exc=exc, countdown=countdown)
 
 
 # ---------------------------------------------------------------------------
@@ -522,8 +525,10 @@ def task_sync_emr_connection(
             exc,
             exc_info=True,
         )
-        # Exponential back-off: 2 min, 4 min, 8 min
-        raise self.retry(exc=exc, countdown=120 * (2 ** self.request.retries))
+        # Exponential back-off with jitter: ~2 min, ~4 min, ~8 min
+        base_delay = 120
+        countdown = base_delay * (2 ** self.request.retries) + random.uniform(0, base_delay)
+        raise self.retry(exc=exc, countdown=countdown)
 
 
 # ---------------------------------------------------------------------------
@@ -577,7 +582,9 @@ def task_retention_sweep(self) -> dict[str, Any]:
         _mark_failure(self, exc)
         _audit("job_failed", job_id, str(exc)[:500])
         task_logger.error("retention_sweep failed: %s", exc, exc_info=True)
-        raise self.retry(exc=exc, countdown=300 * (self.request.retries + 1))
+        base_delay = 300
+        countdown = base_delay * (self.request.retries + 1) + random.uniform(0, base_delay)
+        raise self.retry(exc=exc, countdown=countdown)
 
 
 # ---------------------------------------------------------------------------
@@ -656,7 +663,9 @@ def task_normalize_encounters(
         task_logger.error(
             "normalize_encounters failed tenant=%s: %s", tenant_id, exc, exc_info=True
         )
-        raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
+        base_delay = 60
+        countdown = base_delay * (self.request.retries + 1) + random.uniform(0, base_delay)
+        raise self.retry(exc=exc, countdown=countdown)
 
 
 # ---------------------------------------------------------------------------
@@ -1066,7 +1075,9 @@ def task_analyze_encounters_batch(
         _mark_failure(self, exc)
         _audit("job_failed", job_id, str(exc)[:500])
         task_logger.error("analyze_encounters_batch failed: %s", exc, exc_info=True)
-        raise self.retry(exc=exc, countdown=300)
+        base_delay = 300
+        countdown = base_delay + random.uniform(0, base_delay)
+        raise self.retry(exc=exc, countdown=countdown)
 
 
 # ---------------------------------------------------------------------------
@@ -1151,8 +1162,10 @@ def task_transmit_submission(
             exc,
             exc_info=True,
         )
-        # Exponential back-off: 2 min, 4 min, 8 min
-        raise self.retry(exc=exc, countdown=120 * (2 ** self.request.retries))
+        # Exponential back-off with jitter: ~2 min, ~4 min, ~8 min
+        base_delay = 120
+        countdown = base_delay * (2 ** self.request.retries) + random.uniform(0, base_delay)
+        raise self.retry(exc=exc, countdown=countdown)
 
 
 # ---------------------------------------------------------------------------
@@ -1396,7 +1409,9 @@ def fhir_sync_task(
             "fhir_sync_task failed: connection=%d tenant=%s error=%s",
             connection_id, tenant_id, exc, exc_info=True,
         )
-        raise self.retry(exc=exc, countdown=120 * (2 ** self.request.retries))
+        base_delay = 120
+        countdown = base_delay * (2 ** self.request.retries) + random.uniform(0, base_delay)
+        raise self.retry(exc=exc, countdown=countdown)
 
 
 # ---------------------------------------------------------------------------
@@ -1503,7 +1518,9 @@ def task_refresh_meat_for_patient(
         task_logger.error(
             "refresh_meat_for_patient failed patient=%d: %s", patient_id, exc, exc_info=True
         )
-        raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
+        base_delay = 60
+        countdown = base_delay * (self.request.retries + 1) + random.uniform(0, base_delay)
+        raise self.retry(exc=exc, countdown=countdown)
 
 
 # ---------------------------------------------------------------------------
@@ -1709,8 +1726,10 @@ def sync_patient_task(self, tenant_id: str, pid: int) -> dict[str, Any]:
             "auto_sync.sync_patient: tenant=%s pid=%s failed (attempt %d): %s",
             tenant_id, pid, self.request.retries + 1, exc,
         )
-        # Exponential back-off: 4s, 8s, 16s for attempts 0/1/2
-        raise self.retry(exc=exc, countdown=2 ** self.request.retries * 4)
+        # Exponential back-off with jitter: ~4s, ~8s, ~16s for attempts 0/1/2
+        base_delay = 4
+        countdown = base_delay * (2 ** self.request.retries) + random.uniform(0, base_delay)
+        raise self.retry(exc=exc, countdown=countdown)
 
 
 @celery_app.task(
@@ -1772,7 +1791,9 @@ def deliver_webhook_task(
             "webhook.deliver: subscription=%s event=%s failed (attempt %d): %s",
             subscription_id, event_type, self.request.retries + 1, exc,
         )
-        raise self.retry(exc=exc, countdown=30 * (2 ** self.request.retries))
+        base_delay = 30
+        countdown = base_delay * (2 ** self.request.retries) + random.uniform(0, base_delay)
+        raise self.retry(exc=exc, countdown=countdown)
 
 
 @celery_app.task(name="auto_sync.discover")
@@ -1885,7 +1906,9 @@ def task_refresh_v28_portfolio(
         task_logger.error(
             "refresh_v28_portfolio failed tenant=%s: %s", tenant_id, exc, exc_info=True
         )
-        raise self.retry(exc=exc, countdown=120 * (self.request.retries + 1))
+        base_delay = 120
+        countdown = base_delay * (self.request.retries + 1) + random.uniform(0, base_delay)
+        raise self.retry(exc=exc, countdown=countdown)
 
 
 # ---------------------------------------------------------------------------
@@ -1989,9 +2012,10 @@ def task_rfc3161_timestamp(self) -> dict:
                 "will retry.  Audit chain is unaffected.",
                 head_hash[:16],
             )
+            _rfc_base = 60
             raise self.retry(
                 exc=RuntimeError("TSA returned no token"),
-                countdown=60 * (self.request.retries + 1),
+                countdown=_rfc_base * (self.request.retries + 1) + random.uniform(0, _rfc_base),
             )
 
         # 3. Persist the token to the DB.
@@ -2032,7 +2056,9 @@ def task_rfc3161_timestamp(self) -> dict:
             "rfc3161_timestamp: attempt %d failed: %s — retrying",
             self.request.retries + 1, exc,
         )
-        raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
+        base_delay = 60
+        countdown = base_delay * (self.request.retries + 1) + random.uniform(0, base_delay)
+        raise self.retry(exc=exc, countdown=countdown)
 
 
 # ---------------------------------------------------------------------------
@@ -2063,7 +2089,9 @@ def task_fhir_writeback_async(
         user_id=user_id,
     )
     if res.get("status") == "failed" and self.request.retries < self.max_retries:
-        raise self.retry(countdown=60 * (self.request.retries + 1))
+        base_delay = 60
+        countdown = base_delay * (self.request.retries + 1) + random.uniform(0, base_delay)
+        raise self.retry(countdown=countdown)
     return res
 
 
@@ -2113,7 +2141,9 @@ def task_reveleer_pull(self, tenant_id: str, since: str | None = None) -> dict:
         return pull_charts_from_reveleer(tenant_id=tenant_id, since=since)
     except Exception as exc:
         task_logger.error("reveleer_pull tenant=%s failed: %s", tenant_id, exc)
-        raise self.retry(exc=exc, countdown=120 * (self.request.retries + 1))
+        base_delay = 120
+        countdown = base_delay * (self.request.retries + 1) + random.uniform(0, base_delay)
+        raise self.retry(exc=exc, countdown=countdown)
 
 
 @celery_app.task(
@@ -2155,4 +2185,6 @@ def task_reveleer_push_daily(self, tenant_id: str) -> dict:
         }
     except Exception as exc:
         task_logger.error("reveleer_push_daily tenant=%s failed: %s", tenant_id, exc)
-        raise self.retry(exc=exc, countdown=300 * (self.request.retries + 1))
+        base_delay = 300
+        countdown = base_delay * (self.request.retries + 1) + random.uniform(0, base_delay)
+        raise self.retry(exc=exc, countdown=countdown)

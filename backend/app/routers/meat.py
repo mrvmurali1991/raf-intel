@@ -260,19 +260,18 @@ def run_for_patient(
 
             updates.append((row_status, row_id))
 
-        # 3. Persist results.
+        # 3. Persist results — single batched UPDATE instead of per-row calls.
         if updates:
             with raf_cursor() as cur:
-                for status, row_id in updates:
-                    cur.execute(
-                        """
-                        UPDATE raf_patient_hcc
-                        SET meat_status = %s
-                        WHERE id = %s
-                          AND tenant_id = %s
-                        """,
-                        (status, row_id, tenant_id),
-                    )
+                cur.executemany(
+                    """
+                    UPDATE raf_patient_hcc
+                    SET meat_status = %s
+                    WHERE id = %s
+                      AND tenant_id = %s
+                    """,
+                    [(status, row_id, tenant_id) for status, row_id in updates],
+                )
 
         return RunForPatientResponse(
             patient_id=patient_id,

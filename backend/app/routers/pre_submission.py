@@ -18,14 +18,13 @@ is to render the dashboard.
 # Do not use ``from __future__ import annotations`` — breaks FastAPI schemas.
 
 import logging
-from collections.abc import Generator
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.auth import require_permission, get_current_user
-from app.db import raf_cursor
+from app.dependencies import get_cursor
 from app.services import pre_submission_validator as svc
 
 logger = logging.getLogger(__name__)
@@ -40,16 +39,6 @@ ITEM_LIMIT = 200
 # with raf:read can view the pre-submit dashboard. (raf:write is not
 # required because this endpoint never mutates state.)
 _perm_dep = require_permission("raf", "read")
-
-
-# ---------------------------------------------------------------------------
-# DB cursor dependency
-# ---------------------------------------------------------------------------
-
-def get_cursor() -> Generator[Any, None, None]:
-    """Yield a mysql-connector dictionary cursor from the RAF pool."""
-    with raf_cursor(dictionary=True) as cursor:
-        yield cursor
 
 
 # ---------------------------------------------------------------------------

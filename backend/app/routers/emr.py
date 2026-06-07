@@ -25,6 +25,7 @@ PUT    /api/emr/connections/{id}/mappings           - Update field mappings
 # it breaks FastAPI/Pydantic schema generation (ForwardRef errors in /openapi.json).
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Literal
 
@@ -400,8 +401,6 @@ def demo_connect(
     Activates the first available OpenEMR connection (FHIR or direct DB).
     If no connection exists, attempts auto-registration from environment variables.
     """
-    import os
-
     # Check if already connected — return any active OpenEMR connection
     try:
         conns = emr_mgr.list_connections(tenant_id=tenant_id)
@@ -954,15 +953,17 @@ def oauth2_authorize(
             400, "Cannot determine authorize URL. Set it in the connection config."
         )
 
-    # Build redirect_uri from Origin/Referer header or fallback
+    # Build redirect_uri from Origin/Referer header or env-configured base
     origin = request.headers.get("origin") or request.headers.get("referer") or ""
     if origin:
         origin = origin.split("/emr-config")[0].split("/api/")[0].rstrip("/")
-    redirect_uri = (
-        f"{origin}/emr-config/callback"
-        if origin
-        else "http://localhost:3444/emr-config/callback"
-    )
+    if origin:
+        redirect_uri = f"{origin}/emr-config/callback"
+    else:
+        callback_url = os.getenv("EMR_OAUTH_REDIRECT_BASE")
+        if not callback_url:
+            raise HTTPException(500, "EMR_OAUTH_REDIRECT_BASE not configured")
+        redirect_uri = callback_url
 
     # Store state for callback verification (redirect_uri stored so callback uses the same one)
     emr_mgr.store_oauth2_state(connection_id, state, code_verifier, redirect_uri)
@@ -1007,9 +1008,12 @@ def oauth2_callback(
 
     connection_id = state_data["connection_id"]
     code_verifier = state_data["code_verifier"]
-    redirect_uri = (
-        state_data.get("redirect_uri") or "http://localhost:3444/emr-config/callback"
-    )
+    redirect_uri = state_data.get("redirect_uri")
+    if not redirect_uri:
+        callback_url = os.getenv("EMR_OAUTH_REDIRECT_BASE")
+        if not callback_url:
+            raise HTTPException(500, "EMR_OAUTH_REDIRECT_BASE not configured")
+        redirect_uri = callback_url
 
     conn = emr_mgr.get_connection_with_credentials(connection_id)
     if not conn:

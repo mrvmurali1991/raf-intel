@@ -466,30 +466,63 @@ def _list_fhir_patients(
             where += " AND p.tenant_id = %s"
             params.append(tenant_id)
         if search:
-            where += (
-                " AND (p.first_name LIKE %s OR p.last_name LIKE %s"
-                " OR CAST(p.id AS CHAR) LIKE %s OR p.mrn LIKE %s)"
+            if len(search) >= 3:
+                _ft_where = (
+                    " AND MATCH(p.first_name, p.last_name, p.mrn)"
+                    " AGAINST(%s IN BOOLEAN MODE)"
+                )
+                _ft_param = f"{search}*"
+            else:
+                _ft_where = None
+                _ft_param = None
+
+            if _ft_where is not None:
+                where += _ft_where
+                params.append(_ft_param)
+            else:
+                like = f"%{search}%"
+                where += (
+                    " AND (p.first_name LIKE %s OR p.last_name LIKE %s)"
+                )
+                params.extend([like, like])
+
+        def _run_fhir_queries(cur, where, params):
+            cur.execute(
+                f"SELECT COUNT(*) AS cnt FROM patients p {where}",
+                params,
             )
-            like = f"%{search}%"
-            params.extend([like, like, like, like])
+            total = (cur.fetchone() or {}).get("cnt", 0)
+            cur.execute(
+                f"""SELECT p.id AS pid, p.first_name AS fname,
+                           p.last_name AS lname, p.dob AS DOB,
+                           p.sex, p.mrn
+                    FROM patients p
+                    {where}
+                    ORDER BY p.last_name, p.first_name
+                    LIMIT %s OFFSET %s""",
+                (*params, limit, offset),
+            )
+            return total, cur.fetchall()
 
-        cur.execute(
-            f"SELECT COUNT(*) AS cnt FROM patients p {where}",
-            params,
-        )
-        total = (cur.fetchone() or {}).get("cnt", 0)
-
-        cur.execute(
-            f"""SELECT p.id AS pid, p.first_name AS fname,
-                       p.last_name AS lname, p.dob AS DOB,
-                       p.sex, p.mrn
-                FROM patients p
-                {where}
-                ORDER BY p.last_name, p.first_name
-                LIMIT %s OFFSET %s""",
-            (*params, limit, offset),
-        )
-        rows = cur.fetchall()
+        try:
+            total, rows = _run_fhir_queries(cur, where, params)
+        except Exception as _ft_err:
+            if search and _ft_where is not None and "fulltext" in str(_ft_err).lower():
+                logging.warning(
+                    "FULLTEXT index not available for patients (FHIR), "
+                    "falling back to LIKE: %s", _ft_err
+                )
+                _like = f"%{search}%"
+                _fb_where = where.replace(
+                    _ft_where,
+                    " AND (p.first_name LIKE %s OR p.last_name LIKE %s)",
+                )
+                _fb_params = list(params)
+                _fb_params[_fb_params.index(_ft_param)] = _like
+                _fb_params.insert(_fb_params.index(_like) + 1, _like)
+                total, rows = _run_fhir_queries(cur, _fb_where, _fb_params)
+            else:
+                raise
 
     patients = []
     for r in rows:
@@ -523,51 +556,81 @@ def _list_raf_patients(
             params.append(tenant_id)
         if only_uploaded:
             where += " AND data_source = 'upload'"
+        _raf_ft_where: str | None = None
+        _raf_ft_param: str | None = None
         if search:
             if search.isdigit():
                 where += " AND id = %s"
                 params.append(int(search))
+            elif len(search) >= 3:
+                _raf_ft_where = (
+                    " AND MATCH(first_name, last_name, mrn)"
+                    " AGAINST(%s IN BOOLEAN MODE)"
+                )
+                _raf_ft_param = f"{search}*"
+                where += _raf_ft_where
+                params.append(_raf_ft_param)
             else:
                 like = f"%{search}%"
                 where += (
-                    " AND (CONCAT(first_name, ' ', last_name) LIKE %s"
-                    " OR first_name LIKE %s"
-                    " OR last_name LIKE %s"
-                    " OR mrn LIKE %s)"
+                    " AND (first_name LIKE %s OR last_name LIKE %s)"
                 )
-                params.extend([like, like, like, like])
+                params.extend([like, like])
 
-        cur.execute(f"SELECT COUNT(*) AS cnt FROM patients {where}", params)
-        total = (cur.fetchone() or {}).get("cnt", 0)
+        def _run_raf_queries(cur, where, params):
+            cur.execute(
+                f"SELECT COUNT(*) AS cnt FROM patients {where}", params
+            )
+            total = (cur.fetchone() or {}).get("cnt", 0)
+            cur.execute(
+                f"""SELECT id AS pid,
+                           first_name AS fname,
+                           last_name AS lname,
+                           middle_name AS mname,
+                           dob AS DOB,
+                           sex,
+                           race,
+                           ethnicity,
+                           preferred_language AS language,
+                           address AS street,
+                           city,
+                           state,
+                           zip AS postal_code,
+                           phone AS phone_cell,
+                           phone AS phone_home,
+                           email,
+                           mrn,
+                           insurance_type,
+                           data_source,
+                           created_at AS created_date
+                    FROM patients
+                    {where}
+                    ORDER BY last_name, first_name
+                    LIMIT %s OFFSET %s""",
+                (*params, limit, offset),
+            )
+            return total, cur.fetchall()
 
-        cur.execute(
-            f"""SELECT id AS pid,
-                       first_name AS fname,
-                       last_name AS lname,
-                       middle_name AS mname,
-                       dob AS DOB,
-                       sex,
-                       race,
-                       ethnicity,
-                       preferred_language AS language,
-                       address AS street,
-                       city,
-                       state,
-                       zip AS postal_code,
-                       phone AS phone_cell,
-                       phone AS phone_home,
-                       email,
-                       mrn,
-                       insurance_type,
-                       data_source,
-                       created_at AS created_date
-                FROM patients
-                {where}
-                ORDER BY last_name, first_name
-                LIMIT %s OFFSET %s""",
-            (*params, limit, offset),
-        )
-        rows = cur.fetchall()
+        try:
+            total, rows = _run_raf_queries(cur, where, params)
+        except Exception as _ft_err:
+            if search and _raf_ft_where is not None and "fulltext" in str(_ft_err).lower():
+                logging.warning(
+                    "FULLTEXT index not available for patients (RAF), "
+                    "falling back to LIKE: %s", _ft_err
+                )
+                _like = f"%{search}%"
+                _fb_where = where.replace(
+                    _raf_ft_where,
+                    " AND (first_name LIKE %s OR last_name LIKE %s)",
+                )
+                _fb_params = list(params)
+                _idx = _fb_params.index(_raf_ft_param)
+                _fb_params[_idx] = _like
+                _fb_params.insert(_idx + 1, _like)
+                total, rows = _run_raf_queries(cur, _fb_where, _fb_params)
+            else:
+                raise
 
     from decimal import Decimal
     _PHI_EXCLUDED_FIELDS = {"ssn", "social_security_number", "ssn_last4"}
@@ -1084,8 +1147,8 @@ def svc_get_medication_gaps(pid: int, year: int, tenant_id: str) -> dict[str, An
                     _mc.execute(
                         "SELECT DISTINCT icd10_code FROM patient_conditions"
                         " WHERE patient_id = %s"
-                        " AND (onset_date IS NULL OR YEAR(onset_date) <= %s) LIMIT 500",
-                        (pid, year),
+                        " AND (onset_date IS NULL OR onset_date < %s) LIMIT 500",
+                        (pid, f"{year + 1}-01-01"),
                     )
                     billed = {r["icd10_code"] for r in _mc.fetchall() if r.get("icd10_code")}
 

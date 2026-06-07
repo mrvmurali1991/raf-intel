@@ -207,9 +207,10 @@ class Settings:
     # Frontend URL (used to construct email links, e.g. password reset)
     frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
-    # CMS per-member per-year revenue benchmark used for RAF opportunity calcs
+    # CMS per-member per-year revenue benchmark used for RAF opportunity calcs.
+    # CMS PY2026 national per-capita rate. Update annually from CMS Rate Announcement.
     cms_revenue_per_raf_point: float = float(
-        os.getenv("CMS_REVENUE_PER_RAF_POINT", "11015.04")
+        os.getenv("CMS_REVENUE_PER_RAF_POINT", "11800")
     )
 
     # RADV billing gate: when True (default), only LLM-validated MEAT evidence

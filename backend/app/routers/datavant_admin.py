@@ -19,7 +19,7 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from app.auth import get_current_user, require_role
+from app.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 

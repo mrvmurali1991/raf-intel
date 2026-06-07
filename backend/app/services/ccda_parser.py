@@ -8,7 +8,8 @@ for downstream persistence and HCC suspect routing.
 
 Design decisions
 ----------------
-- Uses ``xml.etree.ElementTree`` exclusively (no lxml dependency).
+- Uses ``defusedxml.ElementTree`` to guard against XXE attacks on untrusted
+  inbound payloads (drop-in replacement for ``xml.etree.ElementTree``).
 - Delegates ICD-10 → HCC crosswalk to the existing ``hcc_icd10_crosswalk``
   table via ``app.db.raf_cursor``.  Falls back gracefully when the DB is
   unavailable (unit-test context).
@@ -26,14 +27,15 @@ Sections parsed
   encounters  → start, end, encounter type, provider NPI
   allergies   → substance, reaction, severity
 
-TODO(production): Replace ``xml.etree.ElementTree`` with
-``defusedxml.ElementTree`` once ``defusedxml`` is pinned in requirements.txt
-to guard against XML entity expansion attacks on untrusted inbound payloads.
+``defusedxml.ElementTree`` is used instead of ``xml.etree.ElementTree`` to
+block XXE, billion-laughs, and quadratic-blowup attacks on untrusted
+inbound payloads received from external EHRs.
 """
 from __future__ import annotations
 
 import logging
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
+from xml.etree.ElementTree import Element as _ETElement  # safe: only used for sentinel construction, never for parsing
 from datetime import datetime
 from typing import Any
 
@@ -377,7 +379,7 @@ def _parse_results(section: ET.Element) -> list[dict]:
             result_date: str | None = None
             if eff is not None:
                 result_date = _parse_date(
-                    _attr(eff, "value") or _attr(eff.find(_cda("low")) or ET.Element("x"), "value")
+                    _attr(eff, "value") or _attr(eff.find(_cda("low")) or _ETElement("x"), "value")
                 )
 
             if test_name == "Unknown test" and loinc_code is None:

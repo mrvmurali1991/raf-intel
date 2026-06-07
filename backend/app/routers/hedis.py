@@ -79,14 +79,30 @@ def _cached_hedis_scores(tenant_id: int, year: int) -> dict[str, Any]:
 
 
 def _load_tenant_patients(tenant_id: int) -> list[dict[str, Any]]:
-    """Return minimal patient roster for the tenant (id, dob, sex)."""
+    """Return minimal patient roster for the tenant (id, dob, sex).
+
+    Fetches in batches of 1000 rows to avoid loading the entire patients table
+    into memory for large tenants.
+    """
+    _batch_size = 1000
+    patients: list[dict[str, Any]] = []
+    offset = 0
     with raf_cursor() as cur:
-        cur.execute(
-            "SELECT id, dob, sex FROM patients "
-            "WHERE tenant_id = %s AND is_active = 1",
-            (tenant_id,),
-        )
-        return list(cur.fetchall() or [])
+        while True:
+            cur.execute(
+                "SELECT id, dob, sex FROM patients "
+                "WHERE tenant_id = %s AND is_active = 1 "
+                "LIMIT %s OFFSET %s",
+                (tenant_id, _batch_size, offset),
+            )
+            batch = cur.fetchall()
+            if not batch:
+                break
+            patients.extend(batch)
+            if len(batch) < _batch_size:
+                break
+            offset += _batch_size
+    return patients
 
 
 # ---------------------------------------------------------------------------

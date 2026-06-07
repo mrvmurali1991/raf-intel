@@ -142,6 +142,7 @@ def list_disputes(
     tenant_id: int | None = None,
     patient_id: int | None = None,
     limit: int = 200,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
     """Return disputes filtered by status / assignee / tenant / patient."""
     where: list[str] = []
@@ -168,15 +169,47 @@ def list_disputes(
         FROM hcc_disputes
         {where_sql}
         ORDER BY denial_received_at DESC, id DESC
-        LIMIT %s
+        LIMIT %s OFFSET %s
     """
-    args.append(int(limit))
+    args.extend([int(limit), int(offset)])
 
     with raf_cursor() as cur:
         cur.execute(sql, args)
         rows = [_row_to_dict(r) for r in cur.fetchall()]
 
     return rows
+
+
+def count_disputes(
+    status: str | None = None,
+    assigned_to: str | None = None,
+    tenant_id: int | None = None,
+    patient_id: int | None = None,
+) -> int:
+    """Return the total number of disputes matching the given filters."""
+    where: list[str] = []
+    args: list[Any] = []
+
+    if status:
+        where.append("status = %s")
+        args.append(status)
+    if assigned_to:
+        where.append("assigned_to = %s")
+        args.append(assigned_to)
+    if tenant_id is not None:
+        where.append("tenant_id = %s")
+        args.append(int(tenant_id))
+    if patient_id is not None:
+        where.append("patient_id = %s")
+        args.append(int(patient_id))
+
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+    sql = f"SELECT COUNT(*) AS cnt FROM hcc_disputes {where_sql}"
+
+    with raf_cursor() as cur:
+        cur.execute(sql, args)
+        row = cur.fetchone()
+    return int(row["cnt"]) if row else 0
 
 
 # ---------------------------------------------------------------------------

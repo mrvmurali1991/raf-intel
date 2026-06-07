@@ -325,29 +325,40 @@ def reassign_patients(
         for pid in rejected_ids
     ]
 
+    _SQL_UPSERT_ASSIGNMENT = """
+        INSERT INTO raf_patient_assignments
+            (patient_id, tenant_id, assignee_user_id,
+             assigned_by_user_id, assigned_at)
+        VALUES (%s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            assignee_user_id    = VALUES(assignee_user_id),
+            assigned_by_user_id = VALUES(assigned_by_user_id),
+            assigned_at         = VALUES(assigned_at)
+    """
+    batch_params = [
+        (pid, tenant_id, body.assignee_user_id, actor_id, now)
+        for pid in accepted_ids
+    ]
     with raf_cursor() as cur:
-        for pid in accepted_ids:
-            try:
-                cur.execute(
-                    """
-                    INSERT INTO raf_patient_assignments
-                        (patient_id, tenant_id, assignee_user_id,
-                         assigned_by_user_id, assigned_at)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON DUPLICATE KEY UPDATE
-                        assignee_user_id    = VALUES(assignee_user_id),
-                        assigned_by_user_id = VALUES(assigned_by_user_id),
-                        assigned_at         = VALUES(assigned_at)
-                    """,
-                    (pid, tenant_id, body.assignee_user_id, actor_id, now),
-                )
-                upserted += 1
-            except Exception as exc:  # noqa: BLE001 - best-effort per-row
-                logger.warning(
-                    "bulk reassign failed pid=%s tenant=%s err=%s",
-                    pid, tenant_id, exc,
-                )
-                errors.append(BulkError(patient_id=pid, error=str(exc)))
+        try:
+            # Happy path: single batched upsert for all accepted patients.
+            cur.executemany(_SQL_UPSERT_ASSIGNMENT, batch_params)
+            upserted = len(accepted_ids)
+        except Exception as batch_exc:  # noqa: BLE001 — retry row-by-row on batch failure
+            logger.warning(
+                "bulk reassign batch failed tenant=%s err=%s — retrying per-row",
+                tenant_id, batch_exc,
+            )
+            for pid, params in zip(accepted_ids, batch_params):
+                try:
+                    cur.execute(_SQL_UPSERT_ASSIGNMENT, params)
+                    upserted += 1
+                except Exception as exc:  # noqa: BLE001 - best-effort per-row
+                    logger.warning(
+                        "bulk reassign failed pid=%s tenant=%s err=%s",
+                        pid, tenant_id, exc,
+                    )
+                    errors.append(BulkError(patient_id=pid, error=str(exc)))
 
     # Single rolled-up audit event for the whole batch — individual rows
     # already live in ``raf_patient_assignments``.

@@ -371,14 +371,59 @@ def get_raf_read_pool() -> MySQLConnectionPool:
     return _raf_read_pool
 
 
+def _pool_get_connection(pool: MySQLConnectionPool, timeout: float = 10.0):
+    """Acquire a connection from *pool* with an explicit wall-clock timeout.
+
+    ``MySQLConnectionPool.get_connection()`` can block indefinitely when all
+    connections are in use and the caller holds the GIL waiting for one to be
+    returned.  This wrapper races the blocking call against a ``threading.Timer``
+    so that callers never wait more than *timeout* seconds.
+
+    Raises ``TimeoutError`` when the pool does not yield a connection within
+    *timeout* seconds.  The acquired connection is returned normally when the
+    pool responds in time.
+
+    Args:
+        pool: The ``MySQLConnectionPool`` instance to acquire from.
+        timeout: Maximum wall-clock seconds to wait (default 10).
+    """
+    result: list = []
+    exc_holder: list = []
+
+    def _acquire() -> None:
+        try:
+            result.append(pool.get_connection())
+        except Exception as exc:  # noqa: BLE001
+            exc_holder.append(exc)
+
+    t = threading.Thread(target=_acquire, daemon=True)
+    t.start()
+    t.join(timeout=timeout)
+
+    if t.is_alive():
+        # Thread is still blocked — give up and raise.  The thread will
+        # eventually unblock when a connection is returned to the pool; the
+        # acquired connection will be closed immediately because nobody holds
+        # a reference to ``result[0]``.
+        raise TimeoutError(
+            f"Pool connection not available within {timeout:.0f}s "
+            f"(pool_name={pool.pool_name!r})"
+        )
+
+    if exc_holder:
+        raise exc_holder[0]
+
+    return result[0]
+
+
 def get_openemr_db():
     """Return a raw connection from the OpenEMR pool."""
-    return get_openemr_pool().get_connection()
+    return _pool_get_connection(get_openemr_pool())
 
 
 def get_raf_db():
     """Return a raw connection from the RAF pool."""
-    return get_raf_pool().get_connection()
+    return _pool_get_connection(get_raf_pool())
 
 
 # ---------------------------------------------------------------------------
@@ -448,7 +493,7 @@ def _db_cursor(pool_fn, dictionary: bool = True) -> Generator:
     (>SLOW_QUERY_THRESHOLD_MS) and count queries per request for N+1 detection.
     """
     pool = pool_fn()
-    conn = pool.get_connection()
+    conn = _pool_get_connection(pool)
     cursor = None
     try:
         raw_cursor = conn.cursor(dictionary=dictionary)
@@ -597,7 +642,7 @@ def check_connections() -> dict[str, bool]:
         conn = None
         try:
             pool = pool_fn()
-            conn = pool.get_connection()
+            conn = _pool_get_connection(pool)
             conn.ping(reconnect=True)
             status[label] = True
         except Exception as exc:
@@ -795,7 +840,7 @@ def dynamic_db_cursor(
     conn = None
     cursor = None
     try:
-        conn = pool.get_connection()
+        conn = _pool_get_connection(pool)
         cursor = conn.cursor(dictionary=dictionary)
         yield cursor
         conn.commit()

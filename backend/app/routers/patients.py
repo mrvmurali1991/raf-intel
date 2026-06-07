@@ -27,6 +27,7 @@ from pydantic import BaseModel
 from app.auth import get_current_user, get_tenant_id, require_permission
 from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.rate_limit import limiter
+from app.routers.uploads import _validate_file_content
 from app.schemas.patient import PatientSummary
 from app.services import openemr_connector as emr
 from app.services import patient_service as svc
@@ -513,6 +514,9 @@ async def import_patients_csv(
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
+    # Validate magic bytes and encoding BEFORE any parsing.
+    _validate_file_content(content, fname)
+
     if len(content) > _MAX_CSV_BYTES:
         raise HTTPException(
             status_code=413,
@@ -642,6 +646,11 @@ async def import_patients_fhir(
 
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    # Validate magic bytes and encoding BEFORE any parsing.
+    # JSON has no magic bytes; this check enforces valid UTF-8 text and the
+    # hard 100 MB size ceiling.
+    _validate_file_content(content, file.filename or "")
 
     if len(content) > _MAX_CSV_BYTES:
         raise HTTPException(

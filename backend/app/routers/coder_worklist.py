@@ -44,7 +44,7 @@ from app.services.coder_worklist_service import (
     start_review,
 )
 from app.services.hcc_mapping_service import get_hcc_coefficient
-from app.services.raf.dos_rules import PAYMENT_YEARS, get_payment_year_window
+from app.services.raf.dos_rules import get_payment_year_window
 
 logger = logging.getLogger(__name__)
 

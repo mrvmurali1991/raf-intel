@@ -1866,7 +1866,10 @@ def auto_register_openemr() -> dict | None:
             )
         return None
 
-    openemr_url = os.getenv("OPENEMR_URL", "http://localhost:8080")
+    openemr_url = os.getenv("OPENEMR_URL")
+    if not openemr_url and os.getenv("APP_ENV") == "production":
+        raise RuntimeError("OPENEMR_URL is required in production")
+    openemr_url = openemr_url or "http://localhost:8080"
 
     connection_data = {
         "tenant_id": tenant_id,

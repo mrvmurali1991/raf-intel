@@ -29,6 +29,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.auth import get_current_user, get_tenant_id, require_permission
+from app.response import paginated_response
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,24 @@ def _coerce_run(row: dict) -> PipelineRunSummary:
     )
 
 
+def _count_pipeline_runs(tenant_id: str, *, status: str | None = None) -> int:
+    """Return the total number of pipeline_runs rows for *tenant_id*."""
+    from app.db import raf_cursor
+
+    clauses: list[str] = ["tenant_id = %s"]
+    params: list[Any] = [tenant_id]
+    if status:
+        clauses.append("status = %s")
+        params.append(status)
+    where = "WHERE " + " AND ".join(clauses)
+    sql = f"SELECT COUNT(*) AS cnt FROM pipeline_runs {where}"
+
+    with raf_cursor() as cur:
+        cur.execute(sql, params)
+        row = cur.fetchone()
+    return int(row["cnt"]) if row else 0
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -151,7 +170,6 @@ def get_pipeline_status(
 
 @router.get(
     "/runs",
-    response_model=list[PipelineRunSummary],
     summary="List pipeline runs",
 )
 def list_pipeline_runs(
@@ -161,11 +179,13 @@ def list_pipeline_runs(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("pipeline", "read")),
-) -> list[PipelineRunSummary]:
+) -> dict[str, Any]:
     """Return a paginated list of pipeline runs for the authenticated tenant.
 
     Results are ordered newest-first.  Use ``status`` to filter to a specific
     lifecycle stage (e.g. ``running`` to check for an in-flight pipeline).
+
+    Response shape: {items, total, limit, offset, has_more}
     """
     from app.services.pipeline_chain import get_pipeline_runs
 
@@ -184,6 +204,7 @@ def list_pipeline_runs(
             limit=limit,
             offset=offset,
         )
+        total = _count_pipeline_runs(tenant_id, status=status)
     except Exception as exc:
         logger.error(
             "pipeline router: get_pipeline_runs failed [tenant=%s]: %s",
@@ -193,7 +214,12 @@ def list_pipeline_runs(
         )
         raise HTTPException(status_code=500, detail="Failed to query pipeline runs")
 
-    return [_coerce_run(row) for row in rows]
+    return paginated_response(
+        items=[_coerce_run(row).model_dump() for row in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get(

@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
+from app.response import paginated_response
 from app.services import dispute_service as svc
 from app.auth import get_current_user
 
@@ -84,7 +85,7 @@ class RecordOutcomePayload(BaseModel):
 # Routes
 # ---------------------------------------------------------------------------
 
-@router.post("/disputes", summary="Create a new dispute")
+@router.post("/disputes", summary="Create a new dispute", status_code=201)
 def create_dispute_endpoint(
     request: Request,
     response: Response,
@@ -106,15 +107,25 @@ def list_disputes_endpoint(
     tenant_id: int | None = Query(None),
     patient_id: int | None = Query(None),
     limit: int = Query(200, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
+    """Return a paginated list of disputes.
+
+    Response shape: {items, total, limit, offset, has_more}
+    """
     try:
         rows = svc.list_disputes(
             status=status, assigned_to=assigned_to,
-            tenant_id=tenant_id, patient_id=patient_id, limit=limit,
+            tenant_id=tenant_id, patient_id=patient_id,
+            limit=limit, offset=offset,
+        )
+        total = svc.count_disputes(
+            status=status, assigned_to=assigned_to,
+            tenant_id=tenant_id, patient_id=patient_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"count": len(rows), "disputes": rows}
+    return paginated_response(items=rows, total=total, limit=limit, offset=offset)
 
 
 @router.get("/disputes/metrics", summary="Win-rate, $ recovered, cycle time")

@@ -2,6 +2,7 @@
 import logging
 import threading
 import time
+from collections import OrderedDict
 from enum import Enum
 from functools import wraps
 
@@ -153,7 +154,8 @@ sftp_breaker = CircuitBreaker(
 # instead of a single global CB that taking down one tenant trips for all.
 # ---------------------------------------------------------------------------
 
-_keyed_breakers: dict[str, CircuitBreaker] = {}
+_MAX_BREAKERS = 500
+_keyed_breakers: OrderedDict[str, CircuitBreaker] = OrderedDict()
 _keyed_lock = threading.Lock()
 
 
@@ -164,15 +166,24 @@ def get_breaker(
     recovery_timeout: float = 60.0,
 ) -> CircuitBreaker:
     """Get-or-create a CircuitBreaker for a stable key (e.g. f'fhir:{tenant}:{url}').
-    All callers with the same key share the same breaker state."""
+    All callers with the same key share the same breaker state.
+
+    The registry is bounded to _MAX_BREAKERS entries.  When the capacity is
+    reached the least-recently-used entry is evicted so that dynamic EMR URLs
+    in a multi-tenant deployment cannot cause unbounded memory growth.
+    """
     with _keyed_lock:
-        cb = _keyed_breakers.get(key)
-        if cb is None:
-            cb = CircuitBreaker(
-                key, failure_threshold=failure_threshold,
-                recovery_timeout=recovery_timeout,
-            )
-            _keyed_breakers[key] = cb
+        if key in _keyed_breakers:
+            _keyed_breakers.move_to_end(key)
+            return _keyed_breakers[key]
+        if len(_keyed_breakers) >= _MAX_BREAKERS:
+            evicted_key, _ = _keyed_breakers.popitem(last=False)
+            logger.debug("circuit_breaker: evicted LRU breaker key=%r", evicted_key)
+        cb = CircuitBreaker(
+            key, failure_threshold=failure_threshold,
+            recovery_timeout=recovery_timeout,
+        )
+        _keyed_breakers[key] = cb
         return cb
 
 

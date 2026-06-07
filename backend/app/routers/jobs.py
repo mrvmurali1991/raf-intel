@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user, get_tenant_id, require_permission
+from app.response import paginated_response
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +150,34 @@ def _fetch_jobs(
         return cur.fetchall() or []
 
 
+def _count_jobs(
+    *,
+    tenant_id: str,
+    status: str | None = None,
+    task_name: str | None = None,
+) -> int:
+    """Return the total number of jobs matching the given filters (no pagination)."""
+    from app.db import raf_cursor
+
+    clauses: list[str] = ["tenant_id = %s"]
+    params: list[Any] = [tenant_id]
+
+    if status:
+        clauses.append("status = %s")
+        params.append(status)
+    if task_name:
+        clauses.append("task_name = %s")
+        params.append(task_name)
+
+    where = "WHERE " + " AND ".join(clauses)
+    sql = f"SELECT COUNT(*) AS cnt FROM raf_jobs {where}"
+
+    with raf_cursor() as cur:
+        cur.execute(sql, params)
+        row = cur.fetchone()
+    return int(row["cnt"]) if row else 0
+
+
 def _fetch_job(job_id: str, tenant_id: str) -> dict | None:
     """Fetch a single job row by ID, scoped to the user's tenant."""
     from app.db import raf_cursor
@@ -204,7 +233,7 @@ def _require_tenant_int(tenant_id: str) -> int:
 # ---------------------------------------------------------------------------
 
 
-@router.get("", response_model=list[JobSummary], summary="List jobs")
+@router.get("", summary="List jobs")
 def list_jobs(
     status: str | None = Query(None, description="Filter by status"),
     task_name: str | None = Query(None, description="Filter by task name"),
@@ -213,8 +242,11 @@ def list_jobs(
     current_user: dict = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("jobs", "read")),
-) -> list[JobSummary]:
-    """Return a paginated list of jobs for the authenticated user's tenant."""
+) -> dict[str, Any]:
+    """Return a paginated list of jobs for the authenticated user's tenant.
+
+    Response shape: {items, total, limit, offset, has_more}
+    """
     try:
         rows = _fetch_jobs(
             tenant_id=tenant_id,
@@ -223,11 +255,17 @@ def list_jobs(
             limit=limit,
             offset=offset,
         )
+        total = _count_jobs(tenant_id=tenant_id, status=status, task_name=task_name)
     except Exception as exc:
         logger.error("Failed to list jobs: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to query job list")
 
-    return [JobSummary(**row) for row in rows]
+    return paginated_response(
+        items=[JobSummary(**row).model_dump() for row in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/stats", response_model=JobStats, summary="Job queue statistics")

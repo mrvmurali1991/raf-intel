@@ -74,7 +74,7 @@ class BulkRequest(BaseModel):
 
 # ----------- Endpoints -----------
 
-@router.post("/requests", summary="Create a chart-chase request")
+@router.post("/requests", summary="Create a chart-chase request", status_code=201)
 def create(
     body: CreateRequest,
     tenant_id: str = Depends(get_tenant_id),

@@ -487,11 +487,14 @@ def generate_pre_visit_summary(patient_id: int, year: int, tenant_id: str = "") 
             enc_row = cur.fetchone()
         last_encounter = _format_date(enc_row["last_enc"]) if enc_row else None
 
-        # Current RAF breakdown
+        # Current RAF, HCC breakdown, open suspects, and recapture gaps —
+        # all from raf_intelligence DB, consolidated into a single connection.
         with raf_cursor() as cur:
+            # Current RAF score (only the columns actually used)
             cur.execute(
                 """
-                SELECT * FROM raf_scores
+                SELECT final_raf, measurement_year, calculated_at
+                FROM raf_scores
                 WHERE patient_id = %s AND measurement_year = %s
                 ORDER BY calculated_at DESC LIMIT 1
                 """,
@@ -499,7 +502,7 @@ def generate_pre_visit_summary(patient_id: int, year: int, tenant_id: str = "") 
             )
             raf_row = cur.fetchone()
 
-        with raf_cursor() as cur:
+            # HCC detail for the current year
             cur.execute(
                 """
                 SELECT hcc_code, icd10_codes, meat_status
@@ -509,6 +512,37 @@ def generate_pre_visit_summary(patient_id: int, year: int, tenant_id: str = "") 
                 (patient_id, calc_year),
             )
             hcc_rows = cur.fetchall()
+
+            # Open suspect conditions
+            cur.execute(
+                """
+                SELECT description, suspected_icd, suspected_hcc,
+                       confidence, source,
+                       0.15 AS coeff
+                FROM raf_suspect_conditions
+                WHERE patient_id = %s AND status = 'open'
+                ORDER BY confidence DESC
+                """,
+                (patient_id,),
+            )
+            suspect_rows = cur.fetchall()
+
+            # Recapture HCCs — prior year coded, not yet in current year
+            cur.execute(
+                """
+                SELECT h.hcc_code, h.icd10_codes
+                FROM raf_patient_hcc h
+                WHERE h.patient_id = %s AND h.measurement_year = %s
+                  AND NOT EXISTS (
+                      SELECT 1 FROM raf_patient_hcc h2
+                      WHERE h2.patient_id = h.patient_id
+                        AND h2.hcc_code = h.hcc_code
+                        AND h2.measurement_year = %s
+                  )
+                """,
+                (patient_id, prior_year, calc_year),
+            )
+            recapture_rows = cur.fetchall()
 
         current_raf = _coerce_float(raf_row["final_raf"]) if raf_row else 0.0
 
@@ -538,21 +572,6 @@ def generate_pre_visit_summary(patient_id: int, year: int, tenant_id: str = "") 
                     }
                 )
 
-        # Open suspect conditions
-        with raf_cursor() as cur:
-            cur.execute(
-                """
-                SELECT description, suspected_icd, suspected_hcc,
-                       confidence, source,
-                       0.15 AS coeff
-                FROM raf_suspect_conditions
-                WHERE patient_id = %s AND status = 'open'
-                ORDER BY confidence DESC
-                """,
-                (patient_id,),
-            )
-            suspect_rows = cur.fetchall()
-
         open_suspects = [
             {
                 "condition": r["description"],
@@ -564,24 +583,6 @@ def generate_pre_visit_summary(patient_id: int, year: int, tenant_id: str = "") 
             }
             for r in suspect_rows
         ]
-
-        # Recapture HCCs — prior year coded, not yet in current year
-        with raf_cursor() as cur:
-            cur.execute(
-                """
-                SELECT h.hcc_code, h.icd10_codes
-                FROM raf_patient_hcc h
-                WHERE h.patient_id = %s AND h.measurement_year = %s
-                  AND NOT EXISTS (
-                      SELECT 1 FROM raf_patient_hcc h2
-                      WHERE h2.patient_id = h.patient_id
-                        AND h2.hcc_code = h.hcc_code
-                        AND h2.measurement_year = %s
-                  )
-                """,
-                (patient_id, prior_year, calc_year),
-            )
-            recapture_rows = cur.fetchall()
 
         recapture_hccs = []
         for r in recapture_rows:

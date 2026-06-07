@@ -31,6 +31,7 @@ Table DDL (run once via migration):
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -56,8 +57,10 @@ def _model_version_for_year(year: int) -> str:
             return model
     return "V24"
 
-# Revenue assumed per open recapture gap (adjustable via config in future)
-_REVENUE_IMPACT_PER_GAP: float = 3000.00
+# Fallback revenue assumed per open recapture gap when per-HCC coefficient
+# data (e.g. RAF point value * CMS rate) is not available for a specific code.
+# Override via REVENUE_PER_GAP_DEFAULT env var; update when CMS rates change.
+_REVENUE_IMPACT_PER_GAP: float = float(os.getenv("REVENUE_PER_GAP_DEFAULT", "3000"))
 
 
 # ---------------------------------------------------------------------------

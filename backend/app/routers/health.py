@@ -357,15 +357,13 @@ def dashboard_stats(
                 FROM raf_suspect_conditions sc
                 LEFT JOIN patients p ON p.id = sc.patient_id
                 LEFT JOIN (
-                    SELECT patient_id, final_raf AS raf_score
-                    FROM raf_scores
-                    WHERE measurement_year = %s
-                      AND (patient_id, calculated_at) IN (
-                          SELECT patient_id, MAX(calculated_at)
-                          FROM raf_scores
-                          WHERE measurement_year = %s
-                          GROUP BY patient_id
-                      )
+                    WITH ranked_rs AS (
+                        SELECT patient_id, final_raf,
+                               ROW_NUMBER() OVER (PARTITION BY patient_id ORDER BY calculated_at DESC) AS rn
+                        FROM raf_scores
+                        WHERE measurement_year = %s AND tenant_id = %s
+                    )
+                    SELECT patient_id, final_raf AS raf_score FROM ranked_rs WHERE rn = 1
                 ) latest_rs ON latest_rs.patient_id = sc.patient_id
                 WHERE sc.status = 'open' AND sc.tenant_id = %s
                   AND sc.patient_id IN (
@@ -375,7 +373,7 @@ def dashboard_stats(
                 ORDER BY suspect_count DESC
                 LIMIT 10
                 """,
-                (measurement_year, measurement_year, tenant_id, tenant_id),
+                (measurement_year, tenant_id, tenant_id, tenant_id),
             )
             for r in cur.fetchall():
                 top_undercoded.append({
@@ -563,33 +561,48 @@ def readiness_probe() -> dict[str, Any]:
     """
     Readiness probe — can the app serve traffic?
 
-    Checks the RAF database (critical) and OpenEMR / Redis / Gemini
-    (non-critical).  Returns 200 only when the RAF database is reachable.
-    Load balancers use this to decide whether to route requests here.
+    Returns a flat structured response showing which dependencies are up or
+    down.  The overall ``status`` is ``"ready"`` when the RAF database is up,
+    ``"degraded"`` when the RAF database is up but one or more non-critical
+    deps are down, and ``"not_ready"`` when the RAF database itself is down.
+
+    HTTP status codes:
+    - 200  — RAF database is reachable (even if OpenEMR / Redis are down).
+    - 503  — RAF database is unreachable.
+
+    Example responses::
+
+        {"status": "ready",   "raf_db": "up", "openemr": "up",   "redis": "up"}
+        {"status": "degraded","raf_db": "up", "openemr": "down", "redis": "up"}
+        {"status": "not_ready","raf_db": "down","openemr": "down","redis": "down"}
+
+    Load balancers should use this endpoint; container orchestrators should
+    prefer /health/live for liveness and this endpoint for readiness.
     """
-    checks: dict[str, Any] = {}
-    all_ok = True
-
-    # RAF database — critical: app cannot function without it.
     raf_check = _check_raf_db()
-    checks["raf_database"] = raf_check
-    if raf_check["status"] != "up":
-        all_ok = False
+    openemr_check = _check_openemr_db()
+    redis_check = _check_redis()
 
-    # OpenEMR database — non-critical: app degrades gracefully without it.
-    checks["openemr_database"] = _check_openemr_db()
+    raf_up = raf_check["status"] == "up"
+    openemr_up = openemr_check["status"] == "up"
+    # redis "unavailable" (package missing) is treated as non-critical pass
+    redis_up = redis_check["status"] in ("up", "unavailable")
 
-    # Redis — non-critical: Celery/cache is optional.
-    checks["redis"] = _check_redis()
-
-    # Gemini — non-critical: key presence check only (no network call).
-    checks["gemini"] = _check_gemini()
+    if not raf_up:
+        overall = "not_ready"
+    elif not openemr_up or not redis_up:
+        overall = "degraded"
+    else:
+        overall = "ready"
 
     payload: dict[str, Any] = {
-        "status": "ready" if all_ok else "not_ready",
-        "checks": checks,
+        "status": overall,
+        "raf_db": "up" if raf_up else "down",
+        "openemr": "up" if openemr_up else "down",
+        "redis": "up" if redis_up else "down",
     }
-    if not all_ok:
+
+    if not raf_up:
         return JSONResponse(status_code=503, content=payload)
     return payload
 

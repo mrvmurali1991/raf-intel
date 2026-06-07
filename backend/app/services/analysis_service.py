@@ -52,8 +52,6 @@ def save_encounter_analysis(
         Full pipeline result dict as returned by run_verified_pipeline() or
         run_pipeline().
     """
-    import json as _json
-
     # ------------------------------------------------------------------
     # 1. Upsert the encounter-level summary row
     # ------------------------------------------------------------------
@@ -101,7 +99,7 @@ def save_encounter_analysis(
                 (
                     encounter_id,
                     pid,
-                    _json.dumps(analysis, default=_default_ser),
+                    json.dumps(analysis, default=_default_ser),
                     float(overall) if overall else 0,
                     len(analysis.get("diagnoses", [])),
                     len(analysis.get("suspect_conditions", [])),
@@ -125,14 +123,14 @@ def save_encounter_analysis(
         )
         # Retry with aggressive serialisation to strip any non-JSON-safe objects
         try:
-            clean_json = _json.loads(_json.dumps(analysis, default=_default_ser))
+            clean_json = json.loads(json.dumps(analysis, default=_default_ser))
             with raf_cursor() as cur:
                 cur.execute(
                     sql,
                     (
                         encounter_id,
                         pid,
-                        _json.dumps(clean_json),
+                        json.dumps(clean_json),
                         float(analysis.get("overall_confidence", 0)),
                         len(analysis.get("diagnoses", [])),
                         len(analysis.get("suspect_conditions", [])),
