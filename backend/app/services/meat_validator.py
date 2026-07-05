@@ -109,6 +109,8 @@ TREAT_KEYWORDS: list[str] = [
     "referred", "referral",
     "managed", "maintained on", "titrated", "initiated", "adjusted",
     "diet controlled", "lifestyle modification",
+    "insulin", "injection", "infusion", "dialysis", "hemodialysis",
+    "transplant", "chemotherapy",
 ]
 
 # Character radius around a condition mention to search for MEAT evidence.

@@ -747,9 +747,10 @@ def process_batch_endpoint(
 def get_document_endpoint(
     document_id: str,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("documents", "read")),
 ) -> dict[str, Any]:
-    doc = get_document(document_id)
+    doc = get_document(document_id, tenant_id=tenant_id)
     if not doc:
         raise _doc_not_found(document_id)
     return _serialize(doc)
@@ -763,6 +764,7 @@ def get_document_endpoint(
 def view_document_file(
     document_id: str,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("documents", "read")),
 ):
     from pathlib import Path
@@ -772,7 +774,7 @@ def view_document_file(
     from app.config import settings as _settings
     from app.services.storage import get_storage_backend
 
-    doc = get_document(document_id)
+    doc = get_document(document_id, tenant_id=tenant_id)
     if not doc:
         raise _doc_not_found(document_id)
 
@@ -853,7 +855,7 @@ def list_document_extracts(
     tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("documents", "read")),
 ) -> dict[str, Any]:
-    doc = get_document(document_id)
+    doc = get_document(document_id, tenant_id=tenant_id)
     if not doc:
         raise _doc_not_found(document_id)
 
@@ -869,11 +871,11 @@ def list_document_extracts(
                     SELECT id, suspect_hcc, suspect_icd10, evidence_detail,
                            confidence_score, status
                     FROM raf_suspect_conditions
-                    WHERE patient_id = %s
+                    WHERE patient_id = %s AND tenant_id = %s
                     ORDER BY confidence_score DESC, id ASC
                     LIMIT 50
                     """,
-                    (patient_id,),
+                    (patient_id, tenant_id),
                 )
                 suspect_rows = cur.fetchall()
         except Exception as exc:
@@ -1065,9 +1067,10 @@ def trigger_analysis(
 def get_analysis_endpoint(
     document_id: str,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("documents", "read")),
 ) -> dict[str, Any]:
-    doc = get_document(document_id)
+    doc = get_document(document_id, tenant_id=tenant_id)
     if not doc:
         raise _doc_not_found(document_id)
 
@@ -1135,9 +1138,10 @@ def get_analysis_endpoint(
 def get_diagnoses_endpoint(
     document_id: str,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("documents", "read")),
 ) -> dict[str, Any]:
-    doc = get_document(document_id)
+    doc = get_document(document_id, tenant_id=tenant_id)
     if not doc:
         raise _doc_not_found(document_id)
 
@@ -1162,10 +1166,11 @@ def confirm_diagnosis(
     document_id: str,
     diag_id: str,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("documents", "write")),
 ) -> dict[str, Any]:
     reviewed_by = f"user:{current_user.get('id', 'unknown')} ({current_user.get('email', 'unknown')})"
-    doc = get_document(document_id)
+    doc = get_document(document_id, tenant_id=tenant_id)
     if not doc:
         raise _doc_not_found(document_id)
 
@@ -1207,10 +1212,11 @@ def reject_diagnosis(
     document_id: str,
     diag_id: str,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("documents", "write")),
 ) -> dict[str, Any]:
     reviewed_by = f"user:{current_user.get('id', 'unknown')} ({current_user.get('email', 'unknown')})"
-    doc = get_document(document_id)
+    doc = get_document(document_id, tenant_id=tenant_id)
     if not doc:
         raise _doc_not_found(document_id)
 
@@ -1258,9 +1264,10 @@ def link_patient_endpoint(
         ),
     ),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("documents", "write")),
 ) -> dict[str, Any]:
-    doc = get_document(document_id)
+    doc = get_document(document_id, tenant_id=tenant_id)
     if not doc:
         raise _doc_not_found(document_id)
 
@@ -1309,7 +1316,7 @@ def draft_raf_score(
 ) -> dict[str, Any]:
     from datetime import date
 
-    doc = get_document(document_id)
+    doc = get_document(document_id, tenant_id=tenant_id)
     if not doc:
         raise _doc_not_found(document_id)
 

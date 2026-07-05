@@ -329,7 +329,7 @@ def post_decision(
         # fetch before-state for audit
         try:
             cur.execute(
-                f"SELECT status, {icd_col} AS icd10 FROM {table} WHERE id=%s{_tenant_select_clause}",
+                f"SELECT status, {icd_col} AS icd10 FROM {table} WHERE id=%s{_tenant_select_clause} FOR UPDATE",
                 _tenant_select_params,
             )
             row = cur.fetchone()

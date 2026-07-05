@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 # cutover is announced — the year-ranges are ordered most-recent-first so
 # new tiers can be prepended cleanly.
 _MODEL_VERSION_BY_YEAR_FLOOR: tuple[tuple[int, str], ...] = (
-    (2025, "V28"),
+    (2024, "V28"),
     (0,    "V24"),
 )
 

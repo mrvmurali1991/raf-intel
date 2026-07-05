@@ -30,6 +30,7 @@ when that happens.
 from __future__ import annotations
 
 import logging
+from collections import OrderedDict
 from datetime import date, datetime
 from typing import Any
 
@@ -52,15 +53,21 @@ logger = logging.getLogger(__name__)
 # at most one PatientContext per unique (patient_id, dos) seen in a single
 # Python process lifetime.  Production callers that want a fresh fetch should
 # pass a pre-built ``context`` argument to gate_billed_promotion directly.
-_context_cache: dict[tuple[str, int, date], PatientContext] = {}
+_context_cache: OrderedDict[tuple[str, int, date], PatientContext] = OrderedDict()
+_CONTEXT_CACHE_MAX = 512
 
 
 def _get_or_build_context(patient_id: int, dos: date, tenant_id: str = "") -> PatientContext:
     """Return a cached PatientContext or build and cache one."""
     key = (tenant_id, patient_id, dos)
-    if key not in _context_cache:
-        _context_cache[key] = build_patient_context_from_db(patient_id, dos)
-    return _context_cache[key]
+    if key in _context_cache:
+        _context_cache.move_to_end(key)
+        return _context_cache[key]
+    ctx = build_patient_context_from_db(patient_id, dos)
+    _context_cache[key] = ctx
+    while len(_context_cache) > _CONTEXT_CACHE_MAX:
+        _context_cache.popitem(last=False)
+    return ctx
 
 
 def _parse_date(val: Any) -> date | None:

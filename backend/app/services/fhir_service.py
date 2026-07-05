@@ -909,7 +909,16 @@ def _insert_sync_log(
         return cur.lastrowid
 
 
+_SYNC_LOG_FIELDS = frozenset({
+    "status", "message", "patients_synced", "conditions_synced",
+    "encounters_synced", "reports_synced", "completed_at",
+})
+
+
 def _update_sync_log(log_id: int, **kwargs: Any) -> None:
+    for k in kwargs:
+        if k not in _SYNC_LOG_FIELDS:
+            raise ValueError(f"_update_sync_log: disallowed field {k!r}")
     now = _now_utc()
     fields = [f"{k} = %s" for k in kwargs]
     fields.append("completed_at = %s")

@@ -1537,7 +1537,7 @@ def verify_mfa_code(user_id: int, code: str) -> bool:
         try:
             with raf_cursor() as cur2:
                 cur2.execute(
-                    "SELECT mfa_last_used_step FROM users WHERE id = %s", (user_id,)
+                    "SELECT mfa_last_used_step FROM users WHERE id = %s FOR UPDATE", (user_id,)
                 )
                 step_row = cur2.fetchone()
                 last_step = step_row.get("mfa_last_used_step") if step_row else None
@@ -1548,8 +1548,9 @@ def verify_mfa_code(user_id: int, code: str) -> bool:
                     "UPDATE users SET mfa_last_used_step = %s WHERE id = %s",
                     (current_step, user_id),
                 )
-        except Exception:
-            logger.debug("mfa_last_used_step column may not exist yet", exc_info=True)
+        except Exception as exc:
+            logger.error("TOTP step validation failed for user %s: %s", user_id, exc)
+            return False
         return True
 
     # Try recovery codes.
@@ -1677,16 +1678,15 @@ def get_user_permissions(user_id: int) -> list[dict[str, Any]]:
 def check_permission(user_id: int, resource: str, action: str) -> bool:
     """Return True if user has the given resource+action permission."""
     _ensure_tables()
-    user = get_user(user_id)
-    if not user:
-        return False
-
-    # admin role bypasses permission checks
-    if user["role"] == "admin":
-        return True
-
     with raf_cursor() as cur:
-        # Check explicit user-level override first
+        cur.execute("SELECT role FROM users WHERE id = %s", (user_id,))
+        user_row = cur.fetchone()
+        if not user_row:
+            return False
+        role = user_row["role"]
+        if role == "admin":
+            return True
+        # Check explicit user-level override
         cur.execute(
             "SELECT granted FROM user_permissions WHERE user_id = %s AND resource = %s AND action = %s",
             (user_id, resource, action),
@@ -1694,14 +1694,10 @@ def check_permission(user_id: int, resource: str, action: str) -> bool:
         override = cur.fetchone()
         if override is not None:
             return bool(override["granted"])
-
         # Fall back to role default
         cur.execute(
-            """
-            SELECT COUNT(*) AS cnt FROM role_default_permissions
-            WHERE role = %s AND resource = %s AND action = %s
-            """,
-            (user["role"], resource, action),
+            "SELECT COUNT(*) AS cnt FROM role_default_permissions WHERE role = %s AND resource = %s AND action = %s",
+            (role, resource, action),
         )
         row = cur.fetchone()
         return bool(row and row["cnt"] > 0)

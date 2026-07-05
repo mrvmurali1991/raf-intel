@@ -39,7 +39,6 @@ from app.services.hcc_hierarchy import (
     V28_HIERARCHY_CHAINS,
 )
 from app.services.raf.blend_weights import (
-    _BLEND_WEIGHTS,
     _MACI_FACTORS_V24,
     _MACI_FACTORS_V28,
     _NORM_FACTORS_V22,
@@ -49,6 +48,7 @@ from app.services.raf.blend_weights import (
     _get_maci_factor,
     _get_norm_factor,
 )
+from app.services.raf.dos_rules import get_blend_weights as _dos_get_blend_weights
 from app.services.raf.enrollment_resolver import (
     _SEGMENT_TO_PREFIX,
     _is_esrd,
@@ -1499,7 +1499,11 @@ def calculate_raf_score(
             measurement_year, v24_weight * 100, v28_weight * 100,
         )
     else:
-        v24_weight, v28_weight = _BLEND_WEIGHTS.get(measurement_year, (0.0, 1.0))
+        try:
+            _blend = _dos_get_blend_weights(measurement_year)
+            v24_weight, v28_weight = _blend.get("V24", 0.0), _blend.get("V28", 1.0)
+        except KeyError:
+            v24_weight, v28_weight = 0.0, 1.0
 
     if model_version == "v24":
         v24_weight, v28_weight = 1.0, 0.0
@@ -1508,8 +1512,14 @@ def calculate_raf_score(
     elif model_version == "blended":
         # Force blending even for 2026+ if caller explicitly requests it
         if v24_weight == 0.0:
-            source = _PACE_BLEND_WEIGHTS if is_pace else _BLEND_WEIGHTS
-            v24_weight, v28_weight = source.get(measurement_year, (0.0, 1.0))
+            if is_pace:
+                v24_weight, v28_weight = _PACE_BLEND_WEIGHTS.get(measurement_year, (0.0, 1.0))
+            else:
+                try:
+                    _blend = _dos_get_blend_weights(measurement_year)
+                    v24_weight, v28_weight = _blend.get("V24", 0.0), _blend.get("V28", 1.0)
+                except KeyError:
+                    v24_weight, v28_weight = 0.0, 1.0
     # "auto" uses the dict/PACE lookup result as-is
 
     use_v24 = v24_weight > 0.0
@@ -1662,7 +1672,13 @@ def calculate_raf_score(
         demographic_score = esrd_demo_override
         subtotal = round(subtotal + demo_delta, 4)
         # Recalculate payment_raf with corrected ESRD demographics
-        payment_raf = round(subtotal * (1 - maci) / norm_factor, 4) if norm_factor else payment_raf
+        # Adjust payment_raf proportionally rather than recomputing from single-model norm/MACI
+        # This preserves the V24/V28 blend ratio for PY2024 and PY2025
+        if subtotal > 0:
+            original_subtotal = subtotal - demo_delta
+            if original_subtotal > 0:
+                adjustment_ratio = subtotal / original_subtotal
+                payment_raf = round(payment_raf * adjustment_ratio, 4)
         logger.info(
             "RAF calc pid=%s — ESRD demo override applied: %.4f → %.4f (delta=%.4f)",
             patient_id, demographic_score - demo_delta, demographic_score, demo_delta,
@@ -1742,6 +1758,13 @@ def calculate_raf_score(
                 )
         except Exception as exc:
             logger.warning("Frailty adjustment failed pid=%s: %s", patient_id, exc)
+
+    # 10b. Apply deceased mid-year proration
+    if _months_eligible is not None and _months_eligible < 12:
+        _proration = round(_months_eligible / 12.0, 4)
+        payment_raf = round(payment_raf * _proration, 4)
+        prospective_raf = round(prospective_raf * _proration, 4)
+        suspected_raf_delta = round(prospective_raf - payment_raf, 4)
 
     # 11. Build result dict — backward compatible + new fields
     result_dict: dict[str, Any] = {
@@ -1885,21 +1908,25 @@ def calculate_raf_score_multi_model(
     )
 
     # Run both models unconditionally
-    norm_v28 = _NORM_FACTORS_V28.get(measurement_year, 1.0)
-    maci_v28 = _MACI_FACTORS_V28.get(measurement_year, 0.0)
+    norm_v28 = _get_norm_factor(_NORM_FACTORS_V28, measurement_year)
+    maci_v28 = _get_maci_factor(_MACI_FACTORS_V28, measurement_year)
     v28_result = _run_single_model(
         _processor_v28, icd_codes, age, sex, model_segment, norm_v28, maci_v28
     )
     _apply_hcc_hierarchy(v28_result, "v28")
 
-    norm_v24 = _NORM_FACTORS_V24.get(measurement_year, 1.0)
-    maci_v24 = _MACI_FACTORS_V24.get(measurement_year, 0.0)
+    norm_v24 = _get_norm_factor(_NORM_FACTORS_V24, measurement_year)
+    maci_v24 = _get_maci_factor(_MACI_FACTORS_V24, measurement_year)
     v24_result = _run_single_model(
         _processor_v24, icd_codes, age, sex, model_segment, norm_v24, maci_v24
     )
     _apply_hcc_hierarchy(v24_result, "v24")
 
-    v24_weight, v28_weight = _BLEND_WEIGHTS.get(measurement_year, (0.0, 1.0))
+    try:
+        _blend = _dos_get_blend_weights(measurement_year)
+        v24_weight, v28_weight = _blend.get("V24", 0.0), _blend.get("V28", 1.0)
+    except KeyError:
+        v24_weight, v28_weight = 0.0, 1.0
     blended_raw = (
         v24_weight * v24_result["raw_raf"] + v28_weight * v28_result["raw_raf"]
     )
@@ -2216,7 +2243,7 @@ def get_raf_breakdown(
                     {
                         "hcc": str(h["hcc_code"]),
                         "coefficient": float(h.get("raf_coefficient") or 0),
-                        "label": f"HCC {h['hcc_code']}",
+                        "label": _get_hcc_label_v28(str(h["hcc_code"])) or f"HCC {h['hcc_code']}",
                     }
                     for h in hcc_rows
                 ],
