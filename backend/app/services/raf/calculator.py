@@ -63,6 +63,7 @@ from app.services.raf.score_persistence import (
     _upsert_patient_demographics,
     _upsert_raf_score,
 )
+from app.metrics import RAF_CALCULATIONS, RAF_CALCULATION_DURATION_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -1161,6 +1162,9 @@ def calculate_raf_score(
         - prospective_raf: the total opportunity score (including AI suspects)
         - suspected_raf_delta: (prospective_raf - concurrent_raf) numeric gap
     """
+    import time as _time_mod
+    _raf_calc_start = _time_mod.perf_counter()
+
     if measurement_year is None:
         measurement_year = date.today().year
     if not tenant_id and patient_id != 0:
@@ -1831,6 +1835,10 @@ def calculate_raf_score(
     # Invalidate any cached RAF breakdown for this patient so the next call
     # reflects the freshly calculated score.
     cache_delete_pattern(f"raf:breakdown:{patient_id}:{measurement_year}:*")
+
+    # Prometheus metrics
+    RAF_CALCULATIONS.inc()
+    RAF_CALCULATION_DURATION_SECONDS.observe(_time_mod.perf_counter() - _raf_calc_start)
 
     return result_dict
 

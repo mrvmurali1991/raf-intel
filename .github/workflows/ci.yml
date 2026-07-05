@@ -1,7 +1,7 @@
 # ===========================================================================
 # RAF Intelligence — Continuous Integration
 #
-# Triggered on every push to main/develop and on all pull requests targeting main.
+# Triggered on every push to any branch and on all pull requests targeting main/server.
 # Jobs run in parallel where there are no dependencies between them.
 #
 # Required GitHub secrets (none for CI — all tools installed from public registries).
@@ -12,11 +12,11 @@ name: CI
 on:
   push:
     branches:
-      - main
-      - develop
+      - '**'
   pull_request:
     branches:
       - main
+      - server
 
 # Cancel any in-progress run for the same ref so a rapid succession of pushes
 # does not queue up stale runs.
@@ -57,6 +57,78 @@ jobs:
 
       - name: Run ruff format check
         run: ruff format --check backend/app backend/tests
+
+  # ---------------------------------------------------------------------------
+  # Job: backend-quick-test
+  # Pure-logic unit tests that need no database or external services.
+  # Runs in <10s and catches regressions in core business logic immediately.
+  # Uses --override-ini to bypass the pytest-timeout plugin (not installed here).
+  # ---------------------------------------------------------------------------
+  backend-quick-test:
+    name: "Backend — Pure-logic tests (no DB)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+        working-directory: backend
+
+      - name: Syntax check all Python files
+        run: find backend/app -name '*.py' -exec python -m py_compile {} +
+
+      - name: Run pure-logic tests (no DB required)
+        run: |
+          pytest backend/tests/test_review_fixes.py \
+            --override-ini="addopts=-v --tb=short" \
+            -v
+        working-directory: .
+
+  # ---------------------------------------------------------------------------
+  # Job: secret-detection
+  # Fast grep-based scan for accidentally committed secrets/credentials.
+  # ---------------------------------------------------------------------------
+  secret-detection:
+    name: "Security — Secret detection"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Scan for hardcoded secrets
+        run: |
+          echo "Scanning for potential secrets in tracked files..."
+          FOUND=0
+
+          # Patterns that suggest hardcoded secrets (exclude test/CI files, .env.example, workflows)
+          if git grep -lnE '(AKIA[0-9A-Z]{16}|sk-[a-zA-Z0-9]{48}|ghp_[a-zA-Z0-9]{36}|-----BEGIN (RSA |EC )?PRIVATE KEY-----)' -- \
+            ':!.github/' ':!*.example' ':!*.md' ':!backend/tests/' ':!frontend/tests/' 2>/dev/null; then
+            echo "::error::Potential AWS keys, OpenAI keys, GitHub tokens, or private keys found in committed files!"
+            FOUND=1
+          fi
+
+          # Check for password/secret assignments (but not in test files, configs, or CI)
+          if git grep -lnE '(password|secret|api_key)\s*[:=]\s*["\x27][^"\x27]{8,}' -- \
+            ':!.github/' ':!*.example' ':!*.env*' ':!*.md' ':!backend/tests/' ':!frontend/tests/' \
+            ':!docker-compose*' ':!backend/seed_demo_data.py' ':!backend/alembic/' 2>/dev/null; then
+            echo "::warning::Possible hardcoded credentials detected — review the files above."
+            # Warning only, not a hard fail (too many false positives in config examples)
+          fi
+
+          if [ "$FOUND" -eq 1 ]; then
+            exit 1
+          fi
+          echo "No high-confidence secrets detected."
 
   # ---------------------------------------------------------------------------
   # Job: raf-coefficient-gate

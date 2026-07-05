@@ -19,6 +19,7 @@ from app.services.auth_service import (  # noqa: F401
     decode_token,
     hash_password,
     log_audit,
+    needs_rehash,
     validate_password_strength,
     verify_password,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "decode_token",
     "decode_refresh_token",
     "hash_password",
+    "needs_rehash",
     "verify_password",
     "validate_password_strength",
     "create_user",

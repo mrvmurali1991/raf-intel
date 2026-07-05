@@ -22,7 +22,8 @@ Jinja2==3.1.4
 pypdf==4.3.1
 hccinfhir==0.3.0
 requests==2.32.3
-passlib[bcrypt]==1.7.4  # NOTE: passlib is unmaintained; consider migrating to argon2-cffi
+argon2-cffi>=23.1.0  # Primary password hasher (argon2id)
+passlib[bcrypt]==1.7.4  # Legacy: verify existing bcrypt hashes until fully migrated
 bcrypt>=4.0,<4.1  # pin <4.1: passlib 1.7.4 reads bcrypt.__about__.__version__, removed in 4.1
 PyJWT==2.8.0
 pyotp==2.9.0

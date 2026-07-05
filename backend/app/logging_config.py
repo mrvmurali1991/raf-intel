@@ -246,6 +246,7 @@ def configure_logging() -> None:
     logging.getLogger("hccinfhir").setLevel(logging.WARNING)
     logging.getLogger("multipart").setLevel(logging.WARNING)
     logging.getLogger("passlib").setLevel(logging.WARNING)
+    logging.getLogger("argon2").setLevel(logging.WARNING)
 
     # Durable PHI audit log — HIPAA 164.312(b).
     _install_phi_audit_handler()

@@ -70,6 +70,8 @@ from app.services.auth_service import (
     verify_and_activate_mfa,
 )
 
+from app.metrics import AUTH_LOGIN_TOTAL, AUTH_MFA_ATTEMPTS_TOTAL
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -457,6 +459,7 @@ def login(request: Request, body: LoginRequest) -> dict[str, Any]:
             user_agent=ua,
         )
     except ValueError as exc:
+        AUTH_LOGIN_TOTAL.labels(outcome="failure").inc()
         log_audit(
             action="login_failed",
             resource_type="auth",
@@ -471,6 +474,7 @@ def login(request: Request, body: LoginRequest) -> dict[str, Any]:
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
         )
 
+    AUTH_LOGIN_TOTAL.labels(outcome="success").inc()
     log_audit(
         action="login_success",
         user_id=result["user"]["id"],
@@ -744,7 +748,9 @@ def verify_mfa(body: MFAVerifyRequest, request: Request) -> JSONResponse:
             user_agent=ua,
         )
     except ValueError as exc:
+        AUTH_MFA_ATTEMPTS_TOTAL.labels(outcome="failure").inc()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
+    AUTH_MFA_ATTEMPTS_TOTAL.labels(outcome="success").inc()
     refresh_token = result.pop("refresh_token", None)
     resp = JSONResponse(content=result)
     if refresh_token:

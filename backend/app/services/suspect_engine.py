@@ -415,7 +415,14 @@ def _store_suspect(
             )
             cur.execute("SELECT LAST_INSERT_ID() AS lid")
             row = cur.fetchone()
-            return row["lid"] if row else None
+            lid = row["lid"] if row else None
+            if lid:
+                from app.metrics import SUSPECTS_GENERATED_TOTAL
+                SUSPECTS_GENERATED_TOTAL.labels(
+                    hcc=suspect.get("suspected_hcc") or "unknown",
+                    tenant=_tenant,
+                ).inc()
+            return lid
     except Exception as exc:
         logger.error(
             "_store_suspect failed pid=%s fp=%s: %s",

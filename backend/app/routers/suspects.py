@@ -36,6 +36,7 @@ from app.services.redis_cache import (
     invalidate_hedis_scores,
     invalidate_v28_portfolio,
 )
+from app.metrics import SUSPECTS_ACCEPTED_TOTAL
 from app.services.suspect_engine import (
     accept_suspect,
     dismiss_suspect,
@@ -721,6 +722,10 @@ def accept_suspect_endpoint(
     except Exception as exc:
         logger.exception("accept_suspect_endpoint id=%s: %s", suspect_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
+
+    # Prometheus: count accepted suspects
+    hcc_label = (updated or {}).get("suspect_hcc") or "unknown"
+    SUSPECTS_ACCEPTED_TOTAL.labels(hcc=hcc_label, tenant=tenant_id or "").inc()
 
     # ------------------------------------------------------------------
     # Persist override metadata (gracefully degrade if 024 not applied)

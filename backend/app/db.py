@@ -90,6 +90,10 @@ _raf_pool: MySQLConnectionPool | None = None
 _raf_read_pool: MySQLConnectionPool | None = None
 _pool_lock = threading.Lock()
 
+# Active connection counter — incremented on acquire, decremented on release.
+_active_connections = 0
+_active_conn_lock = threading.Lock()
+
 # ---------------------------------------------------------------------------
 # Dynamic pool cache — keyed by a hash of (host, port, database, user)
 # ---------------------------------------------------------------------------
@@ -492,8 +496,17 @@ def _db_cursor(pool_fn, dictionary: bool = True) -> Generator:
     The cursor is wrapped with _InstrumentedCursor to log slow queries
     (>SLOW_QUERY_THRESHOLD_MS) and count queries per request for N+1 detection.
     """
+    global _active_connections
     pool = pool_fn()
     conn = _pool_get_connection(pool)
+    with _active_conn_lock:
+        _active_connections += 1
+    # Update Prometheus gauge (best-effort; metric module may not be loaded yet)
+    try:
+        from app.metrics import DB_POOL_ACTIVE
+        DB_POOL_ACTIVE.set(_active_connections)
+    except Exception:
+        pass
     cursor = None
     try:
         raw_cursor = conn.cursor(dictionary=dictionary)
@@ -507,6 +520,13 @@ def _db_cursor(pool_fn, dictionary: bool = True) -> Generator:
         if cursor is not None:
             cursor._cursor.close()
         conn.close()
+        with _active_conn_lock:
+            _active_connections -= 1
+        try:
+            from app.metrics import DB_POOL_ACTIVE
+            DB_POOL_ACTIVE.set(_active_connections)
+        except Exception:
+            pass
 
 
 def explain_query(query: str, params: tuple | None = None) -> list[dict]:

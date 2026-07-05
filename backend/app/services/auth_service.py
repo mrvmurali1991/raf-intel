@@ -2,7 +2,7 @@
 Authentication and authorization service for RAF Intelligence.
 
 Handles:
-- Password hashing with bcrypt via passlib
+- Password hashing with argon2id (primary) and bcrypt legacy verification
 - JWT access and refresh tokens via PyJWT
 - Session management stored in raf_intelligence DB
 - Account lockout on repeated failures
@@ -25,10 +25,10 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+import argon2
 import jwt
 import pyotp
 import qrcode
-from passlib.context import CryptContext
 
 from app.config import settings
 from app.db import raf_cursor
@@ -185,18 +185,47 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
 
 
 # ---------------------------------------------------------------------------
-# Password hashing
+# Password hashing — argon2id (primary) with bcrypt legacy fallback
 # ---------------------------------------------------------------------------
 
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_argon2_hasher = argon2.PasswordHasher(
+    time_cost=3,
+    memory_cost=65536,  # 64 MB
+    parallelism=4,
+    hash_len=32,
+    salt_len=16,
+)
 
 
 def hash_password(plain: str) -> str:
-    return _pwd_context.hash(plain)
+    """Hash a password using argon2id (current standard)."""
+    return _argon2_hasher.hash(plain)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_context.verify(plain, hashed)
+    """Verify password against argon2id or legacy bcrypt hash."""
+    if hashed.startswith("$argon2"):
+        try:
+            return _argon2_hasher.verify(hashed, plain)
+        except argon2.exceptions.VerifyMismatchError:
+            return False
+        except argon2.exceptions.InvalidHashError:
+            return False
+    # Legacy bcrypt verification via passlib (kept until all hashes are upgraded)
+    from passlib.context import CryptContext
+
+    _legacy_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    return _legacy_ctx.verify(plain, hashed)
+
+
+def needs_rehash(hashed: str) -> bool:
+    """Return True if the hash should be upgraded to argon2id."""
+    if not hashed.startswith("$argon2"):
+        return True  # bcrypt -> argon2 upgrade needed
+    try:
+        return _argon2_hasher.check_needs_rehash(hashed)
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -986,9 +1015,7 @@ def authenticate_user(
 
     if not user:
         # Run dummy hash to prevent timing attack (user enumeration)
-        _pwd_context.verify(
-            "dummy", "$2b$12$LJ3m4ys3Lgxmx4XRSG5H8OjG5OhHWLBDhtNBCjw.XMJkRiQHJKo6"
-        )
+        verify_password("dummy", "$2b$12$LJ3m4ys3Lgxmx4XRSG5H8OjG5OhHWLBDhtNBCjw.XMJkRiQHJKo6")
         raise ValueError("Invalid email or password.")
 
     if not user["is_active"]:
@@ -1051,6 +1078,20 @@ def authenticate_user(
             """,
             (user["id"],),
         )
+
+    # Opportunistic rehash: upgrade legacy bcrypt hashes to argon2id on login
+    if needs_rehash(user["password_hash"]):
+        try:
+            new_hash = hash_password(password)
+            with raf_cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET password_hash = %s WHERE id = %s",
+                    (new_hash, user["id"]),
+                )
+            logger.info("Rehashed password to argon2id for user %s", user["id"])
+        except Exception as exc:
+            # Non-fatal: login proceeds even if rehash fails
+            logger.warning("Failed to rehash password for user %s: %s", user["id"], exc)
 
     # MFA check — if enabled, issue a short-lived mfa_pending token instead of a full session.
     # The client must POST to /api/auth/mfa/verify with this token + TOTP code.
@@ -1458,7 +1499,7 @@ def enable_mfa(user_id: int) -> dict[str, Any]:
     recovery_codes = [pyotp.random_base32()[:8].upper() for _ in range(10)]
 
     # Hash each recovery code before storage — plaintext codes are returned to
-    # the user once and never persisted.  We use the same bcrypt context as
+    # the user once and never persisted.  We use the same argon2id hasher as
     # password hashing so the work factor matches the security policy.
     hashed_recovery_codes = [hash_password(code) for code in recovery_codes]
 
@@ -1474,7 +1515,7 @@ def enable_mfa(user_id: int) -> dict[str, Any]:
         "qr_code": f"data:image/png;base64,{qr_base64}",
         "provisioning_uri": provisioning_uri,
         # Plaintext codes are shown to the user exactly once — they are NOT
-        # stored in the database (only bcrypt hashes are).
+        # stored in the database (only argon2 hashes are).
         "recovery_codes": recovery_codes,
     }
 
@@ -1554,19 +1595,17 @@ def verify_mfa_code(user_id: int, code: str) -> bool:
         return True
 
     # Try recovery codes.
-    # Codes generated after the hashing migration are stored as bcrypt hashes;
-    # legacy plaintext codes (from before the migration) are handled by the
-    # plain string fallback so existing users are not locked out.
+    # Codes are stored as argon2 hashes (new) or legacy bcrypt hashes;
+    # legacy plaintext codes (from before the hashing migration) are rejected.
     raw = row.get("mfa_recovery_codes")
     stored_codes: list[str] = json.loads(raw) if raw else []
     code_upper = code.upper()
 
     matched_index: int | None = None
     for i, stored in enumerate(stored_codes):
-        # Hashed codes start with the bcrypt identifier "$2b$" / "$2a$".
-        if stored.startswith("$2"):
-            # verify_password() is constant-time via passlib; short-circuit
-            # only after a definitive match to avoid timing leaks.
+        # Hashed codes start with "$argon2" (new) or "$2b$"/"$2a$" (legacy bcrypt).
+        if stored.startswith("$argon2") or stored.startswith("$2"):
+            # verify_password() handles both argon2 and bcrypt transparently.
             if verify_password(code_upper, stored):
                 matched_index = i
                 break

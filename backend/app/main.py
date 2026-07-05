@@ -567,11 +567,7 @@ async def emr_gate(request: Request, call_next):
 # status, phase) only.
 # ---------------------------------------------------------------------------
 
-from prometheus_client import make_asgi_app, Counter, Histogram  # noqa: E402,F401
 from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
-
-# Auth-gated /metrics — protect from public scraping; allowlist via env IP list or basic auth
-metrics_app = make_asgi_app()
 
 
 def _metrics_basic_auth_expected() -> str:
