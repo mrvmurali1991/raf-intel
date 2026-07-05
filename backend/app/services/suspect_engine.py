@@ -1372,6 +1372,21 @@ def accept_suspect(
         raise ValueError("accept_suspect requires tenant_id to prevent cross-tenant mutation")
     try:
         with raf_cursor() as cur:
+            # Lock row to prevent concurrent accept/dismiss race
+            cur.execute(
+                "SELECT status FROM raf_suspect_conditions WHERE id = %s AND tenant_id = %s FOR UPDATE",
+                (suspect_id, tenant_id),
+            )
+            existing = cur.fetchone()
+            if not existing:
+                raise ValueError(f"Suspect {suspect_id} not found for tenant {tenant_id}")
+            if existing["status"] in ("accepted", "dismissed", "coded"):
+                # Idempotent — already reviewed, return current record
+                cur.execute(
+                    "SELECT * FROM raf_suspect_conditions WHERE id = %s AND tenant_id = %s",
+                    (suspect_id, tenant_id),
+                )
+                return _serialize_suspect(cur.fetchone() or {})
             cur.execute(
                 """
                 UPDATE raf_suspect_conditions
@@ -1745,6 +1760,21 @@ def dismiss_suspect(
         raise ValueError("dismiss_suspect requires tenant_id to prevent cross-tenant mutation")
     try:
         with raf_cursor() as cur:
+            # Lock row to prevent concurrent accept/dismiss race
+            cur.execute(
+                "SELECT status FROM raf_suspect_conditions WHERE id = %s AND tenant_id = %s FOR UPDATE",
+                (suspect_id, tenant_id),
+            )
+            existing = cur.fetchone()
+            if not existing:
+                raise ValueError(f"Suspect {suspect_id} not found for tenant {tenant_id}")
+            if existing["status"] in ("accepted", "dismissed", "coded"):
+                # Idempotent — already reviewed, return current record
+                cur.execute(
+                    "SELECT * FROM raf_suspect_conditions WHERE id = %s AND tenant_id = %s",
+                    (suspect_id, tenant_id),
+                )
+                return _serialize_suspect(cur.fetchone() or {})
             cur.execute(
                 """
                 UPDATE raf_suspect_conditions

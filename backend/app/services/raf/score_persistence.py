@@ -88,15 +88,6 @@ def _store_patient_hccs(
         cc_to_dx: dict = result.cc_to_dx or {}
 
         with raf_cursor() as cur:
-            # Add is_chronic column if not yet present (idempotent migration).
-            try:
-                cur.execute(
-                    "ALTER TABLE raf_patient_hcc ADD COLUMN is_chronic TINYINT(1) DEFAULT 1"
-                )
-            except Exception:
-                logger.debug("swallowed exception", exc_info=True)
-                pass  # Column already exists
-
             # Prune only HCCs that are no longer present in the new hcc_list.
             # Preserving row IDs for still-valid HCCs is critical: raf_meat_evidence
             # has FK patient_hcc_id → raf_patient_hcc(id) ON DELETE CASCADE, so a

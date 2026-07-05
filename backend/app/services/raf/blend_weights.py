@@ -84,7 +84,7 @@ _NORM_FACTORS_V22: dict[int, float] = {
 _MACI_FACTORS_V28: dict[int, float] = {
     2024: 0.059,
     2025: 0.059,
-    2026: 0.059,  # estimated
+    2026: 0.059,  # finalized per CMS 2026 Rate Announcement (Apr 2025)
 }
 
 # Backward-compat alias

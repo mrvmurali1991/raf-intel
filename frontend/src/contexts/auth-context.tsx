@@ -5,7 +5,7 @@
  *
  * Owns the entire authentication lifecycle:
  *   - Access token in memory (_accessToken module variable)
- *   - Refresh token in sessionStorage (cleared on tab close)
+ *   - Refresh token in httpOnly cookie (set by backend, not accessible to JS)
  *   - Lightweight boolean cookie for Next.js middleware SSR guard
  *   - Axios interceptors on BOTH authApi and lib/api's default instance
  *   - Interval-based silent token refresh (2 min before expiry)

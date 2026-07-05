@@ -52,12 +52,12 @@ logger = logging.getLogger(__name__)
 # at most one PatientContext per unique (patient_id, dos) seen in a single
 # Python process lifetime.  Production callers that want a fresh fetch should
 # pass a pre-built ``context`` argument to gate_billed_promotion directly.
-_context_cache: dict[tuple[int, date], PatientContext] = {}
+_context_cache: dict[tuple[str, int, date], PatientContext] = {}
 
 
-def _get_or_build_context(patient_id: int, dos: date) -> PatientContext:
+def _get_or_build_context(patient_id: int, dos: date, tenant_id: str = "") -> PatientContext:
     """Return a cached PatientContext or build and cache one."""
-    key = (patient_id, dos)
+    key = (tenant_id, patient_id, dos)
     if key not in _context_cache:
         _context_cache[key] = build_patient_context_from_db(patient_id, dos)
     return _context_cache[key]

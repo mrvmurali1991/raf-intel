@@ -80,6 +80,8 @@ logger = logging.getLogger(__name__)
 MONITOR_KEYWORDS: list[str] = [
     "monitor", "monitoring", "checking", "follow-up", "followup", "f/u",
     "trending", "watching", "lab review", "labs ordered", "imaging ordered",
+    "vitals", "vital signs", "blood pressure", "bp", "o2 sat", "spo2",
+    "weight", "bmi", "heart rate", "pulse",
 ]
 
 EVALUATE_KEYWORDS: list[str] = [
@@ -94,7 +96,8 @@ ASSESS_KEYWORDS: list[str] = [
 ]
 
 TREAT_KEYWORDS: list[str] = [
-    "medication", "prescribed", "rx", "treatment", "therapy", "continue",
+    "medication", "prescribed", "rx", "treatment", "therapy",
+    "continue medication", "continue current regimen", "continue treatment",
     "increased dose", "decreased dose", "started on", "discontinued",
     "referred", "referral",
 ]

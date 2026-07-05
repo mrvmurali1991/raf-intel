@@ -159,6 +159,15 @@ PAYMENT_YEARS: dict[int, PaymentYearWindow] = {
         dos_end=date(2025, 12, 31),
         model_blend={"V24": 0.00, "V28": 1.00},
     ),
+    # PY2027 — projected 100% V28 (no phase-in blend).  DOS window follows
+    # standard CMS rule: data collected from PY-1.  Update model_blend if
+    # CMS 2027 Advance Notice (expected Jan 2026) introduces changes.
+    2027: PaymentYearWindow(
+        year=2027,
+        dos_start=date(2026, 1, 1),
+        dos_end=date(2026, 12, 31),
+        model_blend={"V24": 0.00, "V28": 1.00},
+    ),
 }
 
 

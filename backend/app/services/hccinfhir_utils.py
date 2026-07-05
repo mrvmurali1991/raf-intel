@@ -73,7 +73,7 @@ def lookup_hcc(icd10_code: str, model: ModelName = DEFAULT_MODEL) -> dict:
                             is_chronic (bool)
                             reference_coefficient (float | None)
     """
-    code = icd10_code.strip().upper()
+    code = icd10_code.strip().upper().replace(".", "")
     cc_set: set[str] = dx_to_cc_default.get((code, model), set())
 
     details = []
@@ -177,7 +177,7 @@ def is_risk_adjusting(icd10_code: str, model: ModelName = DEFAULT_MODEL) -> bool
     Returns:
         True if the code maps to one or more condition categories, else False.
     """
-    code = icd10_code.strip().upper()
+    code = icd10_code.strip().upper().replace(".", "")
     return bool(dx_to_cc_default.get((code, model)))
 
 

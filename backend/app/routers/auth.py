@@ -30,6 +30,7 @@ Admin / manager endpoints:
 import ipaddress
 import logging
 import os
+import time as _time
 from datetime import date, datetime
 from functools import lru_cache
 from typing import Any
@@ -48,6 +49,7 @@ from app.services.auth_service import (
     authenticate_user,
     change_password,
     complete_mfa_login,
+    count_users,
     create_embed_token,
     create_user,
     deactivate_user,
@@ -253,6 +255,7 @@ class UserDetailResponse(BaseModel):
 
 class UserListResponse(BaseModel):
     count: int
+    total: int | None = None
     users: list[dict[str, Any]]
 
 
@@ -912,14 +915,21 @@ _DEMO_ACCESSIBLE_TENANTS: list[dict[str, str]] = [
 ]
 
 
-@lru_cache(maxsize=1)
+_tenant_table_exists_cache: tuple[bool, float] | None = None
+
+
 def _user_tenant_access_table_exists() -> bool:
     """Return True when the optional user_tenant_access table is present.
 
-    Cached per-process so we don't run information_schema on every /me hit.
+    TTL-cached (5 min) per-process so we don't run information_schema on
+    every /me hit, but we still pick up schema changes within a few minutes.
     Falls back to False (demo path) on any DB error — the switcher must
     never break login.
     """
+    global _tenant_table_exists_cache
+    now = _time.monotonic()
+    if _tenant_table_exists_cache and now - _tenant_table_exists_cache[1] < 300:
+        return _tenant_table_exists_cache[0]
     try:
         with raf_cursor() as cur:
             cur.execute(
@@ -927,10 +937,12 @@ def _user_tenant_access_table_exists() -> bool:
                 "WHERE table_schema = DATABASE() AND table_name = 'user_tenant_access'"
             )
             row = cur.fetchone() or {}
-            return int(row.get("cnt") or 0) > 0
+            result = int(row.get("cnt") or 0) > 0
     except Exception as exc:
         logger.warning("user_tenant_access existence probe failed: %s", exc)
-        return False
+        result = False
+    _tenant_table_exists_cache = (result, now)
+    return result
 
 
 def _load_accessible_tenants(user_id: int) -> list[dict[str, str]]:
@@ -1152,7 +1164,8 @@ def admin_list_users(
 ) -> UserListResponse:
     users = list_users(limit=limit, offset=offset, role=role, is_active=is_active, tenant_id=tenant_id)
     serialized = [_safe_user(u) for u in users]
-    return UserListResponse(count=len(serialized), users=serialized)
+    total = count_users(role=role, is_active=is_active, tenant_id=tenant_id)
+    return UserListResponse(count=len(serialized), total=total, users=serialized)
 
 
 @router.post(

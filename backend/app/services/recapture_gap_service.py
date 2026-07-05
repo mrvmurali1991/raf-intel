@@ -176,6 +176,18 @@ def detect_and_persist_gaps(
                 continue
             seen.add(key)
 
+            hcc_code = row["hcc_code"]
+            # Look up coefficient for per-HCC revenue estimate
+            try:
+                from app.services.hccinfhir_utils import get_hcc_coefficient
+                coeff = get_hcc_coefficient(str(hcc_code), model=current_model.replace("V", "CMS-HCC Model V"))
+                if coeff and coeff > 0:
+                    revenue = round(coeff * float(os.getenv("CMS_REVENUE_PER_RAF_POINT", "11800")), 2)
+                else:
+                    revenue = _REVENUE_IMPACT_PER_GAP
+            except Exception:
+                revenue = _REVENUE_IMPACT_PER_GAP
+
             batch.append((
                 row["patient_id"],
                 tenant_id,
@@ -184,7 +196,7 @@ def detect_and_persist_gaps(
                 prior_year,
                 current_year,
                 row["provider_npi"],
-                _REVENUE_IMPACT_PER_GAP,
+                revenue,
             ))
 
         if batch:

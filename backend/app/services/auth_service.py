@@ -610,6 +610,30 @@ def list_users(
         return cur.fetchall()
 
 
+def count_users(
+    role: str | None = None,
+    is_active: bool | None = None,
+    tenant_id: str = "",
+) -> int:
+    """Return the total number of users matching the given filters."""
+    if not tenant_id:
+        raise ValueError("count_users: tenant_id is required")
+    _ensure_tables()
+    conditions = ["tenant_id = %s"]
+    params: list[Any] = [tenant_id]
+    if role is not None:
+        conditions.append("role = %s")
+        params.append(role)
+    if is_active is not None:
+        conditions.append("is_active = %s")
+        params.append(1 if is_active else 0)
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    with raf_cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) AS cnt FROM users {where}", params)
+        row = cur.fetchone() or {}
+        return int(row.get("cnt") or 0)
+
+
 def update_user(
     user_id: int,
     full_name: str | None = None,
@@ -737,13 +761,12 @@ def generate_password_reset_token(email: str) -> str:
     """Create a password reset token stored (hashed) on the user record.
 
     Also sends a password-reset email to the user with a link that expires in
-    30 minutes.  The token itself is valid for 1 hour in the DB; the email
-    copy states 30 minutes to encourage prompt use.
+    30 minutes.
     """
     _ensure_tables()
     token = secrets.token_urlsafe(32)
     token_hash = _hash_token(token)
-    expires = _utcnow() + timedelta(hours=1)
+    expires = _utcnow() + timedelta(minutes=30)
     with raf_cursor() as cur:
         cur.execute(
             "UPDATE users SET password_reset_token = %s, password_reset_expires = %s WHERE email = %s",
@@ -884,12 +907,13 @@ def validate_session(session_id: str) -> dict[str, Any] | None:
             )
             return None
 
-    # Touch last_used_at and last_activity_at on every successful validation
-    with raf_cursor() as cur:
-        cur.execute(
-            "UPDATE user_sessions SET last_used_at = NOW(), last_activity_at = NOW() WHERE session_id = %s",
-            (session_id,),
-        )
+    # Debounce activity writes — only update if idle > 60s to reduce DB write load
+    if last_activity is None or idle_seconds > 60:
+        with raf_cursor() as cur:
+            cur.execute(
+                "UPDATE user_sessions SET last_used_at = NOW(), last_activity_at = NOW() WHERE session_id = %s",
+                (session_id,),
+            )
     return row
 
 
@@ -1506,6 +1530,25 @@ def verify_mfa_code(user_id: int, code: str) -> bool:
         return False
     totp = pyotp.TOTP(plain_secret)
     if totp.verify(code, valid_window=1):
+        # Prevent TOTP replay — reject codes at or before the last accepted step
+        import time as _time
+        current_step = int(_time.time()) // 30
+        try:
+            with raf_cursor() as cur2:
+                cur2.execute(
+                    "SELECT mfa_last_used_step FROM users WHERE id = %s", (user_id,)
+                )
+                step_row = cur2.fetchone()
+                last_step = step_row.get("mfa_last_used_step") if step_row else None
+                if last_step is not None and current_step <= last_step:
+                    logger.warning("TOTP replay rejected for user %s (step %d <= %d)", user_id, current_step, last_step)
+                    return False
+                cur2.execute(
+                    "UPDATE users SET mfa_last_used_step = %s WHERE id = %s",
+                    (current_step, user_id),
+                )
+        except Exception:
+            logger.debug("mfa_last_used_step column may not exist yet", exc_info=True)
         return True
 
     # Try recovery codes.

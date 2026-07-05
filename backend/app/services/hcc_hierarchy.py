@@ -57,7 +57,7 @@ logger = logging.getLogger(__name__)
 
 # Source: CMS 2024 HCC Model Software User Guide, Appendix – HCC Hierarchies
 # Each inner tuple lists HCC codes from MOST severe to LEAST severe.
-V24_HIERARCHY_CHAINS: list[tuple[int, ...]] = [
+_V24_HARDCODED_CHAINS: list[tuple[int, ...]] = [
     # Cancer / Tumors
     (8, 9, 10, 11, 12),
     # Diabetes
@@ -85,6 +85,40 @@ V24_HIERARCHY_CHAINS: list[tuple[int, ...]] = [
     # Renal / Kidney disease
     (134, 135, 136, 137, 138),
 ]
+
+
+def _load_v24_chains_from_hccinfhir() -> list[tuple[int, ...]] | None:
+    """Return V24 chains derived from the CMS hierarchy bundled with hccinfhir.
+
+    hccinfhir exposes ``hierarchies_default`` as ``{(hcc, model): {trumped}}``.
+    We flatten that into 2-tuples ``(parent, child)``; ``_build_lookup`` below
+    produces the correct transitive closure regardless of whether the chains
+    are expressed as long tuples or pair-wise edges.
+    """
+    try:
+        from hccinfhir.defaults import hierarchies_default
+    except Exception:  # pragma: no cover — hccinfhir always installed in prod
+        logger.debug("swallowed exception", exc_info=True)
+        return None
+    chains: list[tuple[int, ...]] = []
+    for (hcc, model), trumped in hierarchies_default.items():
+        if "V24" not in model:
+            continue
+        try:
+            parent = int(hcc)
+        except (TypeError, ValueError):
+            continue
+        for child in trumped:
+            try:
+                chains.append((parent, int(child)))
+            except (TypeError, ValueError):
+                continue
+    return chains or None
+
+
+V24_HIERARCHY_CHAINS: list[tuple[int, ...]] = (
+    _load_v24_chains_from_hccinfhir() or _V24_HARDCODED_CHAINS
+)
 
 # V28 hierarchy chains.
 #

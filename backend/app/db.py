@@ -546,7 +546,7 @@ def openemr_cursor(dictionary: bool = True, tenant_id: str | None = None) -> Gen
     argument.
     """
     if tenant_id is None:
-        if os.getenv("APP_ENV", "development") == "production":
+        if os.getenv("APP_ENV", "production") == "production":
             raise ValueError("openemr_cursor() requires tenant_id in production")
         # Fallback: use DEFAULT_TENANT_ID for legacy callers that haven't been
         # updated to pass tenant_id yet.  Log a warning so we can track them.

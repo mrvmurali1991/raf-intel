@@ -891,7 +891,9 @@ def _run_single_model(
         "demographic_score": max(0.0, round(demographic_score, 4)),
         "disease_score": max(0.0, round(disease_score, 4)),
         "interaction_score": max(0.0, round(interaction_score, 4)),
-        "subtotal": max(0.0, round(demographic_score + disease_score + interaction_score, 4)),
+        "subtotal": max(0.0, round(
+            max(0.0, demographic_score) + max(0.0, disease_score) + max(0.0, interaction_score), 4
+        )),
         "hcc_list": [str(h) for h in hcc_list],
         "hcc_contributions": hcc_contributions,
         "all_coefficients": {k: round(v, 4) for k, v in all_coefficients.items()},
@@ -1246,12 +1248,17 @@ def calculate_raf_score(
                 patient_id, _deceased_date, measurement_year,
             )
 
+    _months_eligible = None
+    if _deceased_date and isinstance(_deceased_date, (date, datetime)):
+        _death_month = _deceased_date.month if hasattr(_deceased_date, 'month') else int(str(_deceased_date)[5:7])
+        _months_eligible = _death_month
+
     dob = patient.get("DOB") or patient.get("dob")
     if not dob:
-        logger.warning(
-            "Patient %s has no DOB — using fallback 1950-01-01", patient.get("pid")
+        raise ValueError(
+            f"Patient {patient_id} has no date of birth — cannot compute RAF score. "
+            "Fix the patient record before scoring."
         )
-        dob = "1950-01-01"
     sex = _sex_code(patient.get("sex", "M"))
     age_year = encounter_year if encounter_year is not None else measurement_year
     age = _calculate_age(dob, age_year)
@@ -1373,7 +1380,7 @@ def calculate_raf_score(
         icd_codes=icd_codes,
     )
     logger.info(
-        "RAF calc pid=%s year=%s age=%s sex=%s segment=%s orec=%s dual=%s codes=%s enrollment_months=%s",
+        "RAF calc pid=%s year=%s age=%s sex=%s segment=%s orec=%s dual=%s num_codes=%d enrollment_months=%s",
         patient_id,
         measurement_year,
         age,
@@ -1381,9 +1388,10 @@ def calculate_raf_score(
         model_segment,
         _orec,
         _dual_type,
-        icd_codes,
+        len(icd_codes),
         enrollment_months,
     )
+    logger.debug("RAF calc pid=%s codes=%s", patient_id, icd_codes)
 
     # 4a. New Enrollee short-circuit — demographic-only, no HCC disease scoring
     if _is_new_enrollee(model_segment):
@@ -1641,6 +1649,11 @@ def calculate_raf_score(
     disease_score = primary["disease_score"]  # type: ignore[index]
     interaction_score = primary["interaction_score"]  # type: ignore[index]
     subtotal = primary["subtotal"]  # type: ignore[index]
+    hcc_contributions = primary["hcc_contributions"]  # type: ignore[index]
+    all_coefficients = primary["all_coefficients"]  # type: ignore[index]
+    interactions_fired = primary["interactions_fired"]  # type: ignore[index]
+    norm_factor = primary["norm_factor"]  # type: ignore[index]
+    maci = primary["maci_factor"]  # type: ignore[index]
 
     # Apply ESRD demographic override — CMS ESRD model uses separate, higher
     # demographic base scores that differ from the standard community model.
@@ -1648,15 +1661,12 @@ def calculate_raf_score(
         demo_delta = esrd_demo_override - demographic_score
         demographic_score = esrd_demo_override
         subtotal = round(subtotal + demo_delta, 4)
+        # Recalculate payment_raf with corrected ESRD demographics
+        payment_raf = round(subtotal * (1 - maci) / norm_factor, 4) if norm_factor else payment_raf
         logger.info(
             "RAF calc pid=%s — ESRD demo override applied: %.4f → %.4f (delta=%.4f)",
             patient_id, demographic_score - demo_delta, demographic_score, demo_delta,
         )
-    hcc_contributions = primary["hcc_contributions"]  # type: ignore[index]
-    all_coefficients = primary["all_coefficients"]  # type: ignore[index]
-    interactions_fired = primary["interactions_fired"]  # type: ignore[index]
-    norm_factor = primary["norm_factor"]  # type: ignore[index]
-    maci = primary["maci_factor"]  # type: ignore[index]
 
     raf_score = round(blended_raw, 4)
 
@@ -1784,6 +1794,7 @@ def calculate_raf_score(
         # Deceased patient — present only when patient died mid-year so callers
         # can prorate the RAF score by months alive.  None for living patients.
         "deceased_date": str(_deceased_date) if _deceased_date is not None else None,
+        "months_eligible": _months_eligible,
         "_disclaimer": (
             "RAF scores are estimates based on CMS-HCC models via hccinfhir. "
             "Not for payment submission."
