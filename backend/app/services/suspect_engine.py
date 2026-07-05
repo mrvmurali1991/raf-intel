@@ -919,6 +919,18 @@ def scan_note_vs_billing(patient_id: int, year: int | None = None) -> list[dict[
             note_snippet = dx.get("note_snippet") or ""
             base_conf = float(dx.get("confidence") or 0.6)
 
+            # Validate snippet against encounter notes when available
+            _snippet_validated = False
+            if note_snippet:
+                try:
+                    _enc_id = job.get("encounter_id")
+                    if _enc_id:
+                        _notes = emr.get_encounter_notes(_enc_id) if hasattr(emr, "get_encounter_notes") else None
+                        if _notes and note_snippet.strip() in _notes:
+                            _snippet_validated = True
+                except Exception:
+                    pass
+
             accept, adjusted_conf, ctx_meta = _apply_context_filter(
                 note_snippet, description, base_conf,
             )
@@ -947,8 +959,9 @@ def scan_note_vs_billing(patient_id: int, year: int | None = None) -> list[dict[
                     "diagnosis_index": i,
                     "analysis_date": analysis_date,
                     "note_snippet": note_snippet,
-                    "note_snippet_validated": False,
+                    "note_snippet_validated": _snippet_validated,
                     "context": ctx_meta,
+                    "pre_context_confidence": base_conf,
                 },
             })
 
@@ -1060,6 +1073,7 @@ def scan_note_nlp(
                     "model_version": finding.model_version,
                     "surfacing_threshold": NLP_MIN_CONFIDENCE_SURFACED,
                     "note_snippet_validated": True,
+                    "note_text_length": len(note_text),
                     "source": "note_nlp",
                 },
             })
@@ -1114,6 +1128,31 @@ def scan_comorbidities(patient_id: int, year: int | None = None) -> list[dict[st
     # Build a normalised ICD set for prefix matching (strip dots, uppercase)
     norm_icds = {c.replace(".", "").strip().upper() for c in coded_icds if c}
 
+    # Fetch most recent encounter date per coded ICD for temporal attribution
+    _icd_encounter_info: dict[str, dict] = {}
+    try:
+        with raf_cursor() as cur:
+            cur.execute(
+                """
+                SELECT nd.icd10_code,
+                       MAX(ne.encounter_date) AS last_date,
+                       SUBSTRING_INDEX(GROUP_CONCAT(ne.id ORDER BY ne.encounter_date DESC), ',', 1) AS last_enc_id
+                FROM normalized_diagnoses nd
+                JOIN normalized_encounters ne ON ne.id = nd.encounter_id
+                WHERE nd.patient_id = %s
+                GROUP BY nd.icd10_code
+                """,
+                (patient_id,),
+            )
+            for r in cur.fetchall():
+                code = (r.get("icd10_code") or "").upper().replace(".", "")
+                _icd_encounter_info[code] = {
+                    "last_encounter_date": str(r["last_date"]) if r.get("last_date") else None,
+                    "last_encounter_id": r.get("last_enc_id"),
+                }
+    except Exception:
+        logger.debug("scan_comorbidities: encounter date lookup failed", exc_info=True)
+
     suspects: list[dict[str, Any]] = []
 
     for pat in patterns:
@@ -1165,9 +1204,13 @@ def scan_comorbidities(patient_id: int, year: int | None = None) -> list[dict[st
                 "condition_a_icd": pat.get("condition_a_icd"),
                 "condition_a_matched": cond_a_matched,
                 "condition_a_hcc": pat.get("condition_a_hcc"),
+                "condition_a_last_encounter": _icd_encounter_info.get(cond_a_matched, {}).get("last_encounter_date"),
+                "condition_a_encounter_id": _icd_encounter_info.get(cond_a_matched, {}).get("last_encounter_id"),
                 "condition_b_icd": pat.get("condition_b_icd"),
                 "condition_b_matched": cond_b_matched,
                 "condition_b_hcc": pat.get("condition_b_hcc"),
+                "condition_b_last_encounter": _icd_encounter_info.get(cond_b_matched or "", {}).get("last_encounter_date") if cond_b_matched else None,
+                "condition_b_encounter_id": _icd_encounter_info.get(cond_b_matched or "", {}).get("last_encounter_id") if cond_b_matched else None,
                 "confidence_base": float(pat.get("confidence_base") or 0.6),
                 "clinical_rationale": pat.get("notes") or "",
                 "source": "comorbidity",

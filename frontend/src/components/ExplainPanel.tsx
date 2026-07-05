@@ -513,10 +513,12 @@ function ComorbidityEvidence({ ev }: { ev: Record<string, unknown> }) {
   const conditionB = evGet(ev, "condition_b", "condition_b_icd10") as string | undefined;
   const conditionALabel = evGet(ev, "condition_a_label") as string | undefined;
   const conditionBLabel = evGet(ev, "condition_b_label") as string | undefined;
-  const matchedA = evGet(ev, "matched_a", "matched_condition_a") as string | undefined;
-  const matchedB = evGet(ev, "matched_b", "matched_condition_b") as string | undefined;
+  const matchedA = evGet(ev, "matched_a", "matched_condition_a", "condition_a_matched") as string | undefined;
+  const matchedB = evGet(ev, "matched_b", "matched_condition_b", "condition_b_matched") as string | undefined;
   const rationale = evGet(ev, "clinical_rationale", "rationale", "description") as string | undefined;
   const confBase = evGet(ev, "confidence_base", "base_confidence") as number | undefined;
+  const condADate = evGet(ev, "condition_a_last_encounter") as string | undefined;
+  const condBDate = evGet(ev, "condition_b_last_encounter") as string | undefined;
 
   return (
     <div className="space-y-2">
@@ -536,6 +538,7 @@ function ComorbidityEvidence({ ev }: { ev: Record<string, unknown> }) {
               <span className="font-medium text-muted-foreground">Condition A:</span>{" "}
               {conditionA}{conditionALabel ? ` (${conditionALabel})` : ""}
               {matchedA && <span className="text-emerald-600 dark:text-emerald-400"> — matched {matchedA}</span>}
+              {condADate && <span className="text-muted-foreground"> (last documented: {condADate})</span>}
             </p>
           )}
           {conditionB && (
@@ -543,6 +546,7 @@ function ComorbidityEvidence({ ev }: { ev: Record<string, unknown> }) {
               <span className="font-medium text-muted-foreground">Condition B:</span>{" "}
               {conditionB}{conditionBLabel ? ` (${conditionBLabel})` : ""}
               {matchedB && <span className="text-emerald-600 dark:text-emerald-400"> — matched {matchedB}</span>}
+              {condBDate && <span className="text-muted-foreground"> (last documented: {condBDate})</span>}
             </p>
           )}
         </div>
@@ -689,8 +693,10 @@ function NLPEvidence({ ev }: { ev: Record<string, unknown> }) {
   const start = evGet(ev, "nlp_evidence_start", "start", "char_start") as number | undefined;
   const end = evGet(ev, "nlp_evidence_end", "end", "char_end") as number | undefined;
   const encounterDate = evGet(ev, "encounter_date", "date", "source_date") as string | undefined;
-  const model = evGet(ev, "model", "nlp_model", "extractor") as string | undefined;
-  const verified = evGet(ev, "verified", "quote_verified") as boolean | undefined;
+  const model = evGet(ev, "model", "model_version", "nlp_model", "extractor") as string | undefined;
+  const verified = evGet(ev, "verified", "quote_verified", "note_snippet_validated") as boolean | undefined;
+  const threshold = evGet(ev, "surfacing_threshold") as number | undefined;
+  const preCtxConf = evGet(ev, "pre_context_confidence") as number | undefined;
 
   // Render the sentence with the matched portion highlighted if offsets given
   const renderSentence = () => {
@@ -740,11 +746,20 @@ function NLPEvidence({ ev }: { ev: Record<string, unknown> }) {
             {model}
           </span>
         )}
-        {verified && (
+        {verified === true && (
           <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
             <Check className="h-3 w-3" aria-hidden />
-            Quote verified
+            Quote verified against source
           </span>
+        )}
+        {verified === false && (
+          <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+            <AlertCircle className="h-3 w-3" aria-hidden />
+            Quote not verified
+          </span>
+        )}
+        {threshold != null && (
+          <span>Surfacing threshold: {(threshold * 100).toFixed(0)}%</span>
         )}
       </div>
     </div>
