@@ -890,9 +890,9 @@ def _run_single_model(
         "payment_raf": max(0.0, payment_raf),
         "demographic_score": max(0.0, round(demographic_score, 4)),
         "disease_score": max(0.0, round(disease_score, 4)),
-        "interaction_score": max(0.0, round(interaction_score, 4)),
+        "interaction_score": round(interaction_score, 4),
         "subtotal": max(0.0, round(
-            max(0.0, demographic_score) + max(0.0, disease_score) + max(0.0, interaction_score), 4
+            max(0.0, demographic_score) + max(0.0, disease_score) + interaction_score, 4
         )),
         "hcc_list": [str(h) for h in hcc_list],
         "hcc_contributions": hcc_contributions,
@@ -1699,6 +1699,7 @@ def calculate_raf_score(
         persist_result_obj,
         score_type=model_version_used,
         tenant_id=tenant_id,
+        model_version="V28" if v28_calc else "V24",
     )
 
     # 9. Persist demographics

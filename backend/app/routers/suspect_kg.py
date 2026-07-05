@@ -22,7 +22,7 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.auth import get_current_user, require_permission
+from app.auth import get_current_user, get_tenant_id, require_permission
 from app.services.knowledge_graph.suspect_kg_orchestrator import (
     get_evidence_chain,
     get_evidence_type_distribution,
@@ -40,7 +40,6 @@ router = APIRouter(prefix="/api/suspects", tags=["suspects-kg"])
 
 class KgDetectRequest(BaseModel):
     year: int = Field(default=2026, ge=2020, le=2100)
-    tenant_id: int = Field(default=1, ge=1)
     chart_text: str | None = Field(default=None, description="Optional chart text for LLM augmentation phase")
     provider_specialty: str | None = Field(default=None)
 
@@ -57,6 +56,7 @@ def kg_detect(
     patient_id: int,
     body: KgDetectRequest | None = Body(default=None),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("patients", "write")),
 ) -> dict[str, Any]:
     """
@@ -72,13 +72,13 @@ def kg_detect(
         suspects = run_kg_first_detection(
             patient_id=patient_id,
             year=body.year,
-            tenant_id=body.tenant_id,
+            tenant_id=int(tenant_id),
             chart_text=body.chart_text,
             provider_specialty=body.provider_specialty,
         )
     except Exception as exc:
-        logger.error("kg_detect failed pid=%s: %s", patient_id, exc)
-        raise HTTPException(status_code=500, detail=f"KG detection failed: {exc}")
+        logger.error("kg_detect failed pid=%s: %s", patient_id, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal error during suspect detection.")
 
     by_type: dict[str, int] = {}
     for s in suspects:
@@ -88,7 +88,7 @@ def kg_detect(
     return {
         "patient_id": patient_id,
         "year": body.year,
-        "tenant_id": body.tenant_id,
+        "tenant_id": tenant_id,
         "suspects_found": len(suspects),
         "by_evidence_type": by_type,
         "suspects": suspects,
@@ -107,6 +107,7 @@ def kg_evidence_distribution(
     patient_id: int | None = Query(default=None),
     year: int | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("patients", "read")),
 ) -> dict[str, Any]:
     """
@@ -114,10 +115,10 @@ def kg_evidence_distribution(
     evidence_type.  Useful to verify KG dominance after a detection run.
     """
     try:
-        dist = get_evidence_type_distribution(patient_id=patient_id, year=year)
+        dist = get_evidence_type_distribution(patient_id=patient_id, year=year, tenant_id=tenant_id)
     except Exception as exc:
-        logger.error("kg_evidence_distribution failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Distribution query failed: {exc}")
+        logger.error("kg_evidence_distribution failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal error querying distribution.")
 
     total = sum(dist.values()) or 1
     pct = {k: round(100.0 * v / total, 2) for k, v in dist.items()}
@@ -141,6 +142,7 @@ def kg_evidence_distribution(
 def evidence_chain(
     suspect_id: int,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("patients", "read")),
 ) -> dict[str, Any]:
     """
@@ -153,11 +155,11 @@ def evidence_chain(
     this suspect on my list?".
     """
     try:
-        chain = get_evidence_chain(suspect_id)
+        chain = get_evidence_chain(suspect_id, tenant_id=tenant_id)
     except ValueError:
-        raise HTTPException(status_code=404, detail=f"Suspect {suspect_id} not found")
+        raise HTTPException(status_code=404, detail="Suspect not found")
     except Exception as exc:
-        logger.error("evidence_chain id=%s: %s", suspect_id, exc)
-        raise HTTPException(status_code=500, detail=f"Evidence chain lookup failed: {exc}")
+        logger.error("evidence_chain id=%s: %s", suspect_id, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal error loading evidence chain.")
 
     return chain

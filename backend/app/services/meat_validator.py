@@ -82,17 +82,24 @@ MONITOR_KEYWORDS: list[str] = [
     "trending", "watching", "lab review", "labs ordered", "imaging ordered",
     "vitals", "vital signs", "blood pressure", "bp", "o2 sat", "spo2",
     "weight", "bmi", "heart rate", "pulse",
+    "a1c", "hba1c", "inr", "creatinine", "egfr", "ejection fraction",
+    "peak flow", "lipid panel", "thyroid panel",
 ]
 
 EVALUATE_KEYWORDS: list[str] = [
     "evaluate", "evaluation", "assessed", "exam", "examination",
     "reviewed", "discussed", "tested", "physical exam",
+    "auscultation", "palpation", "percussion", "inspection",
+    "review of systems", "ros", "neurological exam",
+    "musculoskeletal exam", "fundoscopic", "objective findings",
 ]
 
 ASSESS_KEYWORDS: list[str] = [
     "stable", "unstable", "controlled", "uncontrolled", "improved",
     "worsened", "deteriorating", "exacerbation", "well-controlled",
     "poorly controlled", "a&p", "assessment:",
+    "improving", "progressing", "unchanged", "persistent",
+    "acute on chronic", "at goal", "not at goal",
 ]
 
 TREAT_KEYWORDS: list[str] = [
@@ -100,6 +107,8 @@ TREAT_KEYWORDS: list[str] = [
     "continue medication", "continue current regimen", "continue treatment",
     "increased dose", "decreased dose", "started on", "discontinued",
     "referred", "referral",
+    "managed", "maintained on", "titrated", "initiated", "adjusted",
+    "diet controlled", "lifestyle modification",
 ]
 
 # Character radius around a condition mention to search for MEAT evidence.

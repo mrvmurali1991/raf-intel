@@ -444,14 +444,16 @@ def _check_dos_year_gate(
                 (patient_id, hcc_code, payment_year, tenant_id),
             )
             row = cur.fetchone()
-    except MySQLdb.OperationalError as exc:
-        logger.warning(
+    except Exception as exc:
+        logger.error(
             "_check_dos_year_gate: DB error querying raf_meat_evidence "
-            "(patient=%s hcc=%s year=%s) — skipping gate. err=%s "
-            "TODO: ensure migration 022 has run.",
+            "(patient=%s hcc=%s year=%s) — gate check failed. err=%s",
             patient_id, hcc_code, payment_year, exc,
         )
-        return
+        raise ValueError(
+            f"RADV gate check failed due to database error for patient {patient_id}, "
+            f"HCC {hcc_code}, year {payment_year}. Cannot verify DOS compliance."
+        ) from exc
 
     max_dos = row["max_dos"] if row else None
 

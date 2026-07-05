@@ -56,6 +56,7 @@ _NORM_FACTORS_V28: dict[int, float] = {
     2024: 1.045,
     2025: 1.045,
     2026: 1.067,
+    2027: 1.067,  # placeholder — update from CMS 2027 Rate Announcement when published
 }
 
 # Backward-compat alias
@@ -67,6 +68,7 @@ _NORM_FACTORS_V24: dict[int, float] = {
     2024: 1.153,
     2025: 1.153,
     2026: 1.153,
+    2027: 1.187,  # placeholder — V24 no longer blended but kept for reference
 }
 
 # V22 (legacy 2017 model) normalization factors — used for the PACE legacy side
@@ -85,6 +87,7 @@ _MACI_FACTORS_V28: dict[int, float] = {
     2024: 0.059,
     2025: 0.059,
     2026: 0.059,  # finalized per CMS 2026 Rate Announcement (Apr 2025)
+    2027: 0.059,  # placeholder — update from CMS 2027 Rate Announcement when published
 }
 
 # Backward-compat alias
@@ -94,6 +97,7 @@ _MACI_FACTORS_V24: dict[int, float] = {
     2024: 0.059,
     2025: 0.059,
     2026: 0.059,
+    2027: 0.059,  # placeholder
 }
 
 

@@ -891,6 +891,7 @@ def validate_session(session_id: str) -> dict[str, Any] | None:
 
     # HIPAA idle timeout: revoke session if inactive too long
     last_activity = row.get("last_activity_at")
+    idle_seconds = 0
     if last_activity is not None:
         if isinstance(last_activity, str):
             last_activity = datetime.fromisoformat(last_activity)

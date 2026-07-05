@@ -68,6 +68,7 @@ def _store_patient_hccs(
     result: Any,
     score_type: str = "blended",
     tenant_id: str = "",  # Required — empty string will raise below
+    model_version: str = "V28",
 ) -> None:
     """Store active HCCs in raf_patient_hcc table.
 
@@ -134,7 +135,7 @@ def _store_patient_hccs(
                         (patient_id, measurement_year, hcc_code, icd10_codes,
                          source_encounter_ids, raf_coefficient, meat_status, tenant_id,
                          is_chronic, model_version)
-                    VALUES (%s, %s, %s, %s, '[]', %s, 'missing', %s, %s, 'V28')
+                    VALUES (%s, %s, %s, %s, '[]', %s, 'missing', %s, %s, %s)
                     ON DUPLICATE KEY UPDATE
                         icd10_codes     = VALUES(icd10_codes),
                         raf_coefficient = VALUES(raf_coefficient),
@@ -150,6 +151,7 @@ def _store_patient_hccs(
                         coefficient,
                         tenant_id,
                         is_chronic,
+                        model_version,
                     ),
                 )
     except Exception as exc:

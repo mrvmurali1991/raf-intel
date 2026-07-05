@@ -21,6 +21,8 @@ mixing with general debug output.  Configure it in your logging setup, e.g.:
     handlers = phi_file
     propagate = 0
 """
+# TODO(audit-tenant): Add tenant_id column to audit_log table (currently
+# derived via users JOIN). Needed for immutable per-action tenant attribution.
 from __future__ import annotations
 
 import json
@@ -119,8 +121,7 @@ def log_phi_access(
                 ),
             )
     except Exception:
-        logger.debug("swallowed exception", exc_info=True)
-        _app_logger.error("Failed to persist PHI access log to database", exc_info=True)
+        _app_logger.error("AUDIT_TRAIL_DEGRADED: Failed to persist PHI access log to database", exc_info=True)
 
     # Write to immutable hash-chain audit log (tamper-evident file)
     try:

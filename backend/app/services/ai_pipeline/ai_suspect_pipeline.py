@@ -140,7 +140,11 @@ def merge(rule_out: list[SuspectCandidate], llm_out: list[SuspectCandidate]) -> 
         for e in cand.supporting_evidence:
             merged_evidence.setdefault((e.type, e.ref_id), e)
         existing.supporting_evidence = list(merged_evidence.values())
-        existing.confidence = min(1.0, max(existing.confidence, cand.confidence) + 0.1)
+        # Scale boost by the weaker signal's strength — two weak signals
+        # should not compound past clinical action thresholds
+        weaker = min(existing.confidence, cand.confidence)
+        boost = round(weaker * 0.15, 4)
+        existing.confidence = min(1.0, max(existing.confidence, cand.confidence) + boost)
         existing.source = "both"
         if cand.source == "rule" and existing.source != "rule":
             existing.icd10 = cand.icd10

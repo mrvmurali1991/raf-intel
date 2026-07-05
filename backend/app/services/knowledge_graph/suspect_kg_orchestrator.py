@@ -837,7 +837,7 @@ def _load_demographics(patient_id: int, year: int) -> dict[str, Any]:
 # Public API — get_evidence_chain
 # ---------------------------------------------------------------------------
 
-def get_evidence_chain(suspect_id: int) -> dict[str, Any]:
+def get_evidence_chain(suspect_id: int, tenant_id: str = "") -> dict[str, Any]:
     """
     Load a single suspect row and return its full evidence chain.
 
@@ -847,8 +847,8 @@ def get_evidence_chain(suspect_id: int) -> dict[str, Any]:
     try:
         with raf_cursor() as cur:
             cur.execute(
-                "SELECT * FROM raf_suspect_conditions WHERE id = %s",
-                (suspect_id,),
+                "SELECT * FROM raf_suspect_conditions WHERE id = %s AND tenant_id = %s",
+                (suspect_id, tenant_id),
             )
             row = cur.fetchone()
     except Exception as exc:
@@ -918,13 +918,14 @@ def get_evidence_chain(suspect_id: int) -> dict[str, Any]:
 def get_evidence_type_distribution(
     patient_id: int | None = None,
     year: int | None = None,
+    tenant_id: str = "",
 ) -> dict[str, int]:
     """
     Return a count of suspects grouped by evidence_type.  Optionally
     filtered to a single patient and / or measurement year.
     """
-    where: list[str] = []
-    params: list[Any] = []
+    where: list[str] = ["tenant_id = %s"]
+    params: list[Any] = [tenant_id]
     if patient_id is not None:
         where.append("patient_id = %s")
         params.append(patient_id)
