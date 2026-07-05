@@ -2,12 +2,14 @@
 Suspect Condition Detection Engine — ``SuspectScanner`` (DB layer).
 
 Identifies conditions that are likely present but not yet coded in the
-patient's billing record.  Four scanning strategies:
+patient's billing record.  Six scanning strategies:
 
   1. Medication signals  – drug name → suspected ICD-10 / HCC
   2. Lab signals         – abnormal lab values → suspected condition
   3. Historical HCC gap  – prior-year HCCs not recaptured in current year
   4. Note vs billing gap – Gemini NLP-identified diagnoses not in billing
+  5. Live NLP mining     – Gemini over last N encounter notes
+  6. Comorbidity patterns – condition A + B implies uncoded condition C
 
 Suspects are deduplicated by fingerprint, stored in raf_suspect_conditions,
 and support accept / dismiss review workflows.
@@ -50,6 +52,9 @@ _medication_signals_ts: float = 0
 _lab_signals_cache: list[dict] | None = None
 _lab_signals_ts: float = 0
 
+_comorbidity_patterns_cache: list[dict] | None = None
+_comorbidity_patterns_ts: float = 0
+
 _SIGNAL_CACHE_TTL = 300  # seconds
 _signal_cache_lock = threading.Lock()
 
@@ -74,6 +79,17 @@ def _get_lab_signals(cur) -> list[dict]:
             _lab_signals_ts = time.time()
             logger.debug("Refreshed lab signals cache: %d rows", len(_lab_signals_cache))
         return _lab_signals_cache
+
+
+def _get_comorbidity_patterns(cur) -> list[dict]:
+    global _comorbidity_patterns_cache, _comorbidity_patterns_ts
+    with _signal_cache_lock:
+        if _comorbidity_patterns_cache is None or time.time() - _comorbidity_patterns_ts > _SIGNAL_CACHE_TTL:
+            cur.execute("SELECT * FROM raf_comorbidity_patterns WHERE is_active = 1")
+            _comorbidity_patterns_cache = cur.fetchall()
+            _comorbidity_patterns_ts = time.time()
+            logger.debug("Refreshed comorbidity patterns cache: %d rows", len(_comorbidity_patterns_cache))
+        return _comorbidity_patterns_cache
 
 
 # ---------------------------------------------------------------------------
@@ -285,6 +301,10 @@ _EVIDENCE_TYPE_MAP = {
     # The frontend discriminator for "note NLP" is the presence of
     # evidence_detail.nlp_evidence_sentence in the JSON detail blob.
     "note_nlp": "referral",
+    # Comorbidity pattern detection — maps to "referral" because it is a
+    # knowledge-graph-derived clinical insight (not a direct lab/med signal).
+    # The frontend discriminator is evidence_detail.comorbidity_pattern_id.
+    "comorbidity": "referral",
     "imaging": "imaging",
     "referral": "referral",
 }
@@ -996,6 +1016,131 @@ def scan_note_nlp(
 
 
 # ---------------------------------------------------------------------------
+# Scan 6 – Comorbidity pattern detection
+# ---------------------------------------------------------------------------
+
+def scan_comorbidities(patient_id: int, year: int | None = None) -> list[dict[str, Any]]:
+    """
+    Identify suspected conditions from comorbidity patterns.
+
+    When a patient has condition A + condition B, they likely also have
+    condition C -- a common finding in clinical practice that is often
+    undercoded.  This is the "knowledge graph lite" approach used by RAAPID
+    and similar engines at scale.
+
+    Reads rules from ``raf_comorbidity_patterns``:
+        condition_a_icd + condition_b_icd => suspect_icd10 (suspect_hcc)
+
+    A suspect is emitted only when:
+        1. condition_a_icd IS present in the patient's coded ICD set
+        2. condition_b_icd IS present (or is NULL in the pattern = single-condition)
+        3. suspect_icd10 is NOT already coded
+        4. suspect_hcc is NOT already in raf_patient_hcc
+
+    Uses the same fingerprint/dedup pattern as scan_medications and scan_labs.
+    """
+    coded_icds = _coded_icd_set(patient_id, year=year)
+    coded_hccs = _coded_hcc_set(patient_id, year=year)
+
+    if not coded_icds:
+        return []
+
+    try:
+        with raf_cursor() as cur:
+            patterns = _get_comorbidity_patterns(cur)
+    except Exception as exc:
+        logger.error("scan_comorbidities: cannot load patterns: %s", exc)
+        return []
+
+    if not patterns:
+        return []
+
+    # Build a normalised ICD set for prefix matching (strip dots, uppercase)
+    norm_icds = {c.replace(".", "").strip().upper() for c in coded_icds if c}
+
+    suspects: list[dict[str, Any]] = []
+
+    for pat in patterns:
+        cond_a_icd = (pat.get("condition_a_icd") or "").replace(".", "").strip().upper()
+        cond_b_icd = (pat.get("condition_b_icd") or "").replace(".", "").strip().upper() if pat.get("condition_b_icd") else None
+        suspect_icd = (pat.get("suspect_icd10") or "").replace(".", "").strip().upper()
+        suspect_hcc = str(pat.get("suspect_hcc") or "").strip().upper()
+
+        if not cond_a_icd or not suspect_icd:
+            continue
+
+        # Check condition A is present (prefix match)
+        cond_a_matched = _icd_prefix_present(cond_a_icd, norm_icds)
+        if not cond_a_matched:
+            continue
+
+        # Check condition B is present (if specified)
+        cond_b_matched = None
+        if cond_b_icd:
+            cond_b_matched = _icd_prefix_present(cond_b_icd, norm_icds)
+            if not cond_b_matched:
+                continue
+
+        # Skip if suspect ICD already coded
+        if _icd_prefix_present(suspect_icd, norm_icds):
+            continue
+
+        # Skip if suspect HCC already coded
+        if suspect_hcc and suspect_hcc in coded_hccs:
+            continue
+
+        confidence = float(pat.get("confidence_base") or 0.6)
+        pattern_name = pat.get("pattern_name") or ""
+        notes = pat.get("notes") or ""
+
+        fp = _suspect_fingerprint(patient_id, "comorbidity", suspect_icd or suspect_hcc)
+        suspects.append({
+            "patient_id": patient_id,
+            "fingerprint": fp,
+            "source": "comorbidity",
+            "suspected_icd": suspect_icd,
+            "suspected_hcc": suspect_hcc,
+            "description": notes or f"Comorbidity pattern: {pattern_name}",
+            "confidence": confidence,
+            "measurement_year": year,
+            "evidence": {
+                "comorbidity_pattern_id": pat.get("id"),
+                "pattern_name": pattern_name,
+                "condition_a_icd": pat.get("condition_a_icd"),
+                "condition_a_matched": cond_a_matched,
+                "condition_b_icd": pat.get("condition_b_icd"),
+                "condition_b_matched": cond_b_matched,
+                "source": "comorbidity",
+            },
+        })
+
+    logger.info("scan_comorbidities pid=%s → %d suspects", patient_id, len(suspects))
+    return suspects
+
+
+def _icd_prefix_present(target: str, patient_codes: set[str]) -> str | None:
+    """Check if *target* ICD prefix matches any code in *patient_codes*.
+
+    Returns the matching patient code (or None).  Both inputs should already
+    be normalised (no dots, uppercase).
+    """
+    if not target:
+        return None
+    # Exact match first
+    if target in patient_codes:
+        return target
+    # Prefix match: target is a category, patient codes are leaves
+    for pc in patient_codes:
+        if pc.startswith(target):
+            return pc
+    # Reverse prefix: patient code is a category, target is a leaf
+    for pc in patient_codes:
+        if target.startswith(pc):
+            return pc
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Full scan
 # ---------------------------------------------------------------------------
 
@@ -1015,6 +1160,7 @@ def run_full_suspect_scan(
         3. Historical HCC gap (claim history)
         4. Note vs billing (pre-computed NLP jobs)
         5. Live NLP suspect mining (Gemini over last 5 encounter notes)
+        6. Comorbidity patterns (condition A + B => suspect C)
 
     Suspects from scan 5 are merged here and persisted with
     ``evidence_type='referral'`` and ``evidence_detail.nlp_evidence_*`` JSON
@@ -1036,6 +1182,15 @@ def run_full_suspect_scan(
         # rest of the scan pipeline.
         logger.warning(
             "run_full_suspect_scan: scan_note_nlp failed pid=%s: %s",
+            patient_id, exc,
+        )
+    try:
+        all_suspects.extend(scan_comorbidities(patient_id, year=year))
+    except Exception as exc:
+        # Comorbidity patterns are best-effort — table may not exist yet
+        # in dev environments that have not run the migration.
+        logger.warning(
+            "run_full_suspect_scan: scan_comorbidities failed pid=%s: %s",
             patient_id, exc,
         )
 
