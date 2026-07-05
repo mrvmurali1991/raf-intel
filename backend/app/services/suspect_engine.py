@@ -2,7 +2,7 @@
 Suspect Condition Detection Engine — ``SuspectScanner`` (DB layer).
 
 Identifies conditions that are likely present but not yet coded in the
-patient's billing record.  Six scanning strategies:
+patient's billing record.  Seven scanning strategies:
 
   1. Medication signals  – drug name → suspected ICD-10 / HCC
   2. Lab signals         – abnormal lab values → suspected condition
@@ -10,6 +10,8 @@ patient's billing record.  Six scanning strategies:
   4. Note vs billing gap – Gemini NLP-identified diagnoses not in billing
   5. Live NLP mining     – Gemini over last N encounter notes
   6. Comorbidity patterns – condition A + B implies uncoded condition C
+  7. Specificity upgrades – generic ICD-10 + clinical evidence → specific code
+                            (pure revenue recovery, condition already documented)
 
 Suspects are deduplicated by fingerprint, stored in raf_suspect_conditions,
 and support accept / dismiss review workflows.
@@ -55,6 +57,9 @@ _lab_signals_ts: float = 0
 _comorbidity_patterns_cache: list[dict] | None = None
 _comorbidity_patterns_ts: float = 0
 
+_specificity_upgrades_cache: list[dict] | None = None
+_specificity_upgrades_ts: float = 0
+
 _SIGNAL_CACHE_TTL = 300  # seconds
 _signal_cache_lock = threading.Lock()
 
@@ -90,6 +95,17 @@ def _get_comorbidity_patterns(cur) -> list[dict]:
             _comorbidity_patterns_ts = time.time()
             logger.debug("Refreshed comorbidity patterns cache: %d rows", len(_comorbidity_patterns_cache))
         return _comorbidity_patterns_cache
+
+
+def _get_specificity_upgrades(cur) -> list[dict]:
+    global _specificity_upgrades_cache, _specificity_upgrades_ts
+    with _signal_cache_lock:
+        if _specificity_upgrades_cache is None or time.time() - _specificity_upgrades_ts > _SIGNAL_CACHE_TTL:
+            cur.execute("SELECT * FROM raf_specificity_upgrades WHERE is_active = 1")
+            _specificity_upgrades_cache = cur.fetchall()
+            _specificity_upgrades_ts = time.time()
+            logger.debug("Refreshed specificity upgrades cache: %d rows", len(_specificity_upgrades_cache))
+        return _specificity_upgrades_cache
 
 
 # ---------------------------------------------------------------------------
@@ -305,6 +321,10 @@ _EVIDENCE_TYPE_MAP = {
     # knowledge-graph-derived clinical insight (not a direct lab/med signal).
     # The frontend discriminator is evidence_detail.comorbidity_pattern_id.
     "comorbidity": "referral",
+    # Specificity upgrade engine — maps to "referral" because it is a
+    # rule-driven coding specificity recommendation based on existing clinical
+    # evidence. The frontend discriminator is evidence_detail.specificity_upgrade_id.
+    "specificity_upgrade": "referral",
     "imaging": "imaging",
     "referral": "referral",
 }
@@ -1118,6 +1138,300 @@ def scan_comorbidities(patient_id: int, year: int | None = None) -> list[dict[st
     return suspects
 
 
+# ---------------------------------------------------------------------------
+# Scan 7 – ICD-10 Specificity Upgrade Engine
+# ---------------------------------------------------------------------------
+
+def scan_specificity_upgrades(patient_id: int, year: int | None = None) -> list[dict[str, Any]]:
+    """
+    Identify patients coded with unspecified/generic ICD-10 codes who have
+    clinical evidence supporting more specific codes that map to higher-value
+    HCCs.  This is pure revenue recovery -- the condition is already
+    documented, just under-coded.
+
+    Example:
+        Patient coded E11.9 (Type 2 DM, unspecified)
+        + CKD (N18.3) in their problem list
+        = Should be coded E11.22 (Type 2 DM with diabetic CKD)
+        -> HCC 18 instead of HCC 19 = ~$1,500/year uplift
+
+    Reads upgrade rules from ``raf_specificity_upgrades``:
+        generic_icd10 + required_evidence => specific_icd10 (specific_hcc)
+
+    A suspect is emitted only when:
+        1. generic_icd10 IS present in the patient's coded ICD set
+        2. required_evidence IS present (comorbidity ICD prefix, lab, or medication)
+        3. specific_icd10 is NOT already coded
+        4. specific_hcc is NOT already in raf_patient_hcc (unless same as generic)
+
+    Uses the same fingerprint/dedup pattern as other scan functions.
+    """
+    coded_icds = _coded_icd_set(patient_id, year=year)
+    coded_hccs = _coded_hcc_set(patient_id, year=year)
+
+    if not coded_icds:
+        return []
+
+    try:
+        with raf_cursor() as cur:
+            upgrades = _get_specificity_upgrades(cur)
+    except Exception as exc:
+        logger.error("scan_specificity_upgrades: cannot load upgrades: %s", exc)
+        return []
+
+    if not upgrades:
+        return []
+
+    # Build a normalised ICD set for prefix matching (strip dots, uppercase)
+    norm_icds = {c.replace(".", "").strip().upper() for c in coded_icds if c}
+
+    # Load medications and labs lazily (only when needed by evidence_type)
+    _medications: list[dict] | None = None
+    _labs: list[dict] | None = None
+
+    def _get_patient_medications() -> list[dict]:
+        nonlocal _medications
+        if _medications is None:
+            try:
+                _medications = emr.get_medications(patient_id, year=year) or []
+            except Exception as exc:
+                logger.warning(
+                    "scan_specificity_upgrades: get_medications failed pid=%s: %s",
+                    patient_id, exc,
+                )
+                _medications = []
+        return _medications
+
+    def _get_patient_labs() -> list[dict]:
+        nonlocal _labs
+        if _labs is None:
+            try:
+                _labs = emr.get_labs(patient_id) or []
+            except Exception as exc:
+                logger.warning(
+                    "scan_specificity_upgrades: get_labs failed pid=%s: %s",
+                    patient_id, exc,
+                )
+                _labs = []
+        return _labs
+
+    suspects: list[dict[str, Any]] = []
+
+    for rule in upgrades:
+        generic_icd = (rule.get("generic_icd10") or "").replace(".", "").strip().upper()
+        specific_icd = (rule.get("specific_icd10") or "").replace(".", "").strip().upper()
+        specific_hcc = str(rule.get("specific_hcc") or "").strip().upper()
+        generic_hcc = str(rule.get("generic_hcc") or "").strip().upper()
+        required_evidence = (rule.get("required_evidence") or "").strip()
+        evidence_type = (rule.get("evidence_type") or "comorbidity").strip()
+        confidence = float(rule.get("confidence_base") or 0.75)
+        revenue_delta = float(rule.get("revenue_delta_est") or 0)
+        description = rule.get("description") or ""
+
+        if not generic_icd or not specific_icd or not required_evidence:
+            continue
+
+        # Step 1: Check if the patient has the generic (unspecified) code
+        generic_matched = _icd_prefix_present(generic_icd, norm_icds)
+        if not generic_matched:
+            continue
+
+        # Step 2: Check if the specific code is NOT already coded
+        # (no need to upgrade if already coded at the specific level)
+        if _icd_prefix_present(specific_icd, norm_icds):
+            continue
+
+        # Step 3: Check if specific_hcc is already captured (skip if same HCC
+        # but still worth flagging for documentation improvement)
+        if specific_hcc and specific_hcc != generic_hcc and specific_hcc in coded_hccs:
+            continue
+
+        # Step 4: Check required evidence based on evidence_type
+        evidence_found = False
+        evidence_detail_extra: dict[str, Any] = {}
+
+        if evidence_type == "comorbidity":
+            # required_evidence is an ICD-10 prefix to look for
+            evidence_prefix = required_evidence.replace(".", "").strip().upper()
+            evidence_match = _icd_prefix_present(evidence_prefix, norm_icds)
+            if evidence_match:
+                evidence_found = True
+                evidence_detail_extra["evidence_icd_matched"] = evidence_match
+
+        elif evidence_type == "lab":
+            # required_evidence is a lab pattern (e.g. "A1C>=9", "eGFR<15",
+            # "albumin<3.0", "BMI>=40").  This is a simplified check --
+            # for complex lab thresholds the lab_signals engine handles
+            # the full logic.  Here we just check if any lab result matches.
+            labs = _get_patient_labs()
+            evidence_found = _check_lab_evidence(required_evidence, labs)
+            if evidence_found:
+                evidence_detail_extra["lab_evidence_pattern"] = required_evidence
+
+        elif evidence_type == "medication":
+            # required_evidence is a medication name pattern (SQL LIKE syntax)
+            meds = _get_patient_medications()
+            med_pattern = required_evidence.replace("%", "").lower().strip()
+            for med in meds:
+                drug_name = (med.get("drug") or "").lower().strip()
+                if med_pattern and med_pattern in drug_name:
+                    evidence_found = True
+                    evidence_detail_extra["medication_matched"] = med.get("drug")
+                    break
+
+        elif evidence_type == "procedure":
+            # Procedure evidence -- check via ICD prefix in coded set as a
+            # simplified approach (procedure codes are often co-documented)
+            evidence_prefix = required_evidence.replace(".", "").strip().upper()
+            evidence_match = _icd_prefix_present(evidence_prefix, norm_icds)
+            if evidence_match:
+                evidence_found = True
+                evidence_detail_extra["procedure_evidence_matched"] = evidence_match
+
+        if not evidence_found:
+            continue
+
+        # Emit suspect
+        fp = _suspect_fingerprint(patient_id, "specificity_upgrade", specific_icd)
+        suspects.append({
+            "patient_id": patient_id,
+            "fingerprint": fp,
+            "source": "specificity_upgrade",
+            "suspected_icd": specific_icd,
+            "suspected_hcc": specific_hcc,
+            "description": description,
+            "confidence": confidence,
+            "measurement_year": year,
+            "evidence": {
+                "specificity_upgrade_id": rule.get("id"),
+                "generic_icd10": rule.get("generic_icd10"),
+                "generic_icd_matched": generic_matched,
+                "specific_icd10": rule.get("specific_icd10"),
+                "required_evidence": required_evidence,
+                "evidence_type": evidence_type,
+                "revenue_delta_est": revenue_delta,
+                "source": "specificity_upgrade",
+                **evidence_detail_extra,
+            },
+        })
+
+    logger.info("scan_specificity_upgrades pid=%s → %d suspects", patient_id, len(suspects))
+    return suspects
+
+
+def _check_lab_evidence(pattern: str, labs: list[dict]) -> bool:
+    """Check if any lab result matches the simplified evidence pattern.
+
+    Supported pattern formats:
+        "A1C>=9"            – lab name contains 'a1c' and value >= 9
+        "eGFR<15"           – lab name contains 'egfr' and value < 15
+        "eGFR_30_59"        – lab name contains 'egfr' and 30 <= value <= 59
+        "eGFR_15_29"        – lab name contains 'egfr' and 15 <= value <= 29
+        "albumin<3.0"       – lab name contains 'albumin' and value < 3.0
+        "albumin_3.0_3.4"   – lab name contains 'albumin' and 3.0 <= value <= 3.4
+        "BMI>=40"           – lab name contains 'bmi' and value >= 40
+        "BMI_35_39.9"       – lab name contains 'bmi' and 35 <= value <= 39.9
+        "BMI<18.5"          – lab name contains 'bmi' and value < 18.5
+        "EF<40"             – lab name contains 'ef' or 'ejection' and value < 40
+        "EF>=50"            – lab name contains 'ef' or 'ejection' and value >= 50
+        "microalbumin>=30"  – lab name contains 'microalbumin' and value >= 30
+        "proteinuria>=300"  – lab name contains 'protein' and value >= 300
+        "prealbumin<15"     – lab name contains 'prealbumin' and value < 15
+        "weight_loss>=10%"  – simplified; cannot reliably detect from single lab
+
+    Returns True if evidence is found; False otherwise.
+    """
+    import re
+
+    if not labs or not pattern:
+        return False
+
+    # Parse pattern into (lab_keyword, operator, threshold) or range format
+    pattern_lower = pattern.lower().strip()
+
+    # Range patterns: "name_low_high"
+    range_match = re.match(
+        r"([a-z_]+)_(\d+\.?\d*)_(\d+\.?\d*)", pattern_lower
+    )
+    if range_match:
+        keyword = range_match.group(1).replace("_", "")
+        low_val = float(range_match.group(2))
+        high_val = float(range_match.group(3))
+        for lab in labs:
+            lab_text = (lab.get("result_text") or lab.get("result_code") or "").lower()
+            if keyword in lab_text:
+                try:
+                    value = float(str(lab.get("value") or "").replace(",", ""))
+                    if low_val <= value <= high_val:
+                        return True
+                except (ValueError, TypeError):
+                    continue
+        return False
+
+    # Comparison patterns: "name>=value", "name<value", "name<=value", "name>value"
+    comp_match = re.match(
+        r"([a-z_]+)(>=|<=|>|<|=)(\d+\.?\d*%?)", pattern_lower
+    )
+    if comp_match:
+        keyword = comp_match.group(1).replace("_", "")
+        op = comp_match.group(2)
+        threshold_str = comp_match.group(3).rstrip("%")
+        try:
+            threshold = float(threshold_str)
+        except ValueError:
+            return False
+
+        _ops = {
+            ">":  lambda v, t: v > t,
+            "<":  lambda v, t: v < t,
+            ">=": lambda v, t: v >= t,
+            "<=": lambda v, t: v <= t,
+            "=":  lambda v, t: v == t,
+        }
+        op_fn = _ops.get(op)
+        if not op_fn:
+            return False
+
+        # Special handling for certain lab keywords that may appear under
+        # multiple names (e.g. 'ef' matches 'ejection fraction', 'lvef')
+        alt_keywords = _get_lab_keyword_aliases(keyword)
+
+        for lab in labs:
+            lab_text = (
+                (lab.get("result_text") or "") + " " +
+                (lab.get("result_code") or "")
+            ).lower()
+            if any(kw in lab_text for kw in alt_keywords):
+                try:
+                    value = float(str(lab.get("value") or "").replace(",", ""))
+                    if op_fn(value, threshold):
+                        return True
+                except (ValueError, TypeError):
+                    continue
+        return False
+
+    # Fallback: treat pattern as a simple keyword presence check (no threshold)
+    # This handles patterns like "weight_loss>=10%" which are hard to detect
+    # from structured lab data alone.
+    return False
+
+
+def _get_lab_keyword_aliases(keyword: str) -> list[str]:
+    """Return a list of alternative name patterns for common lab keywords."""
+    _ALIASES: dict[str, list[str]] = {
+        "a1c": ["a1c", "hba1c", "hemoglobin a1c", "glycated", "glycosylated"],
+        "egfr": ["egfr", "gfr", "glomerular filtration"],
+        "albumin": ["albumin"],
+        "prealbumin": ["prealbumin", "pre-albumin", "transthyretin"],
+        "microalbumin": ["microalbumin", "urine albumin", "uacr"],
+        "proteinuria": ["protein", "proteinuria", "urine protein"],
+        "bmi": ["bmi", "body mass index"],
+        "ef": ["ef", "ejection fraction", "lvef", "ejection frac"],
+        "weightloss": ["weight loss", "weight change"],
+    }
+    return _ALIASES.get(keyword, [keyword])
+
+
 def _icd_prefix_present(target: str, patient_codes: set[str]) -> str | None:
     """Check if *target* ICD prefix matches any code in *patient_codes*.
 
@@ -1161,6 +1475,7 @@ def run_full_suspect_scan(
         4. Note vs billing (pre-computed NLP jobs)
         5. Live NLP suspect mining (Gemini over last 5 encounter notes)
         6. Comorbidity patterns (condition A + B => suspect C)
+        7. Specificity upgrades (generic ICD + evidence => specific ICD)
 
     Suspects from scan 5 are merged here and persisted with
     ``evidence_type='referral'`` and ``evidence_detail.nlp_evidence_*`` JSON
@@ -1191,6 +1506,15 @@ def run_full_suspect_scan(
         # in dev environments that have not run the migration.
         logger.warning(
             "run_full_suspect_scan: scan_comorbidities failed pid=%s: %s",
+            patient_id, exc,
+        )
+    try:
+        all_suspects.extend(scan_specificity_upgrades(patient_id, year=year))
+    except Exception as exc:
+        # Specificity upgrades are best-effort — table may not exist yet
+        # in dev environments that have not run the seed script.
+        logger.warning(
+            "run_full_suspect_scan: scan_specificity_upgrades failed pid=%s: %s",
             patient_id, exc,
         )
 
