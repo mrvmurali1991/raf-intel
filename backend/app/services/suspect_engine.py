@@ -550,12 +550,21 @@ def scan_medications(patient_id: int, year: int | None = None) -> list[dict[str,
                 "description": sig.get("description") or "",
                 "confidence": float(sig.get("confidence") or 0.5),
                 "measurement_year": year,
+                # NOTE: _apply_context_filter is not called for medication
+                # suspects — no clinical note snippet is available at this
+                # scan level to run context detection against.
                 "evidence": {
                     "drug_name": med.get("drug"),
                     "rxnorm": med.get("rxnorm_drugcode"),
                     "start_date": med.get("start_date"),
                     "medication_id": med.get("id"),
                     "signal_pattern": sig.get("drug_name_pattern"),
+                    "medication_signal_id": sig.get("id"),
+                    "signal_rxnorm": sig.get("rxnorm_code"),
+                    "signal_drug_class": sig.get("drug_class"),
+                    "match_type": "rxnorm_match" if rx_match else "name_match",
+                    "signal_confidence_base": float(sig.get("confidence") or sig.get("confidence_base") or 0.5),
+                    "signal_description": sig.get("description") or sig.get("notes") or "",
                 },
             })
 
@@ -659,11 +668,18 @@ def scan_labs(patient_id: int, year: int | None = None) -> list[dict[str, Any]]:
                     "result_code": lab.get("result_code"),
                     "result_text": lab.get("result_text"),
                     "value": raw_value,
-                    "units": lab.get("units"),
+                    "units": lab.get("units") or sig.get("threshold_unit") or "",
                     "threshold": threshold,
                     "operator": operator,
                     "lab_date": lab.get("date"),
                     "lab_id": lab.get("id"),
+                    "lab_signal_id": sig.get("id"),
+                    "signal_loinc_code": sig.get("lab_loinc_code") or sig.get("result_code") or "",
+                    "signal_lab_name_pattern": sig.get("lab_name_pattern") or sig.get("result_name") or "",
+                    "match_type": "loinc_match" if code_match else "name_match",
+                    "signal_confidence_base": float(sig.get("confidence") or sig.get("confidence_base") or 0.5),
+                    "threshold_expression": f"{lab.get('result_text') or lab.get('result_code') or 'Lab'} {raw_value} {sig.get('threshold_unit') or lab.get('units') or ''} {operator} {threshold}".strip(),
+                    "signal_notes": sig.get("notes") or sig.get("description") or "",
                 },
             })
 
@@ -715,9 +731,14 @@ def scan_historical_hccs(
             cur.execute(
                 """
                 SELECT
+                    rph.id,
                     rph.hcc_code,
                     rph.icd_code,
                     rph.encounter_date,
+                    rph.source_encounter_ids,
+                    rph.raf_coefficient,
+                    rph.meat_status,
+                    rph.model_version,
                     COALESCE(rc.hcc_description, rph.hcc_code) AS description
                 FROM raf_patient_hcc rph
                 LEFT JOIN hcc_raf_coefficients rc
@@ -778,8 +799,15 @@ def scan_historical_hccs(
             "evidence": {
                 "prior_year": prior_year,
                 "current_year": current_year,
-                "prior_icd": row.get("icd_code"),
+                "prior_icd": row.get("icd_code") or row.get("icd10_code"),
+                "prior_hcc": row.get("hcc_code"),
                 "prior_encounter_date": enc_date_str,
+                "prior_hcc_id": row.get("id"),
+                "prior_source_encounter_ids": row.get("source_encounter_ids"),
+                "prior_raf_coefficient": float(row.get("raf_coefficient") or 0),
+                "prior_meat_status": row.get("meat_status"),
+                "prior_model_version": row.get("model_version"),
+                "recapture_reason": "Chronic condition documented in prior year requires annual re-documentation for CMS risk adjustment",
             },
         })
 
@@ -866,7 +894,7 @@ def scan_note_vs_billing(patient_id: int, year: int | None = None) -> list[dict[
         if not isinstance(identified, list):
             continue
 
-        for dx in identified:
+        for i, dx in enumerate(identified):
             icd = (dx.get("icd_code") or "").replace(".", "").strip().upper()
             if not icd:
                 continue
@@ -915,8 +943,11 @@ def scan_note_vs_billing(patient_id: int, year: int | None = None) -> list[dict[
                 "evidence": {
                     "nlp_job_id": job.get("id"),
                     "encounter_id": job.get("encounter_id"),
+                    "encounter_date": job.get("encounter_date") or job.get("date"),
+                    "diagnosis_index": i,
                     "analysis_date": analysis_date,
                     "note_snippet": note_snippet,
+                    "note_snippet_validated": False,
                     "context": ctx_meta,
                 },
             })
@@ -949,7 +980,10 @@ def scan_note_nlp(
     The function is best-effort: LLM/EMR failures are logged and produce an
     empty list rather than aborting the whole patient scan.
     """
-    from app.services.nlp_suspect_extractor import extract_hcc_suspects_from_note
+    from app.services.nlp_suspect_extractor import (
+        extract_hcc_suspects_from_note,
+        NLP_MIN_CONFIDENCE_SURFACED,
+    )
 
     coded_icds = _coded_icd_set(patient_id, year=year)
     coded_hccs = _coded_hcc_set(patient_id, year=year)
@@ -1024,6 +1058,8 @@ def scan_note_nlp(
                     "nlp_evidence_start": finding.evidence_start,
                     "nlp_evidence_end": finding.evidence_end,
                     "model_version": finding.model_version,
+                    "surfacing_threshold": NLP_MIN_CONFIDENCE_SURFACED,
+                    "note_snippet_validated": True,
                     "source": "note_nlp",
                 },
             })
@@ -1128,8 +1164,12 @@ def scan_comorbidities(patient_id: int, year: int | None = None) -> list[dict[st
                 "pattern_name": pattern_name,
                 "condition_a_icd": pat.get("condition_a_icd"),
                 "condition_a_matched": cond_a_matched,
+                "condition_a_hcc": pat.get("condition_a_hcc"),
                 "condition_b_icd": pat.get("condition_b_icd"),
                 "condition_b_matched": cond_b_matched,
+                "condition_b_hcc": pat.get("condition_b_hcc"),
+                "confidence_base": float(pat.get("confidence_base") or 0.6),
+                "clinical_rationale": pat.get("notes") or "",
                 "source": "comorbidity",
             },
         })
@@ -1264,9 +1304,12 @@ def scan_specificity_upgrades(patient_id: int, year: int | None = None) -> list[
             # for complex lab thresholds the lab_signals engine handles
             # the full logic.  Here we just check if any lab result matches.
             labs = _get_patient_labs()
-            evidence_found = _check_lab_evidence(required_evidence, labs)
-            if evidence_found:
+            matched, lab_detail = _check_lab_evidence(required_evidence, labs)
+            evidence_found = matched
+            if matched:
                 evidence_detail_extra["lab_evidence_pattern"] = required_evidence
+                if lab_detail:
+                    evidence_detail_extra["lab_evidence_detail"] = lab_detail
 
         elif evidence_type == "medication":
             # required_evidence is a medication name pattern (SQL LIKE syntax)
@@ -1309,6 +1352,7 @@ def scan_specificity_upgrades(patient_id: int, year: int | None = None) -> list[
                 "specific_icd10": rule.get("specific_icd10"),
                 "required_evidence": required_evidence,
                 "evidence_type": evidence_type,
+                "confidence_base": float(rule.get("confidence_base") or 0.75),
                 "revenue_delta_est": revenue_delta,
                 "source": "specificity_upgrade",
                 **evidence_detail_extra,
@@ -1319,7 +1363,7 @@ def scan_specificity_upgrades(patient_id: int, year: int | None = None) -> list[
     return suspects
 
 
-def _check_lab_evidence(pattern: str, labs: list[dict]) -> bool:
+def _check_lab_evidence(pattern: str, labs: list[dict]) -> tuple[bool, dict | None]:
     """Check if any lab result matches the simplified evidence pattern.
 
     Supported pattern formats:
@@ -1339,12 +1383,13 @@ def _check_lab_evidence(pattern: str, labs: list[dict]) -> bool:
         "prealbumin<15"     – lab name contains 'prealbumin' and value < 15
         "weight_loss>=10%"  – simplified; cannot reliably detect from single lab
 
-    Returns True if evidence is found; False otherwise.
+    Returns (True, lab_detail) if evidence is found; (False, None) otherwise.
+    lab_detail contains {"lab_value", "lab_date", "lab_id", "lab_name"} when matched.
     """
     import re
 
     if not labs or not pattern:
-        return False
+        return (False, None)
 
     # Parse pattern into (lab_keyword, operator, threshold) or range format
     pattern_lower = pattern.lower().strip()
@@ -1363,10 +1408,15 @@ def _check_lab_evidence(pattern: str, labs: list[dict]) -> bool:
                 try:
                     value = float(str(lab.get("value") or "").replace(",", ""))
                     if low_val <= value <= high_val:
-                        return True
+                        return (True, {
+                            "lab_value": value,
+                            "lab_date": lab.get("date"),
+                            "lab_id": lab.get("id"),
+                            "lab_name": lab.get("result_text") or lab.get("result_code"),
+                        })
                 except (ValueError, TypeError):
                     continue
-        return False
+        return (False, None)
 
     # Comparison patterns: "name>=value", "name<value", "name<=value", "name>value"
     comp_match = re.match(
@@ -1379,7 +1429,7 @@ def _check_lab_evidence(pattern: str, labs: list[dict]) -> bool:
         try:
             threshold = float(threshold_str)
         except ValueError:
-            return False
+            return (False, None)
 
         _ops = {
             ">":  lambda v, t: v > t,
@@ -1390,7 +1440,7 @@ def _check_lab_evidence(pattern: str, labs: list[dict]) -> bool:
         }
         op_fn = _ops.get(op)
         if not op_fn:
-            return False
+            return (False, None)
 
         # Special handling for certain lab keywords that may appear under
         # multiple names (e.g. 'ef' matches 'ejection fraction', 'lvef')
@@ -1405,15 +1455,20 @@ def _check_lab_evidence(pattern: str, labs: list[dict]) -> bool:
                 try:
                     value = float(str(lab.get("value") or "").replace(",", ""))
                     if op_fn(value, threshold):
-                        return True
+                        return (True, {
+                            "lab_value": value,
+                            "lab_date": lab.get("date"),
+                            "lab_id": lab.get("id"),
+                            "lab_name": lab.get("result_text") or lab.get("result_code"),
+                        })
                 except (ValueError, TypeError):
                     continue
-        return False
+        return (False, None)
 
     # Fallback: treat pattern as a simple keyword presence check (no threshold)
     # This handles patterns like "weight_loss>=10%" which are hard to detect
     # from structured lab data alone.
-    return False
+    return (False, None)
 
 
 def _get_lab_keyword_aliases(keyword: str) -> list[str]:
@@ -1860,7 +1915,7 @@ def accept_suspect(
         with raf_cursor() as cur:
             # Lock row to prevent concurrent accept/dismiss race
             cur.execute(
-                "SELECT status FROM raf_suspect_conditions WHERE id = %s AND tenant_id = %s FOR UPDATE",
+                "SELECT status, confidence_score, evidence_detail FROM raf_suspect_conditions WHERE id = %s AND tenant_id = %s FOR UPDATE",
                 (suspect_id, tenant_id),
             )
             existing = cur.fetchone()
@@ -1873,6 +1928,20 @@ def accept_suspect(
                     (suspect_id, tenant_id),
                 )
                 return _serialize_suspect(cur.fetchone() or {})
+
+            # Preserve confidence at review time for RADV audit
+            if existing.get("confidence_score") is not None:
+                try:
+                    import json as _json
+                    _ed = _json.loads(existing.get("evidence_detail") or "{}")
+                    _ed["confidence_at_review"] = float(existing["confidence_score"])
+                    cur.execute(
+                        "UPDATE raf_suspect_conditions SET evidence_detail = %s WHERE id = %s AND tenant_id = %s",
+                        (_json.dumps(_ed), suspect_id, tenant_id),
+                    )
+                except Exception:
+                    pass
+
             cur.execute(
                 """
                 UPDATE raf_suspect_conditions
@@ -2248,7 +2317,7 @@ def dismiss_suspect(
         with raf_cursor() as cur:
             # Lock row to prevent concurrent accept/dismiss race
             cur.execute(
-                "SELECT status FROM raf_suspect_conditions WHERE id = %s AND tenant_id = %s FOR UPDATE",
+                "SELECT status, confidence_score, evidence_detail FROM raf_suspect_conditions WHERE id = %s AND tenant_id = %s FOR UPDATE",
                 (suspect_id, tenant_id),
             )
             existing = cur.fetchone()
@@ -2261,6 +2330,20 @@ def dismiss_suspect(
                     (suspect_id, tenant_id),
                 )
                 return _serialize_suspect(cur.fetchone() or {})
+
+            # Preserve confidence at review time for RADV audit
+            if existing.get("confidence_score") is not None:
+                try:
+                    import json as _json
+                    _ed = _json.loads(existing.get("evidence_detail") or "{}")
+                    _ed["confidence_at_review"] = float(existing["confidence_score"])
+                    cur.execute(
+                        "UPDATE raf_suspect_conditions SET evidence_detail = %s WHERE id = %s AND tenant_id = %s",
+                        (_json.dumps(_ed), suspect_id, tenant_id),
+                    )
+                except Exception:
+                    pass
+
             cur.execute(
                 """
                 UPDATE raf_suspect_conditions

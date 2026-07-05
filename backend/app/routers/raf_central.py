@@ -2272,6 +2272,10 @@ class ExplainResponse(BaseModel):
     clinical_rule_adjustments: list[ClinicalRuleAdjustment] | None = None
     context_classification: str | None = None
     evidence_date: str | None = None
+    # Rich evidence detail blob — passed verbatim from raf_suspect_conditions
+    # so the frontend can render type-specific evidence cards (medication
+    # signal IDs, lab thresholds, comorbidity patterns, NLP sentences, etc.)
+    evidence_detail_raw: dict | list | None = None
 
 
 def _parse_evidence_detail_raw(evidence_detail: Any) -> Any:
@@ -2561,6 +2565,15 @@ def explain_suspect(
     # and rule-adjustment chips — see patient-safety review findings #1, #3,
     # and #7. None of these are required (older suspects predate the engine
     # writing them), so they stay nullable in the schema.
+    # Normalise raw_blob for the verbatim evidence_detail_raw field — only
+    # dicts and lists are serialisable; scalar strings are wrapped.
+    _edr: dict | list | None = None
+    if isinstance(raw_blob, dict):
+        _edr = raw_blob
+    elif isinstance(raw_blob, list):
+        _edr = raw_blob
+    # else: None (non-structured evidence detail)
+
     return ExplainResponse(
         suspect_id=int(row["id"]),
         patient_id=int(row["patient_id"]),
@@ -2573,6 +2586,7 @@ def explain_suspect(
         context_classification=_extract_context_classification(raw_blob),
         evidence_date=_extract_evidence_date(raw_blob),
         clinical_rule_adjustments=_extract_clinical_rule_adjustments(raw_blob) or None,
+        evidence_detail_raw=_edr,
     )
 
 
