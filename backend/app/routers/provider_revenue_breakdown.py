@@ -18,7 +18,7 @@ from typing import Any
 from fastapi import Depends, APIRouter, HTTPException, Query
 
 from app.services.provider_revenue_breakdown import compute_breakdown
-from app.auth import get_current_user
+from app.auth import get_current_user, get_tenant_id
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ router = APIRouter(prefix="/api/providers", tags=["providers"], dependencies=[De
 def provider_revenue_breakdown(
     provider_id: int,
     year: int = Query(default=None, description="Measurement year (defaults to current)"),
-    tenant_id: int = Query(default=None, description="Tenant id (single-tenant deployments may omit)"),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> dict[str, Any]:
     """
     Returns a 3-bucket decomposition: Recapture / MEAT improvement /

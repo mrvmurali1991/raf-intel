@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field
 from app.middleware.idempotency import idempotency_key_dependency, store_idempotent_response
 from app.response import paginated_response
 from app.services import dispute_service as svc
-from app.auth import get_current_user
+from app.auth import get_current_user, get_tenant_id
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,7 @@ def create_dispute_endpoint(
 def list_disputes_endpoint(
     status: str | None = Query(None, description="open|in_review|appealing|won|lost|abandoned"),
     assigned_to: str | None = Query(None),
-    tenant_id: int | None = Query(None),
+    tenant_id: str = Depends(get_tenant_id),
     patient_id: int | None = Query(None),
     limit: int = Query(200, ge=1, le=1000),
     offset: int = Query(0, ge=0),
@@ -129,7 +129,7 @@ def list_disputes_endpoint(
 
 
 @router.get("/disputes/metrics", summary="Win-rate, $ recovered, cycle time")
-def metrics_endpoint(tenant_id: int | None = Query(None)) -> dict[str, Any]:
+def metrics_endpoint(tenant_id: str = Depends(get_tenant_id)) -> dict[str, Any]:
     return svc.get_metrics(tenant_id=tenant_id)
 
 

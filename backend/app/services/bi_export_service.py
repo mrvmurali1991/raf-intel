@@ -951,6 +951,19 @@ def _resolve_query(dataset: dict[str, Any]) -> tuple[str, list[dict]]:
     prebuilt = PREBUILT_DATASETS.get(dt, {})
 
     sql = dataset.get("query_template") or prebuilt.get("query_template", "")
+
+    # Security: reject non-SELECT queries to prevent SQL injection via stored templates
+    if sql:
+        _normalized = sql.strip().upper()
+        if not _normalized.startswith("SELECT"):
+            raise ValueError("Only SELECT queries are permitted in BI export templates")
+        _BLOCKED_SQL = {"DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "TRUNCATE",
+                        "EXEC", "EXECUTE", "GRANT", "REVOKE", "CREATE"}
+        _tokens = set(_normalized.split())
+        _blocked = _tokens & _BLOCKED_SQL
+        if _blocked:
+            raise ValueError(f"Blocked SQL keywords in query_template: {_blocked}")
+
     columns = dataset.get("columns_config") or prebuilt.get("columns_config", [])
 
     if isinstance(columns, str):

@@ -285,13 +285,19 @@ def create_attestations_from_suspects(
 # Public API — Read
 # ---------------------------------------------------------------------------
 
-def get_attestation(attestation_id: int) -> dict[str, Any]:
+def get_attestation(attestation_id: int, tenant_id: str | None = None) -> dict[str, Any]:
     """Return a single attestation row or raise ValueError if not found."""
     with raf_cursor() as cur:
-        cur.execute(
-            "SELECT * FROM provider_attestations WHERE id = %s",
-            (attestation_id,),
-        )
+        if tenant_id:
+            cur.execute(
+                "SELECT * FROM provider_attestations WHERE id = %s AND tenant_id = %s",
+                (attestation_id, tenant_id),
+            )
+        else:
+            cur.execute(
+                "SELECT * FROM provider_attestations WHERE id = %s",
+                (attestation_id,),
+            )
         row = cur.fetchone()
     if not row:
         raise ValueError(f"Attestation {attestation_id} not found")

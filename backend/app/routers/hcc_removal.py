@@ -38,7 +38,7 @@ from pydantic import BaseModel, Field
 from app.services import hcc_removal_engine
 from app.services.audit_logger import log_phi_access
 from app.services.openemr_connector import get_patient
-from app.auth import get_current_user
+from app.auth import get_current_user, get_tenant_id
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +72,7 @@ class ConfirmRemovalRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 def _resolve_tenant(header_value: str | None) -> str:
+    """DEPRECATED: Use Depends(get_tenant_id) instead."""
     return (header_value or "default").strip() or "default"
 
 
@@ -86,7 +87,7 @@ def _resolve_tenant(header_value: str | None) -> str:
 def audit_removals(
     patient_id: int,
     body: AuditRemovalsRequest | None = None,
-    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> dict[str, Any]:
     """
     Re-evaluate every coded HCC against the chart and return the list of
@@ -94,7 +95,6 @@ def audit_removals(
     into ``hcc_removal_candidates`` with status='pending'.
     """
     body = body or AuditRemovalsRequest()
-    tenant_id = _resolve_tenant(x_tenant_id)
 
     try:
         patient = get_patient(patient_id)
@@ -148,9 +148,8 @@ def list_removal_candidates(
     ),
     measurement_year: int | None = Query(default=None, ge=2000, le=2100),
     limit: int = Query(default=200, ge=1, le=1000),
-    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> dict[str, Any]:
-    tenant_id = _resolve_tenant(x_tenant_id)
 
     try:
         patient = get_patient(patient_id)
@@ -195,9 +194,8 @@ def list_removal_candidates(
 def dismiss(
     candidate_id: int,
     body: DismissRequest,
-    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> dict[str, Any]:
-    tenant_id = _resolve_tenant(x_tenant_id)
 
     existing = hcc_removal_engine.get_candidate(candidate_id, tenant_id=tenant_id)
     if not existing:
@@ -241,9 +239,8 @@ def dismiss(
 def confirm_removal(
     candidate_id: int,
     body: ConfirmRemovalRequest,
-    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> dict[str, Any]:
-    tenant_id = _resolve_tenant(x_tenant_id)
 
     existing = hcc_removal_engine.get_candidate(candidate_id, tenant_id=tenant_id)
     if not existing:

@@ -14,7 +14,7 @@ from typing import Any
 from fastapi import Depends, APIRouter, Header, HTTPException, Query
 
 from app.services import recapture_ai_recoding as svc
-from app.auth import get_current_user
+from app.auth import get_current_user, get_tenant_id
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,7 @@ router = APIRouter(prefix="/api/recapture", tags=["recapture-ai"], dependencies=
 )
 def ai_suggest(
     gap_id: int,
+    tenant_id: str = Depends(get_tenant_id),
     months: int = Query(
         default=12,
         ge=1,
@@ -58,7 +59,7 @@ def ai_suggest(
     "/gaps/{gap_id}/ai-suggestions",
     summary="List pending AI suggestions for a recapture gap",
 )
-def list_ai_suggestions(gap_id: int) -> dict[str, Any]:
+def list_ai_suggestions(gap_id: int, tenant_id: str = Depends(get_tenant_id)) -> dict[str, Any]:
     suggestions = svc.list_pending_suggestions(gap_id)
     return {
         "gap_id": gap_id,
@@ -77,6 +78,7 @@ def list_ai_suggestions(gap_id: int) -> dict[str, Any]:
 )
 def accept_ai_suggestion(
     suggestion_id: int,
+    tenant_id: str = Depends(get_tenant_id),
     x_user: str | None = Header(default=None, alias="X-User"),
 ) -> dict[str, Any]:
     result = svc.accept_suggestion(suggestion_id, reviewer=x_user)
@@ -91,6 +93,7 @@ def accept_ai_suggestion(
 )
 def reject_ai_suggestion(
     suggestion_id: int,
+    tenant_id: str = Depends(get_tenant_id),
     x_user: str | None = Header(default=None, alias="X-User"),
 ) -> dict[str, Any]:
     result = svc.reject_suggestion(suggestion_id, reviewer=x_user)

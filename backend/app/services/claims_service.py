@@ -1064,26 +1064,43 @@ def _lookup_hcc_bulk(icd_codes: list[str]) -> dict[str, dict[str, Any]]:
     if not icd_codes:
         return result
 
-    # Attempt DB crosswalk first
-    db_found: set[str] = set()
+    # Use hccinfhir as the single source of truth (not the crosswalk table)
     try:
-        with raf_cursor() as cur:
-            placeholders = ",".join(["%s"] * len(icd_codes))
-            cur.execute(
-                f"SELECT icd10_code, hcc_code, hcc_label FROM hcc_icd10_crosswalk WHERE icd10_code IN ({placeholders})",
-                icd_codes,
-            )
-            rows = cur.fetchall()
-            for row in rows:
-                code = (row.get("icd10_code") or "").strip().upper()
-                if code:
-                    result[code] = {
-                        "hcc_code": str(row.get("hcc_code") or ""),
-                        "hcc_label": row.get("hcc_label") or "",
-                    }
-                    db_found.add(code)
+        from app.services.hcc_mapping_service import map_icd10_batch
+        mapped = map_icd10_batch(icd_codes, "V28")
+        for code, info in mapped.items():
+            if info:
+                result[code] = {
+                    "hcc_code": info.get("hcc_code"),
+                    "hcc_label": "",
+                }
+                try:
+                    from app.services.hccinfhir_utils import get_hcc_label
+                    result[code]["hcc_label"] = get_hcc_label(info["hcc_code"]) or ""
+                except Exception:
+                    pass
     except Exception as exc:
-        logger.debug("hcc_icd10_crosswalk lookup failed (table may not exist): %s", exc)
+        logger.warning("_lookup_hcc_bulk hccinfhir failed, falling back to crosswalk: %s", exc)
+        # Fallback to DB crosswalk
+        db_found: set[str] = set()
+        try:
+            with raf_cursor() as cur:
+                placeholders = ",".join(["%s"] * len(icd_codes))
+                cur.execute(
+                    f"SELECT icd10_code, hcc_code, hcc_label FROM hcc_icd10_crosswalk WHERE icd10_code IN ({placeholders})",
+                    icd_codes,
+                )
+                rows = cur.fetchall()
+                for row in rows:
+                    code = (row.get("icd10_code") or "").strip().upper()
+                    if code:
+                        result[code] = {
+                            "hcc_code": str(row.get("hcc_code") or ""),
+                            "hcc_label": row.get("hcc_label") or "",
+                        }
+                        db_found.add(code)
+        except Exception as _fallback_exc:
+            logger.debug("hcc_icd10_crosswalk fallback also failed: %s", _fallback_exc)
 
     # For codes not found in DB, use hccinfhir
     remaining = [c for c in icd_codes if c not in db_found]

@@ -261,7 +261,13 @@ def run_for_patient(
             updates.append((row_status, row_id))
 
         # 3. Persist results — single batched UPDATE instead of per-row calls.
+        #    Cap at 'partial' when billing gate requires LLM validation
+        from app.config import settings as _cfg
         if updates:
+            capped = [
+                ("partial" if _cfg.require_llm_meat_for_billing and s == "complete" else s, rid)
+                for s, rid in updates
+            ]
             with raf_cursor() as cur:
                 cur.executemany(
                     """
@@ -270,7 +276,7 @@ def run_for_patient(
                     WHERE id = %s
                       AND tenant_id = %s
                     """,
-                    [(status, row_id, tenant_id) for status, row_id in updates],
+                    [(status, row_id, tenant_id) for status, row_id in capped],
                 )
 
         return RunForPatientResponse(

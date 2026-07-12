@@ -1304,7 +1304,7 @@ def _enrich_with_hcc(code_list: list[dict]) -> list[dict]:
             hcc_key = f"HCC{hcc}"
             item["hcc_code"]        = hcc_key
             item["hcc_label"]       = labels_default.get((hcc, "CMS-HCC Model V28")) or ""
-            item["hcc_coefficient"] = coefficients_default.get((hcc_key, "CMS-HCC Model V28")) or 0.0
+            item["hcc_coefficient"] = coefficients_default.get((f"cna_hcc{hcc}", "CMS-HCC Model V28")) or 0.0
             item["risk_adjusting"]  = True
         else:
             item["hcc_code"]        = None

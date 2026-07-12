@@ -33,8 +33,8 @@ OAUTH2_BASE = f"{OPENEMR_URL}/oauth2/default"
 FHIR_BASE = f"{OPENEMR_URL}/apis/default/fhir"
 REDIRECT_URI = "http://127.0.0.1:9999/callback"
 
-USERNAME = "admin"
-PASSWORD = "Healthcare@Admin2026"
+USERNAME = os.getenv("OPENEMR_ADMIN_USER", "admin")
+PASSWORD = os.getenv("OPENEMR_ADMIN_PASSWORD", "")
 
 # ---------------------------------------------------------------------------
 # Pretty printing helpers

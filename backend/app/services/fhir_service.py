@@ -744,17 +744,24 @@ def parse_patient(resource: dict[str, Any]) -> dict[str, Any]:
 # Database helpers — connection management
 # ---------------------------------------------------------------------------
 
-def get_connection(connection_id: int) -> dict[str, Any] | None:
+def get_connection(connection_id: int, tenant_id: str | None = None) -> dict[str, Any] | None:
     """Fetch a FHIR connection record from the DB.
 
     The ``client_secret`` column is stored encrypted; it is transparently
     decrypted here so callers receive the plaintext value.
     """
     with raf_cursor() as cur:
-        cur.execute(
-            "SELECT * FROM fhir_connections WHERE id = %s LIMIT 1",
-            (connection_id,),
-        )
+        if tenant_id:
+            cur.execute(
+                "SELECT * FROM fhir_connections WHERE id = %s AND tenant_id = %s LIMIT 1",
+                (connection_id, tenant_id),
+            )
+        else:
+            logger.warning("get_connection called without tenant_id for conn %s", connection_id)
+            cur.execute(
+                "SELECT * FROM fhir_connections WHERE id = %s LIMIT 1",
+                (connection_id,),
+            )
         row = cur.fetchone()
     if row and row.get("client_secret"):
         try:

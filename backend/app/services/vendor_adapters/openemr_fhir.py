@@ -149,7 +149,7 @@ class OpenEMRFhirAdapter:
                         import json as _json2
 
                         payload = _json2.loads(_b64.urlsafe_b64decode(padded))
-                        logger.info("OpenEMR FHIR: JWT full payload: %s", payload)
+                        logger.debug("OpenEMR FHIR: JWT payload decoded for connection %s", self.connection_id)
                 except (ValueError, Exception) as _jwt_exc:  # noqa: BLE001
                     logger.debug(
                         "OpenEMR FHIR: JWT decode skipped for connection %s: %s",
