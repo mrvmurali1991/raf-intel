@@ -84,7 +84,7 @@ async def ingest_patient(
             "ingest_patient raf_patient_id=%s tenant=%s: %s",
             raf_patient_id, tenant_id, exc,
         )
-        raise HTTPException(status_code=500, detail=str(exc)[:400])
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     if result.get("status") == "error":
         raise HTTPException(status_code=422, detail=result.get("error", "ingest_error"))
@@ -117,6 +117,6 @@ async def ingest_tenant(
         logger.exception(
             "ingest_tenant tenant=%s: %s", tenant_id, exc,
         )
-        raise HTTPException(status_code=500, detail=str(exc)[:400])
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     return result

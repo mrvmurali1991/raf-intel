@@ -170,7 +170,7 @@ async def upload_feedback(
     except Exception as exc:  # noqa: BLE001
         logger.exception("edps upload: parser crashed")
         raise HTTPException(
-            status_code=500, detail=f"Failed to parse CSV: {exc}"
+            status_code=500, detail="Internal server error"
         ) from exc
 
     result = upsert_edps_rows(rows, tenant_id=str(tenant_id))
