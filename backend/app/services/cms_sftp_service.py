@@ -764,31 +764,49 @@ def get_transmission_history(tenant_id: str, limit: int = 50) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def get_transmission_detail(transmission_id: int) -> dict | None:
+def get_transmission_detail(transmission_id: int, tenant_id: str | None = None) -> dict | None:
     """Return full detail for a single transmission log entry.
 
     Args:
         transmission_id: Primary key of the ``cms_transmission_log`` row.
+        tenant_id: Tenant scope (when provided, filters by tenant_id).
 
     Returns:
         Dict with all columns, or ``None`` if not found.
     """
     with raf_cursor() as cur:
-        cur.execute(
-            """
-            SELECT
-                t.*,
-                sb.file_type    AS batch_file_type,
-                sb.payment_year AS batch_payment_year,
-                sb.sweep_type   AS batch_sweep_type,
-                sb.status       AS batch_status,
-                sb.file_hash    AS batch_file_hash
-            FROM cms_transmission_log t
-            LEFT JOIN submission_batches sb ON sb.id = t.submission_id
-            WHERE t.id = %s
-            """,
-            (transmission_id,),
-        )
+        if tenant_id:
+            cur.execute(
+                """
+                SELECT
+                    t.*,
+                    sb.file_type    AS batch_file_type,
+                    sb.payment_year AS batch_payment_year,
+                    sb.sweep_type   AS batch_sweep_type,
+                    sb.status       AS batch_status,
+                    sb.file_hash    AS batch_file_hash
+                FROM cms_transmission_log t
+                LEFT JOIN submission_batches sb ON sb.id = t.submission_id
+                WHERE t.id = %s AND t.tenant_id = %s
+                """,
+                (transmission_id, tenant_id),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT
+                    t.*,
+                    sb.file_type    AS batch_file_type,
+                    sb.payment_year AS batch_payment_year,
+                    sb.sweep_type   AS batch_sweep_type,
+                    sb.status       AS batch_status,
+                    sb.file_hash    AS batch_file_hash
+                FROM cms_transmission_log t
+                LEFT JOIN submission_batches sb ON sb.id = t.submission_id
+                WHERE t.id = %s
+                """,
+                (transmission_id,),
+            )
         row = cur.fetchone()
 
     return dict(row) if row else None

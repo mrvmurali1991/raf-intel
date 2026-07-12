@@ -678,7 +678,7 @@ def regenerate_alerts(
     """
     _get_or_404(provider_id, tenant_id=current_user.get("tenant_id"))
     try:
-        return generate_provider_alerts(provider_id)
+        return generate_provider_alerts(provider_id, tenant_id=current_user.get("tenant_id"))
     except Exception as exc:
         logger.error("regenerate_alerts error pid=%s: %s", provider_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")

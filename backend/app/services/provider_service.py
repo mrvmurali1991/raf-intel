@@ -487,11 +487,19 @@ def get_panel_patients(
 
 
 def assign_patient_to_provider(
-    provider_id: int, patient_id: int, attribution: str = "manual"
+    provider_id: int, patient_id: int, attribution: str = "manual",
+    tenant_id: str | None = None,
 ) -> dict[str, Any]:
     """Assign (or re-attribute) a patient to a provider panel."""
 
     with raf_cursor() as cur:
+        if tenant_id:
+            cur.execute(
+                "SELECT id FROM patients WHERE id = %s AND tenant_id = %s",
+                (patient_id, tenant_id),
+            )
+            if not cur.fetchone():
+                raise ValueError(f"Patient {patient_id} not found in tenant {tenant_id}")
         cur.execute(
             """
             INSERT INTO provider_patient_panel (provider_id, patient_id, attribution)

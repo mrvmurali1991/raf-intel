@@ -2668,7 +2668,8 @@ def push_prescription(
             ),
         )
         new_id = cur.lastrowid
-    logger.info(
+    logger.info("Pushed prescription id=%s for pid=%s (success=True)", new_id, pid)
+    logger.debug(
         "Pushed prescription id=%s drug=%s rxnorm=%s for pid=%s by %s",
         new_id, drug_name, rxnorm_code, pid, ordered_by,
     )
@@ -2753,7 +2754,8 @@ def push_procedure_order(
                     (new_order_id, procedure_code, procedure_name, formatted_dx),
                 )
 
-        logger.info(
+        logger.info("push_procedure_order: pid=%s order_id=%s (success=True)", pid, new_order_id)
+        logger.debug(
             "push_procedure_order: pid=%s code=%s (%s) dx=%s order_id=%s",
             pid, procedure_code, lab_code_type, formatted_dx, new_order_id,
         )
