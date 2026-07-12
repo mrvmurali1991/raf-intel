@@ -271,7 +271,8 @@ def list_all(
     """Return providers with optional filters.  Ordered by last_name, first_name."""
     try:
         return list_providers(
-            specialty=specialty, status=status, search=search, limit=limit, offset=offset
+            specialty=specialty, status=status, search=search, limit=limit, offset=offset,
+            tenant_id=current_user.get("tenant_id"),
         )
     except Exception as exc:
         logger.error("list_providers error: %s", exc, exc_info=True)
@@ -351,7 +352,7 @@ def panel_patients(
     """
     _get_or_404(provider_id, tenant_id=current_user.get("tenant_id"))
     try:
-        return get_panel_patients(provider_id, limit=limit, offset=offset)
+        return get_panel_patients(provider_id, limit=limit, offset=offset, tenant_id=current_user.get("tenant_id"))
     except Exception as exc:
         logger.error("get_panel_patients error pid=%s: %s", provider_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -371,7 +372,7 @@ def assign_patient(
     """
     _get_or_404(provider_id, tenant_id=current_user.get("tenant_id"))
     try:
-        return assign_patient_to_provider(provider_id, body.patient_id, body.attribution)
+        return assign_patient_to_provider(provider_id, body.patient_id, body.attribution, tenant_id=current_user.get("tenant_id"))
     except Exception as exc:
         logger.error("assign_patient error pid=%s: %s", provider_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -615,7 +616,7 @@ def hcc_performance(
     _get_or_404(provider_id, tenant_id=current_user.get("tenant_id"))
     calc_year = year or date.today().year
     try:
-        return calculate_hcc_performance(provider_id, calc_year)
+        return calculate_hcc_performance(provider_id, calc_year, tenant_id=current_user.get("tenant_id"))
     except Exception as exc:
         logger.error("hcc_performance error pid=%s: %s", provider_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -654,7 +655,7 @@ def get_alerts(
     _get_or_404(provider_id, tenant_id=current_user.get("tenant_id"))
     try:
         if regenerate:
-            return generate_provider_alerts(provider_id)
+            return generate_provider_alerts(provider_id, tenant_id=current_user.get("tenant_id"))
         return get_provider_alerts(provider_id, status=status)
     except Exception as exc:
         logger.error("get_alerts error pid=%s: %s", provider_id, exc, exc_info=True)

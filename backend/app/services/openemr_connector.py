@@ -1640,7 +1640,8 @@ def push_medical_problem(pid: int, title: str, diagnosis_code: str) -> bool:
         formatted_diagnosis = f"ICD10:{diagnosis_code}" if not diagnosis_code.startswith("ICD10:") else diagnosis_code
         with openemr_cursor() as cur:
             cur.execute(sql, (now_str, title, now_str, pid, formatted_diagnosis))
-        logger.info("Pushed condition %s (%s) for pid=%s", title, formatted_diagnosis, pid)
+        logger.info("Pushed condition for pid=%s (success=True)", pid)
+        logger.debug("Pushed condition %s (%s) for pid=%s", title, formatted_diagnosis, pid)
         return True
     except Exception as exc:
         logger.error("Failed to push medical problem for pid=%s: %s", pid, exc)
