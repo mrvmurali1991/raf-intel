@@ -104,7 +104,7 @@ def apply(body: ApplyRequest) -> dict[str, Any]:
         return apply_specialty_prior(body.specialty, body.hcc_code, body.base_score)
     except Exception as exc:
         logger.error("apply_specialty_prior error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------

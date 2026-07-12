@@ -100,7 +100,7 @@ def update_flag(
         raise HTTPException(status_code=404, detail=f"Unknown feature flag: {key}")
     except Exception as exc:
         logger.error("feature_flags.update_flag failed key=%s: %s", key, exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"user_id": current_user["id"], "flag": resolved}
 
@@ -120,7 +120,7 @@ def reset_flags(
         deleted = flags.reset_user_flags(current_user["id"])
     except Exception as exc:
         logger.error("feature_flags.reset_flags failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     items = flags.list_flags(current_user["id"])
     return {

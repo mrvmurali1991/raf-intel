@@ -132,7 +132,7 @@ def sync_patient(
     try:
         from app.services.hie.sync import sync_patient_from_hie
     except ImportError as exc:
-        raise HTTPException(status_code=500, detail=f"HIE module unavailable: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     try:
         result = sync_patient_from_hie(
@@ -144,7 +144,7 @@ def sync_patient(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("HIE sync failed for patient %s / network %s", raf_patient_id, body.network)
-        raise HTTPException(status_code=500, detail=f"HIE sync error: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     # Map sync service return dict to response model
     result.setdefault("status", "ok")

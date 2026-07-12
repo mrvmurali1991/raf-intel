@@ -68,7 +68,7 @@ def patient_forecast(
             "patient_forecast pid=%s year=%s: %s",
             patient_id, measurement_year, exc, exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     if patient:
         forecast["patient_name"] = (
@@ -109,7 +109,7 @@ def provider_forecast(
             "provider_forecast provider=%s year=%s: %s",
             provider_id, measurement_year, exc, exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -149,4 +149,4 @@ def tenant_forecast(
             "tenant_forecast year=%s tenant=%s: %s",
             measurement_year, tenant_id, exc, exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")

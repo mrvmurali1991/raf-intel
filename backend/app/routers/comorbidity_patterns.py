@@ -70,7 +70,7 @@ def evaluate_patient(pid: int, year: int = Query(2026, ge=2000, le=2100)) -> dic
         matches = engine.evaluate_evidence_set(evidence)
     except Exception as exc:
         logger.exception("evaluate_patient pid=%s failed", pid)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     return {
         "patient_id": pid,
@@ -88,7 +88,7 @@ def evaluate_evidence(req: EvaluateEvidenceRequest) -> dict[str, Any]:
         matches = engine.evaluate_evidence_set(req.evidence.model_dump())
     except Exception as exc:
         logger.exception("evaluate_evidence failed")
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
     return {
         "match_count": len(matches),
         "matches": matches,

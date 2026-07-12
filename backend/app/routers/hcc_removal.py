@@ -120,7 +120,7 @@ def audit_removals(
         )
     except Exception as exc:
         logger.exception("audit-removals failed pid=%s: %s", patient_id, exc)
-        raise HTTPException(status_code=500, detail=f"audit-removals failed: {exc}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     return {
         "patient_id":        patient_id,
@@ -223,7 +223,7 @@ def dismiss(
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         logger.exception("dismiss failed id=%s: %s", candidate_id, exc)
-        raise HTTPException(status_code=500, detail=f"dismiss failed: {exc}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"candidate_id": candidate_id, "action": "dismissed", "record": record}
 
@@ -268,6 +268,6 @@ def confirm_removal(
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         logger.exception("confirm-removal failed id=%s: %s", candidate_id, exc)
-        raise HTTPException(status_code=500, detail=f"confirm-removal failed: {exc}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"candidate_id": candidate_id, "action": "removed", "record": record}

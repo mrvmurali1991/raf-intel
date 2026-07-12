@@ -76,7 +76,7 @@ def get_specialty_benchmarks(
             "specialty_benchmarks year=%s specialty=%s: %s",
             measurement_year, specialty, exc, exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -105,4 +105,4 @@ def get_peer_percentile(
             "peer_percentile provider=%s year=%s: %s",
             provider_id, measurement_year, exc, exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")

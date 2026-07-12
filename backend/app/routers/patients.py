@@ -279,7 +279,7 @@ def _assert_encounter_belongs(encounter_id: int, patient_id: int, tenant_id: str
             if cur.fetchone():
                 return  # found — access is valid
     except Exception as exc:
-        logger.debug("_assert_encounter_belongs: raf encounters check failed: %s", exc)
+        logger.warning("_assert_encounter_belongs: raf encounters check failed: %s", exc)
 
     # Fall back to OpenEMR form_encounter (direct-DB patients).
     # form_encounter.pid maps to openemr patient pid; we need the emr pid.
@@ -293,7 +293,7 @@ def _assert_encounter_belongs(encounter_id: int, patient_id: int, tenant_id: str
             if cur.fetchone():
                 return  # found — access is valid
     except Exception as exc:
-        logger.debug("_assert_encounter_belongs: openemr check failed: %s", exc)
+        logger.warning("_assert_encounter_belongs: openemr check failed: %s", exc)
 
     raise HTTPException(
         status_code=404,
@@ -966,7 +966,7 @@ def get_procedures(
                         ]
                         return ProcedureListResponse(pid=pid, count=len(procs), procedures=procs, source="fhir")
         except Exception as exc:
-            logger.debug("procedures FHIR fallback failed pid=%s: %s", pid, exc)
+            logger.warning("procedures FHIR fallback failed pid=%s: %s", pid, exc)
         return ProcedureListResponse(pid=pid, count=0, procedures=[])
 
     try:
@@ -1134,7 +1134,7 @@ def get_recapture_gaps(
 
                 return RecaptureGapsResponse(pid=pid, year=_year, prior_year=_prior_year, gap_count=len(gaps), recapture_gaps=gaps, source="fhir")
         except Exception as exc:
-            logger.debug("recapture-gaps FHIR fallback failed pid=%s: %s", pid, exc)
+            logger.warning("recapture-gaps FHIR fallback failed pid=%s: %s", pid, exc)
         return RecaptureGapsResponse(pid=pid, recapture_gaps=[], year=_year, gap_count=0)
 
     try:
@@ -1579,7 +1579,7 @@ def get_hedis_compliance(
                     measures=measures, source="fhir",
                 )
         except Exception as exc:
-            logger.debug("HEDIS FHIR fallback failed pid=%s: %s", pid, exc)
+            logger.warning("HEDIS FHIR fallback failed pid=%s: %s", pid, exc)
         return HedisResponse(pid=pid, year=_hyear, summary={"measures_due": 0, "measures_compliant": 0, "compliance_rate": None}, measures={})
 
     try:
@@ -1632,7 +1632,7 @@ def get_patient_enrollment(
                 age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
                 orec = "aged" if age >= 65 else "disabled"
         except Exception as _exc:
-            logger.debug("enrollment: DOB lookup failed for pid=%s: %s", pid, _exc)
+            logger.warning("enrollment: DOB lookup failed for pid=%s: %s", pid, _exc)
         return EnrollmentResponse(pid=pid, enrollment={
             "dual_status": "non_dual",
             "orec": orec,

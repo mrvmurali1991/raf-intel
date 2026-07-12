@@ -94,7 +94,7 @@ def modulated_prior(
         )
     except Exception as exc:  # pragma: no cover — defensive
         logger.error("modulated_prior body=%s: %s", body, exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -153,4 +153,4 @@ def panel_priors(
             "panel_priors provider=%s year=%s: %s",
             provider_id, year, exc, exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")

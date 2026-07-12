@@ -61,7 +61,7 @@ def related_hccs(req: RelatedHccsRequest) -> dict[str, Any]:
         return {"count": len(results), "results": results}
     except Exception as exc:
         logger.exception("related_hccs failed")
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get(
@@ -77,7 +77,7 @@ def evidence_chain(
         return kg.get_evidence_chain(hcc_code=hcc_code, patient_id=pid, year=year)
     except Exception as exc:
         logger.exception("evidence_chain failed")
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/traverse", summary="BFS shortest path between two concept URIs")
@@ -92,7 +92,7 @@ def traverse(
                 "path": path, "found": bool(path)}
     except Exception as exc:
         logger.exception("traverse failed")
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/explain/{hcc_code}", summary="Static explainer for an HCC")
@@ -101,7 +101,7 @@ def explain(hcc_code: str) -> dict[str, Any]:
         return kg.explain_hcc(hcc_code)
     except Exception as exc:
         logger.exception("explain_hcc failed")
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post(
@@ -121,7 +121,7 @@ def patient_full_inference(
         )
     except Exception as exc:
         logger.exception("patient_full_inference failed pid=%s", pid)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/stats", summary="kg_query_log aggregates")

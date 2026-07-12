@@ -58,4 +58,4 @@ def provider_suspect_hotlist(
             "provider_suspect_hotlist provider=%s year=%s: %s",
             provider_id, measurement_year, exc, exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")

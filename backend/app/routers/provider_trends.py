@@ -71,7 +71,7 @@ def tenant_trend_aggregate(
         )
     except Exception as exc:
         logger.error("tenant_trend_aggregate metric=%s: %s", metric, exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -122,4 +122,4 @@ def provider_trend(
             "provider_trend provider=%s years=%s: %s",
             provider_id, years, exc, exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")

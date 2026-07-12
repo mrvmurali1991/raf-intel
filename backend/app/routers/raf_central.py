@@ -1983,7 +1983,7 @@ def action_enrich_suspects(
         logger.exception("enrich-suspects failed pid=%s tenant=%s", pid, tenant_id)
         raise HTTPException(
             status_code=500,
-            detail=f"Suspect enrichment failed: {exc}",
+            detail="Internal server error",
         )
 
     # Invalidate the panel cache so the very next GET /api/raf-central/{pid}

@@ -49,4 +49,4 @@ def provider_revenue_breakdown(
             "provider_revenue_breakdown provider=%s year=%s: %s",
             provider_id, yr, exc, exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")

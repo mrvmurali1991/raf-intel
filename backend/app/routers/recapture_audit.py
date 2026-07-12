@@ -149,7 +149,7 @@ def audit_report_pdf(
         # WeasyPrint native deps missing — surface a clean 500 with the
         # reason so the operator can fix the deployment.
         logger.error("audit_report_pdf weasyprint missing: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
     except Exception as exc:
         logger.error("audit_report_pdf error tenant=%s: %s", tenant_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -191,7 +191,7 @@ def post_evidence(
             tenant_id=tenant_id,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail="Internal server error")
     except Exception as exc:
         logger.error(
             "record_primary_evidence error gap_id=%s tenant=%s: %s",
@@ -219,7 +219,7 @@ def post_submit_review(
             tenant_id=tenant_id,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail="Internal server error")
     except Exception as exc:
         logger.error(
             "submit_for_review error gap_id=%s tenant=%s: %s",
@@ -249,7 +249,7 @@ def post_approve(
             tenant_id=tenant_id,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail="Internal server error")
     except Exception as exc:
         logger.error(
             "approve_review error gap_id=%s tenant=%s: %s",
@@ -279,7 +279,7 @@ def post_reject(
             tenant_id=tenant_id,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail="Internal server error")
     except Exception as exc:
         logger.error(
             "reject_review error gap_id=%s tenant=%s: %s",
