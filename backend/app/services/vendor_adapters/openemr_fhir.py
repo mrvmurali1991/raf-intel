@@ -1732,8 +1732,12 @@ class OpenEMRFhirAdapter:
                 coeff_row = cur.fetchone()
                 raf_coefficient = float(coeff_row["coefficient"]) if coeff_row else 0.0
 
-            # 4. Determine MEAT status based on clinical documentation presence
-            meat_status = "complete" if condition.get("onset_date") else "partial"
+            # 4. Determine MEAT status — cap at 'partial' when billing gate requires LLM validation
+            from app.config import settings as _cfg
+            if _cfg.require_llm_meat_for_billing:
+                meat_status = "partial"
+            else:
+                meat_status = "complete" if condition.get("onset_date") else "partial"
 
             # 5. Upsert into raf_patient_hcc for each applicable year
             for _yr in hcc_years:

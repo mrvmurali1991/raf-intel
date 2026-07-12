@@ -604,6 +604,9 @@ def _import_multi_sheet(
                 meat_status = _cell_str(raw.get("meat_status")).lower() or "missing"
                 if meat_status not in _VALID_MEAT_STATUS:
                     meat_status = "missing"
+                from app.config import settings as _cfg
+                if _cfg.require_llm_meat_for_billing and meat_status == "complete":
+                    meat_status = "partial"
                 icd10_json = json.dumps([icd10] if icd10 else [])
                 src_enc_json = json.dumps([])
 

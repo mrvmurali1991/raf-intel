@@ -462,6 +462,7 @@ def attest_condition(
             evidence_references=body.evidence_references,
             ip_address=ip,
             user_agent=ua,
+            tenant_id=current_user.get("tenant_id"),
         )
     except ValueError as exc:
         logger.warning("attest id=%s validation error: %s", attestation_id, exc)
@@ -501,6 +502,7 @@ def reject_condition(
             clinical_justification=body.clinical_justification,
             ip_address=ip,
             user_agent=ua,
+            tenant_id=current_user.get("tenant_id"),
         )
     except ValueError as exc:
         logger.warning("reject id=%s validation error: %s", attestation_id, exc)
@@ -542,6 +544,7 @@ def defer_condition(
             clinical_justification=body.clinical_justification,
             ip_address=ip,
             user_agent=ua,
+            tenant_id=current_user.get("tenant_id"),
         )
     except ValueError as exc:
         logger.warning("defer id=%s validation error: %s", attestation_id, exc)

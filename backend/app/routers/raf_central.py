@@ -1810,7 +1810,11 @@ def action_mark_meat_reviewed(
             )
             row = cur.fetchone() or {}
             trues = sum(int(row.get(k) or 0) for k in ("m", "e", "a", "t"))
-            status = "complete" if trues == 4 else ("partial" if trues else "missing")
+            from app.config import settings as _cfg
+            if trues == 4 and _cfg.require_llm_meat_for_billing:
+                status = "partial"
+            else:
+                status = "complete" if trues == 4 else ("partial" if trues else "missing")
             cur.execute(
                 """
                 UPDATE raf_patient_hcc

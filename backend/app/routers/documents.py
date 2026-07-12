@@ -699,9 +699,10 @@ def list_batches_endpoint(
 def get_batch_endpoint(
     batch_id: str,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("documents", "read")),
 ) -> dict[str, Any]:
-    batch = get_batch(batch_id)
+    batch = get_batch(batch_id, tenant_id=tenant_id)
     if not batch:
         raise HTTPException(status_code=404, detail=f"Batch {batch_id!r} not found")
     return _serialize(batch)
@@ -998,9 +999,10 @@ def list_document_extracts(
 def delete_document_endpoint(
     document_id: str,
     current_user: dict = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
     _perm: None = Depends(require_permission("documents", "delete")),
 ) -> DeleteDocumentResponse:
-    deleted = delete_document(document_id)
+    deleted = delete_document(document_id, tenant_id=tenant_id)
     if not deleted:
         raise _doc_not_found(document_id)
     return DeleteDocumentResponse(deleted=True, document_id=document_id)

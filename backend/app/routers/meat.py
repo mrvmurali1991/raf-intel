@@ -265,7 +265,7 @@ def run_for_patient(
         from app.config import settings as _cfg
         if updates:
             capped = [
-                ("partial" if _cfg.require_llm_meat_for_billing and s == "complete" else s, rid)
+                ("partial" if _cfg.require_llm_meat_for_billing and s.lower() == "complete" else s, rid)
                 for s, rid in updates
             ]
             with raf_cursor() as cur:

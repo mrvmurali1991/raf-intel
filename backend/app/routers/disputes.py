@@ -134,17 +134,17 @@ def metrics_endpoint(tenant_id: str = Depends(get_tenant_id)) -> dict[str, Any]:
 
 
 @router.get("/disputes/{dispute_id}", summary="Get dispute detail")
-def get_dispute_endpoint(dispute_id: int) -> dict[str, Any]:
+def get_dispute_endpoint(dispute_id: int, current_user: dict = Depends(get_current_user)) -> dict[str, Any]:
     try:
-        return svc.get_dispute(dispute_id)
+        return svc.get_dispute(dispute_id, tenant_id=current_user.get("tenant_id"))
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
 
 @router.put("/disputes/{dispute_id}/assign", summary="Assign dispute to a user")
-def assign_dispute_endpoint(dispute_id: int, payload: AssignPayload) -> dict[str, Any]:
+def assign_dispute_endpoint(dispute_id: int, payload: AssignPayload, current_user: dict = Depends(get_current_user)) -> dict[str, Any]:
     try:
-        return svc.assign_dispute(dispute_id, payload.user_id)
+        return svc.assign_dispute(dispute_id, payload.user_id, tenant_id=current_user.get("tenant_id"))
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except ValueError as exc:
@@ -152,19 +152,19 @@ def assign_dispute_endpoint(dispute_id: int, payload: AssignPayload) -> dict[str
 
 
 @router.post("/disputes/{dispute_id}/gather-evidence", summary="Auto-pull MEAT evidence")
-def gather_evidence_endpoint(dispute_id: int) -> dict[str, Any]:
+def gather_evidence_endpoint(dispute_id: int, current_user: dict = Depends(get_current_user)) -> dict[str, Any]:
     try:
-        evidence = svc.gather_evidence(dispute_id)
+        evidence = svc.gather_evidence(dispute_id, tenant_id=current_user.get("tenant_id"))
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     return {"dispute_id": dispute_id, "count": len(evidence), "evidence": evidence}
 
 
 @router.post("/disputes/{dispute_id}/draft-appeal", summary="Generate appeal letter draft")
-def draft_appeal_endpoint(dispute_id: int, payload: DraftAppealPayload | None = None) -> dict[str, Any]:
+def draft_appeal_endpoint(dispute_id: int, payload: DraftAppealPayload | None = None, current_user: dict = Depends(get_current_user)) -> dict[str, Any]:
     try:
         appeal_round = (payload.appeal_round if payload else 1)
-        return svc.compose_appeal_draft(dispute_id, appeal_round=appeal_round)
+        return svc.compose_appeal_draft(dispute_id, appeal_round=appeal_round, tenant_id=current_user.get("tenant_id"))
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except ValueError as exc:
@@ -177,10 +177,11 @@ def submit_appeal_endpoint(
     response: Response,
     dispute_id: int,
     payload: SubmitAppealPayload,
+    current_user: dict = Depends(get_current_user),
     _idem: None = Depends(idempotency_key_dependency()),
 ) -> dict[str, Any]:
     try:
-        result = svc.submit_appeal(dispute_id, payload.model_dump(exclude_none=False))
+        result = svc.submit_appeal(dispute_id, payload.model_dump(exclude_none=False), tenant_id=current_user.get("tenant_id"))
         store_idempotent_response(request, response, result)
         return result
     except LookupError as exc:
@@ -195,6 +196,7 @@ def record_outcome_endpoint(
     response: Response,
     appeal_id: int,
     payload: RecordOutcomePayload,
+    current_user: dict = Depends(get_current_user),
     _idem: None = Depends(idempotency_key_dependency()),
 ) -> dict[str, Any]:
     try:
