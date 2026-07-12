@@ -117,14 +117,20 @@ def create_provider(
     return get_provider(new_id)
 
 
-def get_provider(provider_id: int) -> dict[str, Any] | None:
+def get_provider(provider_id: int, tenant_id: str | None = None) -> dict[str, Any] | None:
     """Return a single provider by primary key, or None if not found."""
 
     with raf_cursor() as cur:
-        cur.execute(
-            "SELECT * FROM providers WHERE id = %s",
-            (provider_id,),
-        )
+        if tenant_id:
+            cur.execute(
+                "SELECT * FROM providers WHERE id = %s AND tenant_id = %s",
+                (provider_id, tenant_id),
+            )
+        else:
+            cur.execute(
+                "SELECT * FROM providers WHERE id = %s",
+                (provider_id,),
+            )
         row = cur.fetchone()
     if not row:
         return None

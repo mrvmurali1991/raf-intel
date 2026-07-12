@@ -126,8 +126,8 @@ class PatientAssignRequest(BaseModel):
 # Helper: resolve provider or raise 404
 # ---------------------------------------------------------------------------
 
-def _get_or_404(provider_id: int) -> dict[str, Any]:
-    provider = get_provider(provider_id)
+def _get_or_404(provider_id: int, tenant_id: str | None = None) -> dict[str, Any]:
+    provider = get_provider(provider_id, tenant_id=tenant_id)
     if not provider:
         raise HTTPException(status_code=404, detail=f"Provider {provider_id} not found")
     return provider
@@ -286,7 +286,7 @@ def get_detail(
     current_user: dict = Depends(get_current_user),
     _perm: None = Depends(require_permission("providers", "read"))) -> dict[str, Any]:
     """Return a single provider record by ID."""
-    return _get_or_404(provider_id)
+    return _get_or_404(provider_id, tenant_id=current_user.get("tenant_id"))
 
 
 @router.put("/{provider_id}", summary="Update provider")
@@ -301,7 +301,7 @@ def update(
     Partial update of a provider record.  Only supplied (non-null) fields are
     written.  Returns the updated provider.
     """
-    _get_or_404(provider_id)
+    _get_or_404(provider_id, tenant_id=current_user.get("tenant_id"))
     try:
         updated = update_provider(provider_id, body.model_dump(exclude_none=True))
     except Exception as exc:
@@ -323,7 +323,7 @@ def deactivate(
     Set the provider's status to inactive.  The record is retained for audit
     history; no data is deleted.
     """
-    _get_or_404(provider_id)
+    _get_or_404(provider_id, tenant_id=current_user.get("tenant_id"))
     try:
         deactivate_provider(provider_id)
     except Exception as exc:
@@ -349,7 +349,7 @@ def panel_patients(
     Return all patients attributed to this provider, enriched with demographic
     information from OpenEMR.
     """
-    _get_or_404(provider_id)
+    _get_or_404(provider_id, tenant_id=current_user.get("tenant_id"))
     try:
         return get_panel_patients(provider_id, limit=limit, offset=offset)
     except Exception as exc:
@@ -369,7 +369,7 @@ def assign_patient(
     Add (or re-attribute) a patient to this provider's panel.  If the patient
     is already in the panel the attribution method is updated.
     """
-    _get_or_404(provider_id)
+    _get_or_404(provider_id, tenant_id=current_user.get("tenant_id"))
     try:
         return assign_patient_to_provider(provider_id, body.patient_id, body.attribution)
     except Exception as exc:
@@ -394,7 +394,7 @@ def auto_attribute(
     Patients that were already manually attributed are updated to 'auto'
     attribution only when an encounter is found.
     """
-    _get_or_404(provider_id)
+    _get_or_404(provider_id, tenant_id=current_user.get("tenant_id"))
     try:
         return auto_attribute_patients(provider_id=provider_id)
     except Exception as exc:
@@ -431,7 +431,7 @@ def get_scorecard(
     - Documentation quality composite score
     - Percentile rank vs other providers
     """
-    provider = _get_or_404(provider_id)
+    provider = _get_or_404(provider_id, tenant_id=current_user.get("tenant_id"))
     calc_year = year or date.today().year
     try:
         cached = get_latest_scorecard(provider_id, calc_year)
@@ -579,7 +579,7 @@ def refresh_scorecard(
     cache age and persist a new snapshot.  Use after batch RAF calculations
     or panel changes to get an up-to-date scorecard immediately.
     """
-    _get_or_404(provider_id)
+    _get_or_404(provider_id, tenant_id=current_user.get("tenant_id"))
     calc_year = year or date.today().year
     try:
         return calculate_provider_scorecard(
@@ -612,7 +612,7 @@ def hcc_performance(
     Results are sorted by revenue impact descending so the highest-value gaps
     appear first.
     """
-    _get_or_404(provider_id)
+    _get_or_404(provider_id, tenant_id=current_user.get("tenant_id"))
     calc_year = year or date.today().year
     try:
         return calculate_hcc_performance(provider_id, calc_year)
@@ -651,7 +651,7 @@ def get_alerts(
     Set ``regenerate=true`` to trigger a fresh alert sweep (clears stale active
     alerts and regenerates from current RAF data before returning).
     """
-    _get_or_404(provider_id)
+    _get_or_404(provider_id, tenant_id=current_user.get("tenant_id"))
     try:
         if regenerate:
             return generate_provider_alerts(provider_id)
@@ -675,7 +675,7 @@ def regenerate_alerts(
     Sweep current RAF data and regenerate all active alerts for this provider.
     Existing active alerts are replaced.  Returns the new alert list.
     """
-    _get_or_404(provider_id)
+    _get_or_404(provider_id, tenant_id=current_user.get("tenant_id"))
     try:
         return generate_provider_alerts(provider_id)
     except Exception as exc:
@@ -698,7 +698,7 @@ def ack_alert(
     Mark an alert as acknowledged.  The alert record is retained with status
     ``acknowledged`` and an ``acknowledged_at`` timestamp for audit purposes.
     """
-    _get_or_404(provider_id)
+    _get_or_404(provider_id, tenant_id=current_user.get("tenant_id"))
     try:
         result = acknowledge_alert(provider_id, alert_id)
     except Exception as exc:

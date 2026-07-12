@@ -201,7 +201,7 @@ FAMILY_TRIGGERS: list[str] = [
 def _compile_triggers(triggers: list[str]) -> re.Pattern[str]:
     sorted_triggers = sorted(triggers, key=len, reverse=True)
     alts = "|".join(re.escape(t) for t in sorted_triggers)
-    return re.compile(alts, re.IGNORECASE)
+    return re.compile(r"\b(?:" + alts + r")\b", re.IGNORECASE)
 
 _NEGATION_RE = _compile_triggers(NEGATION_TRIGGERS)
 _HYPOTHETICAL_RE = _compile_triggers(HYPOTHETICAL_TRIGGERS)
@@ -350,14 +350,11 @@ def _match_keyword_with_context(
     backward window can reach into full note context when the snippet is
     already a narrow window extracted by `_find_condition_spans`.
     """
-    kw_lower = keyword.lower()
-    text_lower = text.lower()
-    idx = text_lower.find(kw_lower)
-    while idx != -1:
-        ctx = _classify_context(text, idx)
+    kw_pattern = re.compile(r"\b" + re.escape(keyword) + r"\b", re.IGNORECASE)
+    for m in kw_pattern.finditer(text):
+        ctx = _classify_context(text, m.start())
         if ctx == "positive":
             return True
-        idx = text_lower.find(kw_lower, idx + 1)
     return False
 
 

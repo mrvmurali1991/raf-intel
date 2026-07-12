@@ -596,7 +596,7 @@ def refresh_token_endpoint(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
     # Rotate: set new refresh token as httpOnly cookie
-    new_rt = result.get("refresh_token")
+    new_rt = result.pop("refresh_token", None)
     resp = JSONResponse(content=result)
     if new_rt:
         secure = settings.app_env != "development"

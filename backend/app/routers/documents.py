@@ -503,6 +503,37 @@ def list_documents_endpoint(
 
     # Enrich each document with its analysis results so the frontend has
     # diagnoses, medications, labs, clinical_summary, meat_evidence, etc.
+
+    # Batch-resolve patient names to avoid N+1 queries
+    _patient_names: dict[str, str] = {}
+    _patient_ids = list({str(r.get("patient_id") or "") for r in rows if r.get("patient_id") and not r.get("patient_name")})
+    if _patient_ids:
+        try:
+            with raf_cursor() as _pc:
+                _ph = ",".join(["%s"] * len(_patient_ids))
+                _pc.execute(
+                    f"SELECT id, CONCAT(first_name, ' ', last_name) AS name"
+                    f" FROM patients WHERE id IN ({_ph}) AND tenant_id = %s",
+                    (*_patient_ids, tenant_id),
+                )
+                for _pr in _pc.fetchall():
+                    _patient_names[str(_pr["id"])] = _pr["name"]
+                # FHIR fallback for unresolved IDs
+                _remaining = [pid for pid in _patient_ids if pid not in _patient_names]
+                if _remaining:
+                    _ph2 = ",".join(["%s"] * len(_remaining))
+                    _pc.execute(
+                        f"SELECT epm.emr_pid, CONCAT(p.first_name, ' ', p.last_name) AS name"
+                        f" FROM emr_patient_matches epm"
+                        f" JOIN patients p ON p.id = epm.patient_id"
+                        f" WHERE epm.emr_pid IN ({_ph2}) AND p.tenant_id = %s",
+                        (*_remaining, tenant_id),
+                    )
+                    for _pr in _pc.fetchall():
+                        _patient_names[str(_pr["emr_pid"])] = _pr["name"]
+        except Exception:
+            logger.debug("batch patient name lookup failed", exc_info=True)
+
     enriched = []
     for row in rows:
         doc = dict(row) if not isinstance(row, dict) else row
@@ -513,34 +544,8 @@ def list_documents_endpoint(
             doc["upload_date"] = str(doc["created_at"]) if doc["created_at"] else None
         if "file_size_bytes" in doc and "file_size" not in doc:
             doc["file_size"] = doc.get("file_size_bytes") or doc.get("file_size", 0)
-        # Resolve patient_name from raf_intelligence.patients if not set.
-        # patient_id in documents may be an internal patients.id (direct-DB / upload)
-        # or an OpenEMR emr_pid (FHIR auto-match). Try both lookups.
         if not doc.get("patient_name") and doc.get("patient_id"):
-            try:
-                with raf_cursor() as _pc:
-                    # First: internal id lookup (most common path)
-                    _pc.execute(
-                        "SELECT CONCAT(first_name, ' ', last_name) AS name"
-                        " FROM patients WHERE id = %s AND tenant_id = %s LIMIT 1",
-                        (doc["patient_id"], tenant_id),
-                    )
-                    _pr = _pc.fetchone()
-                    if not _pr:
-                        # FHIR branch: patient_id may be an OpenEMR pid stored in
-                        # emr_patient_matches.emr_pid; resolve to internal patients.id
-                        _pc.execute(
-                            "SELECT CONCAT(p.first_name, ' ', p.last_name) AS name"
-                            " FROM emr_patient_matches epm"
-                            " JOIN patients p ON p.id = epm.patient_id"
-                            " WHERE epm.emr_pid = %s AND p.tenant_id = %s LIMIT 1",
-                            (doc["patient_id"], tenant_id),
-                        )
-                        _pr = _pc.fetchone()
-                    doc["patient_name"] = _pr["name"] if _pr else ""
-            except Exception:
-                logger.debug("swallowed exception", exc_info=True)
-                doc["patient_name"] = ""
+            doc["patient_name"] = _patient_names.get(str(doc["patient_id"]), "")
 
         analysis = get_analysis(str(doc["id"]))
         if analysis:
