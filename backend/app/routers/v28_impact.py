@@ -113,7 +113,7 @@ def get_portfolio_impact(
             "v28-impact portfolio failed tenant=%s year=%s: %s",
             tenant_id, measurement_year, exc,
         )
-        raise HTTPException(status_code=500, detail=f"v28-impact failed: {exc}")
+        raise HTTPException(status_code=500, detail="Internal server error")
     return payload
 
 
@@ -151,7 +151,7 @@ def get_patient_impact(
             details=f"year={measurement_year}",
         )
     except Exception:  # noqa: BLE001 — best-effort guard
-        logger.debug("swallowed exception", exc_info=True)
+        logger.warning("best-effort operation failed", exc_info=True)
 
     try:
         return score_delta_v24_to_v28(
@@ -162,7 +162,7 @@ def get_patient_impact(
         )
     except Exception as exc:
         logger.exception("v28-impact patient pid=%s failed: %s", pid, exc)
-        raise HTTPException(status_code=500, detail=f"v28-impact failed: {exc}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -206,7 +206,7 @@ def run_analysis(
             payload = refresh_portfolio_cache(tenant_id, measurement_year)
         except Exception as exc:
             logger.exception("v28-impact sync refresh failed: %s", exc)
-            raise HTTPException(status_code=500, detail=f"refresh failed: {exc}")
+            raise HTTPException(status_code=500, detail="Internal server error")
         return {
             "queued":     False,
             "tenant_id":  tenant_id,

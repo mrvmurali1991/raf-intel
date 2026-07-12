@@ -48,7 +48,7 @@ def provider_meat_audit_risk(
     except Exception as exc:  # pragma: no cover — defensive
         logger.exception("meat-audit-risk failed for provider %s", provider_id)
         raise HTTPException(
-            status_code=500, detail=f"Audit-risk computation failed: {exc}"
+            status_code=500, detail="Internal server error"
         )
 
 
@@ -73,7 +73,7 @@ def provider_meat_evidence(
             "meat-evidence lookup failed for provider %s hcc=%s", provider_id, hcc_code
         )
         raise HTTPException(
-            status_code=500, detail=f"Evidence lookup failed: {exc}"
+            status_code=500, detail="Internal server error"
         )
 
     return {

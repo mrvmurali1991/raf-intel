@@ -850,7 +850,7 @@ interface ActionItemsPanelProps {
   suspects: PatientSuspectsResponse | undefined;
   suspectsLoading: boolean;
   acceptMutation: {
-    mutate: (id: number) => void;
+    mutate: (args: { id: number; override_reason?: string; defense_basis?: string }) => void;
     isPending: boolean;
   };
   dismissMutation: {
@@ -884,9 +884,9 @@ export function ActionItemsPanel({
 
   const openHedisGaps = (hedisQ.data?.open_gaps ?? []).slice(0, 3);
 
-  const handleAcceptConfirmed = (_payload: AcceptOverridePayload) => {
+  const handleAcceptConfirmed = (payload: AcceptOverridePayload) => {
     if (!confirmAccept) return;
-    acceptMutation.mutate(confirmAccept.id);
+    acceptMutation.mutate({ id: confirmAccept.id, ...payload });
     setConfirmAccept(null);
   };
 

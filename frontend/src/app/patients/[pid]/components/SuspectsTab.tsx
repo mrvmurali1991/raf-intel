@@ -30,7 +30,7 @@ export function SuspectsTab({
 }: {
   suspects: PatientSuspectsResponse | undefined;
   suspectsLoading: boolean;
-  acceptMutation: { mutate: (id: number) => void; isPending: boolean };
+  acceptMutation: { mutate: (args: { id: number; override_reason?: string; defense_basis?: string }) => void; isPending: boolean };
   dismissMutation: { mutate: (id: number) => void; isPending: boolean };
 }) {
   // RADV-safety gate state — clinicians must pass through Accept/Dismiss
@@ -65,13 +65,9 @@ export function SuspectsTab({
     );
   }
 
-  const handleAcceptConfirmed = (_payload: AcceptOverridePayload) => {
+  const handleAcceptConfirmed = (payload: AcceptOverridePayload) => {
     if (!confirmAccept) return;
-    // NOTE: existing mutation signature only accepts the suspect id; the override
-    // reason is captured in the gate UI for clinician self-attestation but is
-    // not yet persisted by this legacy endpoint (TODO: wire override_reason +
-    // defense_basis through PatientSuspects accept mutation).
-    acceptMutation.mutate(confirmAccept.id);
+    acceptMutation.mutate({ id: confirmAccept.id, ...payload });
     setConfirmAccept(null);
   };
 

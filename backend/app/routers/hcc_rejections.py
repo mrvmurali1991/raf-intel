@@ -194,7 +194,7 @@ def create_rejection(
         logger.exception("hcc_rejection insert failed: %s", exc)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to record rejection: {exc}",
+            detail="Internal server error",
         )
 
     # Write to immutable audit chain

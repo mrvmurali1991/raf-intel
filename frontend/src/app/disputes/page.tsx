@@ -559,7 +559,7 @@ function DetailDrawer({ dispute, onClose }: { dispute: Dispute; onClose: () => v
         <h2 style={{ fontSize: 18, fontWeight: 700, color: T.slate800 }}>
           Dispute #{dispute.id}
         </h2>
-        <button onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer" }}>
+        <button onClick={onClose} aria-label="Close" style={{ border: "none", background: "transparent", cursor: "pointer" }}>
           <X size={18} color={T.slate500} />
         </button>
       </div>
@@ -640,7 +640,7 @@ function Modal(props: { title: string; children: React.ReactNode; actions: React
       }}>
         <div style={{ padding: "16px 20px", borderBottom: `1px solid ${T.slate200}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, color: T.slate800 }}>{props.title}</h3>
-          <button onClick={props.onClose} style={{ border: "none", background: "transparent", cursor: "pointer" }}>
+          <button onClick={props.onClose} aria-label="Close" style={{ border: "none", background: "transparent", cursor: "pointer" }}>
             <X size={18} color={T.slate500} />
           </button>
         </div>

@@ -81,7 +81,7 @@ def pull_now(
         logger.error("pull_now failed tenant=%s: %s", tenant_id, exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Reveleer pull failed: {exc}",
+            detail="Internal server error",
         )
 
 
@@ -113,7 +113,7 @@ def push_patient(
         )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Reveleer push failed: {exc}",
+            detail="Internal server error",
         )
 
 
@@ -185,5 +185,5 @@ def sync_status(
         logger.error("sync_status failed tenant=%s: %s", tenant_id, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Sync status query failed: {exc}",
+            detail="Internal server error",
         )

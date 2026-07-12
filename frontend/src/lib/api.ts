@@ -1530,8 +1530,9 @@ export async function getSuspects(
 
 export async function acceptSuspect(
   suspectId: number,
+  payload?: { override_reason?: string; defense_basis?: string },
 ): Promise<{ status: string; id: number }> {
-  const { data } = await api.put(`/api/suspects/${suspectId}/accept`, {});
+  const { data } = await api.put(`/api/suspects/${suspectId}/accept`, payload ?? {});
   return data;
 }
 

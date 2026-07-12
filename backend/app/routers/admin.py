@@ -417,7 +417,8 @@ def scan_openemr_docs(
     try:
         pending = _fetch_pending_docs(limit)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch pending docs: {exc}")
+        logger.exception("Failed to fetch pending docs: %s", exc)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     if not pending:
         return {
@@ -526,7 +527,8 @@ def get_ingest_log(
                 )
             rows = cur.fetchall() or []
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to query ingest log: {exc}")
+        logger.exception("Failed to query ingest log: %s", exc)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     # Serialise datetime objects
     serialised = []

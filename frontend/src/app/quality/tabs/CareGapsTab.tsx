@@ -67,6 +67,7 @@ export default function CareGapsTab({ gaps, total }: { gaps: CareGap[]; total: n
 
         <button
           onClick={() => { setStatusFilter("all"); setMeasureFilter("all"); }}
+          aria-label="Clear filters"
           style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "8px 14px", border: `1px solid ${C.border}`, borderRadius: 8, background: C.card, color: C.textMuted, fontSize: 13, cursor: "pointer" }}
         >
           <X size={14} />

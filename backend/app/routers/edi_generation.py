@@ -280,7 +280,7 @@ def generate_837(
         )
     except Exception as exc:
         logger.exception("generate_837_batch failed")
-        raise HTTPException(status_code=500, detail=f"837 generation failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     encounter_count = edi_text.count("\nCLM*") + (1 if edi_text.startswith("CLM*") else 0)
     if encounter_count == 0:
@@ -356,7 +356,7 @@ def generate_834(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("generate_834_enrollment failed")
-        raise HTTPException(status_code=500, detail=f"834 generation failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     member_count = edi_text.count("\nINS*")
 

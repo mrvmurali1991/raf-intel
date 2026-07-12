@@ -3,7 +3,6 @@
 import React, { use, useState, useRef, useEffect, useMemo, startTransition } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Printer, MoreHorizontal } from "lucide-react";
 import {
   getPatient,
   getPatientProfile,
@@ -16,11 +15,6 @@ import {
   getPatientRecaptureGaps,
   getPatientLabSuspects,
   getPatientVitalsSuspects,
-  getPatientAllergies,
-  getPatientImmunizations,
-  getPatientFamilyHistory,
-  getPatientSdoh,
-  getPatientMedicationGaps,
   getAuditPackages,
   markRafDirty,
   generateAudit,
@@ -39,15 +33,10 @@ import { Breadcrumb } from "@/components/Breadcrumb";
 // that may re-emerge if tabs re-introduce inline KPI widgets.
 import { useToast } from "@/components/Toast";
 import { calculateAge } from "@/lib/utils";
-import type { Patient, AnalysisResult, AIDiagnosis } from "@/types";
+import type { AnalysisResult, AIDiagnosis } from "@/types";
 import type {
   PatientProfile,
-  RafBreakdown,
   RafHistoryResponse,
-  PatientEncountersResponse,
-  ProblemListResponse,
-  RecaptureGapsResponse,
-  AuditPackagesResponse,
   PatientSuspectsResponse,
 } from "@/lib/api";
 
@@ -55,18 +44,12 @@ import type {
 import {
   C,
   formatDate,
-  rafScoreColor,
-  Spinner,
-  segmentLabel,
-  segmentCodeUpper,
 } from "./components/shared";
 import type {
   ExtendedRafBreakdown,
   HCCDetail,
   EncounterItem,
   ApiError,
-  ProblemItem,
-  RecaptureGapItem,
 } from "./components/shared";
 import nextDynamic from "next/dynamic";
 import { OverviewTab } from "./components/OverviewTab";
@@ -80,10 +63,6 @@ import { PageLoading } from "@/components/ui/page-loading";
 // OverviewTab. Each tab loads on demand when the user clicks it.
 const RAFTab = nextDynamic(
   () => import("./components/RAFTab").then((m) => m.RAFTab),
-  { ssr: false },
-);
-const ClinicalTab = nextDynamic(
-  () => import("./components/ClinicalTab").then((m) => m.ClinicalTab),
   { ssr: false },
 );
 const EncountersTab = nextDynamic(
@@ -385,41 +364,6 @@ export default function PatientDetailPage({
     enabled: activeTab === "overview",
   });
 
-  const allergiesQ = useQuery({
-    queryKey: ["patient-allergies", pid],
-    queryFn: () => getPatientAllergies(pid),
-    staleTime: 30_000,
-    enabled: activeTab === "overview",
-  });
-
-  const immunizationsQ = useQuery({
-    queryKey: ["patient-immunizations", pid],
-    queryFn: () => getPatientImmunizations(pid),
-    staleTime: 30_000,
-    enabled: activeTab === "overview",
-  });
-
-  const familyHistoryQ = useQuery({
-    queryKey: ["patient-family-history", pid],
-    queryFn: () => getPatientFamilyHistory(pid),
-    staleTime: 30_000,
-    enabled: activeTab === "overview",
-  });
-
-  const sdohQ = useQuery({
-    queryKey: ["patient-sdoh", pid],
-    queryFn: () => getPatientSdoh(pid),
-    staleTime: 30_000,
-    enabled: activeTab === "overview",
-  });
-
-  const medGapsQ = useQuery({
-    queryKey: ["patient-med-gaps", pid, selectedYear],
-    queryFn: () => getPatientMedicationGaps(pid, selectedYear),
-    staleTime: 30_000,
-    enabled: activeTab === "overview",
-  });
-
   const auditsQ = useQuery({
     queryKey: ["patient-audits", pid],
     queryFn: () => getAuditPackages(Number(pid)),
@@ -466,7 +410,8 @@ export default function PatientDetailPage({
   });
 
   const acceptMutation = useMutation({
-    mutationFn: (id: number) => acceptSuspect(id),
+    mutationFn: (args: { id: number; override_reason?: string; defense_basis?: string }) =>
+      acceptSuspect(args.id, { override_reason: args.override_reason, defense_basis: args.defense_basis }),
     onSuccess: () => {
       toast.success("Accepted", "Suspect condition accepted.");
       queryClient.invalidateQueries({ queryKey: ["patient-suspects", pid, selectedYear] });

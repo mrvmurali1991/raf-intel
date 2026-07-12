@@ -60,7 +60,7 @@ def _table_exists(name: str) -> bool:
             )
             return cur.fetchone() is not None
     except Exception:  # noqa: BLE001 — best-effort guard
-        logger.debug("swallowed exception", exc_info=True)
+        logger.warning("best-effort operation failed", exc_info=True)
         return False
 
 
@@ -151,7 +151,7 @@ def bulk_attest(
             gaps = cur.fetchall() or []
     except Exception as exc:
         logger.error("bulk_attest: gap fetch failed: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Gap fetch failed: {exc}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     if not gaps:
         return {"created": 0, "message": "No open gaps found for selected patients"}
@@ -249,7 +249,7 @@ def bulk_export(
                 }
     except Exception as exc:
         logger.error("bulk_export: patient fetch failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Patient fetch failed: {exc}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     # Fetch open gaps
     gaps_map: dict[int, list[dict[str, Any]]] = {pid: [] for pid in patient_ids}

@@ -225,7 +225,7 @@ def import_from_emr(
 # Provider CRUD
 # ---------------------------------------------------------------------------
 
-@router.post("", summary="Create a new provider")
+@router.post("", summary="Create a new provider", status_code=201)
 @limiter.limit("30/minute")
 def create(
     request: Request,
