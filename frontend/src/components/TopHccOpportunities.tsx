@@ -6,10 +6,6 @@
  * Surfaces the top 5 HCCs that are NOT yet coded in this provider's panel,
  * ranked by expected $ revenue lift. Backed by
  * GET /api/providers/{id}/top-opportunities.
- *
- * Design language matches RAFForecastCard (inline-styled tokens, slate /
- * blue / emerald / amber palette) so it slots into the provider detail
- * drawer without conflicting with the existing `premium-card` styling.
  */
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -23,25 +19,11 @@ type ProviderTopHccOpportunitiesResponse = {
   count: number;
 };
 
-const T = {
-  white: "#FFFFFF",
-  slate900: "#0F172A",
-  slate700: "#334155",
-  slate500: "#64748B",
-  slate400: "#64748B",
-  slate300: "#CBD5E1",
-  slate200: "#E2E8F0",
-  slate100: "#F1F5F9",
-  emerald600: "#059669",
+// Chart-only hex constants for dynamic bar fills
+const CHART = {
   emerald500: "#10B981",
-  emerald50: "#ECFDF5",
-  amber600: "#D97706",
-  amber500: "#F59E0B",
-  amber50: "#FFFBEB",
-  red500: "#EF4444",
-  red50: "#FEF2F2",
   blue600: "#2563EB",
-  blue50: "#EFF6FF",
+  amber500: "#F59E0B",
 };
 
 function formatUSD(n: number | null | undefined): string {
@@ -75,9 +57,9 @@ export default function TopHccOpportunities({ providerId, year, limit = 5 }: Pro
     return (
       <Card>
         <Header />
-        <div style={{ color: T.slate500, fontSize: 13 }}>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Calculating top opportunities…
-        </div>
+        </p>
       </Card>
     );
   }
@@ -86,9 +68,9 @@ export default function TopHccOpportunities({ providerId, year, limit = 5 }: Pro
     return (
       <Card>
         <Header />
-        <div style={{ color: T.red500, fontSize: 13 }}>
+        <p className="text-sm text-red-500 dark:text-red-400">
           Top opportunities unavailable. {(q.error as Error)?.message ?? ""}
-        </div>
+        </p>
       </Card>
     );
   }
@@ -101,119 +83,65 @@ export default function TopHccOpportunities({ providerId, year, limit = 5 }: Pro
       <Header totalLift={totalLift} />
 
       {items.length === 0 ? (
-        <div
-          style={{
-            fontSize: 12,
-            color: T.slate500,
-            fontStyle: "italic",
-            paddingTop: 8,
-          }}
-        >
+        <p className="text-xs text-slate-500 dark:text-slate-400 italic pt-2">
           No coding opportunities surfaced. Run a suspect scan to populate this
           list.
-        </div>
+        </p>
       ) : (
-        <ol
-          style={{
-            listStyle: "none",
-            padding: 0,
-            margin: 0,
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-          }}
-        >
+        <ol className="list-none p-0 m-0 flex flex-col gap-2">
           {items.map((row, idx) => (
             <li
               key={row.hcc_code}
+              className={`grid gap-3 items-center rounded-lg ${
+                idx === 0
+                  ? "bg-emerald-50 dark:bg-emerald-950 border border-emerald-500 dark:border-emerald-600"
+                  : "bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+              }`}
               style={{
-                display: "grid",
                 gridTemplateColumns: "auto 1fr auto",
-                gap: 12,
-                alignItems: "center",
                 padding: "10px 12px",
-                background: idx === 0 ? T.emerald50 : T.slate100,
-                borderRadius: 8,
-                border: `1px solid ${idx === 0 ? T.emerald500 : T.slate200}`,
               }}
             >
               {/* HCC chip */}
               <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minWidth: 48,
-                  padding: "3px 8px",
-                  background: T.white,
-                  border: `1px solid ${T.slate300}`,
-                  borderRadius: 6,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: T.slate900,
-                  fontFamily: "monospace",
-                }}
+                className="inline-flex items-center justify-center min-w-[48px] px-2 py-0.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md text-[11px] font-bold text-slate-900 dark:text-slate-50 font-mono"
                 title={`HCC ${row.hcc_code}`}
               >
                 HCC {row.hcc_code}
               </div>
 
               {/* Label + meta */}
-              <div style={{ minWidth: 0 }}>
+              <div className="min-w-0">
                 <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: T.slate900,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
+                  className="text-[13px] font-semibold text-slate-900 dark:text-slate-50 overflow-hidden text-ellipsis whitespace-nowrap"
                   title={row.hcc_label}
                 >
                   {row.hcc_label}
                 </div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    marginTop: 2,
-                    fontSize: 11,
-                    color: T.slate500,
-                  }}
-                >
+                <div className="flex items-center gap-2.5 mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
                   <span>
                     {row.patient_count_missing}{" "}
                     {row.patient_count_missing === 1 ? "patient" : "patients"}
                   </span>
-                  <span style={{ color: T.slate300 }}>·</span>
+                  <span className="text-slate-300 dark:text-slate-600">·</span>
                   <span>conf {formatPct(row.avg_confidence)}</span>
-                  <span style={{ color: T.slate300 }}>·</span>
+                  <span className="text-slate-300 dark:text-slate-600">·</span>
                   <PeerBar rate={row.peer_capture_rate} />
                 </div>
               </div>
 
               {/* $ lift right-aligned */}
-              <div style={{ textAlign: "right" }}>
+              <div className="text-right">
                 <div
-                  style={{
-                    fontSize: 15,
-                    fontWeight: 700,
-                    color: idx === 0 ? T.emerald600 : T.slate900,
-                    lineHeight: 1.1,
-                  }}
+                  className={`text-[15px] font-bold leading-tight ${
+                    idx === 0
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-slate-900 dark:text-slate-50"
+                  }`}
                 >
                   {formatUSD(row.expected_lift)}
                 </div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: T.slate400,
-                    fontFamily: "monospace",
-                    marginTop: 2,
-                  }}
-                >
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
                   RAF +{(row.raf_coefficient || 0).toFixed(3)}
                 </div>
               </div>
@@ -222,16 +150,7 @@ export default function TopHccOpportunities({ providerId, year, limit = 5 }: Pro
         </ol>
       )}
 
-      <div
-        style={{
-          marginTop: 12,
-          paddingTop: 10,
-          borderTop: `1px solid ${T.slate100}`,
-          fontSize: 10,
-          color: T.slate400,
-          lineHeight: 1.5,
-        }}
-      >
+      <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
         Score = patients × coefficient × $12,000 PMPY × confidence · Peer bar
         shows avg capture rate among same-specialty providers.
       </div>
@@ -245,15 +164,7 @@ export default function TopHccOpportunities({ providerId, year, limit = 5 }: Pro
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      style={{
-        background: T.white,
-        border: `1px solid ${T.slate200}`,
-        borderRadius: 10,
-        padding: 16,
-        boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
-      }}
-    >
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[10px] p-4 shadow-sm">
       {children}
     </div>
   );
@@ -261,42 +172,17 @@ function Card({ children }: { children: React.ReactNode }) {
 
 function Header({ totalLift }: { totalLift?: number }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "flex-end",
-        justifyContent: "space-between",
-        marginBottom: 14,
-      }}
-    >
+    <div className="flex items-end justify-between mb-3.5">
       <div>
-        <div
-          style={{
-            fontSize: 10,
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.06em",
-            color: T.slate400,
-            marginBottom: 4,
-          }}
-        >
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
           Top $ Opportunities
         </div>
-        <div style={{ fontSize: 13, color: T.slate500 }}>
+        <div className="text-sm text-slate-500 dark:text-slate-400">
           What to code first
         </div>
       </div>
       {totalLift !== undefined && totalLift > 0 ? (
-        <div
-          style={{
-            padding: "4px 10px",
-            borderRadius: 999,
-            background: T.emerald50,
-            color: T.emerald600,
-            fontSize: 11,
-            fontWeight: 700,
-          }}
-        >
+        <div className="px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold">
           {formatUSD(totalLift)} total
         </div>
       ) : null}
@@ -306,39 +192,24 @@ function Header({ totalLift }: { totalLift?: number }) {
 
 function PeerBar({ rate }: { rate: number | null | undefined }) {
   if (rate === null || rate === undefined) {
-    return <span style={{ color: T.slate400 }}>peer n/a</span>;
+    return <span className="text-slate-500 dark:text-slate-400">peer n/a</span>;
   }
   const pct = Math.max(0, Math.min(1, rate));
   return (
     <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-      }}
+      className="inline-flex items-center gap-1.5"
       title={`Peer capture rate: ${formatPct(rate)}`}
     >
-      <span
-        style={{
-          display: "inline-block",
-          width: 36,
-          height: 5,
-          background: T.slate200,
-          borderRadius: 999,
-          overflow: "hidden",
-          position: "relative",
-        }}
-      >
+      <span className="inline-block w-9 h-[5px] bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden relative">
         <span
+          className="block h-full"
           style={{
-            display: "block",
             width: `${pct * 100}%`,
-            height: "100%",
-            background: pct >= 0.7 ? T.emerald500 : pct >= 0.4 ? T.blue600 : T.amber500,
+            background: pct >= 0.7 ? CHART.emerald500 : pct >= 0.4 ? CHART.blue600 : CHART.amber500,
           }}
         />
       </span>
-      <span style={{ fontFamily: "monospace" }}>{formatPct(rate)}</span>
+      <span className="font-mono">{formatPct(rate)}</span>
     </span>
   );
 }

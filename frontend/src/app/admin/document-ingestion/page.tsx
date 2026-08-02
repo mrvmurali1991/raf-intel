@@ -37,37 +37,13 @@ import { DocumentIngestionDetailDrawer } from "@/components/admin/DocumentIngest
 import { useAuth } from "@/contexts/auth-context";
 
 // ---------------------------------------------------------------------------
-// Design tokens
-// ---------------------------------------------------------------------------
-
-const T = {
-  bg: "#F8FAFC",
-  card: "#FFFFFF",
-  border: "#E2E8F0",
-  text: "#0F172A",
-  muted: "#64748B",
-  subtle: "#94A3B8",
-  accent: "#2563EB",
-  accentBg: "#EFF6FF",
-  success: "#10B981",
-  successBg: "#ECFDF5",
-  warning: "#F59E0B",
-  warningBg: "#FFFBEB",
-  danger: "#DC2626",
-  dangerBg: "#FEF2F2",
-  inactive: "#94A3B8",
-  inactiveBg: "#F1F5F9",
-  header: "#0F172A",
-} as const;
-
-// ---------------------------------------------------------------------------
 // Source metadata (icons, display names, config routes)
 // ---------------------------------------------------------------------------
 
 interface SourceMeta {
   id: string;
   name: string;
-  icon: React.ComponentType<{ style?: React.CSSProperties; "aria-hidden"?: "true" }>;
+  icon: React.ComponentType<{ style?: React.CSSProperties; "aria-hidden"?: "true"; className?: string }>;
   configPath: string;
 }
 
@@ -90,49 +66,34 @@ const SOURCE_META: SourceMeta[] = [
 type SourceStatus = "active" | "idle" | "not_configured";
 
 function statusDot(status: SourceStatus) {
-  const MAP: Record<SourceStatus, { color: string; label: string }> = {
-    active:          { color: T.success,  label: "Active" },
-    idle:            { color: T.warning,  label: "Configured – idle" },
-    not_configured:  { color: T.inactive, label: "Not configured" },
+  const MAP: Record<SourceStatus, { className: string; label: string }> = {
+    active:          { className: "bg-emerald-500",  label: "Active" },
+    idle:            { className: "bg-amber-500",    label: "Configured – idle" },
+    not_configured:  { className: "bg-slate-400",    label: "Not configured" },
   };
-  const { color, label } = MAP[status] ?? MAP.not_configured;
+  const { className, label } = MAP[status] ?? MAP.not_configured;
   return (
     <span
       role="img"
       aria-label={label}
       title={label}
-      style={{
-        display: "inline-block",
-        width: 9,
-        height: 9,
-        borderRadius: "50%",
-        backgroundColor: color,
-        flexShrink: 0,
-      }}
+      className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${className}`}
     />
   );
 }
 
 function statusBadge(s: string): React.ReactNode {
-  const map: Record<string, { bg: string; fg: string; label: string }> = {
-    success:   { bg: T.successBg, fg: T.success,  label: "Success" },
-    completed: { bg: T.successBg, fg: T.success,  label: "Success" },
-    processed: { bg: T.successBg, fg: T.success,  label: "Success" },
-    failed:    { bg: T.dangerBg,  fg: T.danger,   label: "Failed" },
-    skipped:   { bg: T.inactiveBg, fg: T.inactive, label: "Skipped" },
+  const map: Record<string, { bgCls: string; fgCls: string; label: string }> = {
+    success:   { bgCls: "bg-emerald-50 dark:bg-emerald-950", fgCls: "text-emerald-500 dark:text-emerald-400", label: "Success" },
+    completed: { bgCls: "bg-emerald-50 dark:bg-emerald-950", fgCls: "text-emerald-500 dark:text-emerald-400", label: "Success" },
+    processed: { bgCls: "bg-emerald-50 dark:bg-emerald-950", fgCls: "text-emerald-500 dark:text-emerald-400", label: "Success" },
+    failed:    { bgCls: "bg-red-50 dark:bg-red-950",         fgCls: "text-red-600 dark:text-red-400",         label: "Failed" },
+    skipped:   { bgCls: "bg-slate-100 dark:bg-slate-800",    fgCls: "text-slate-400",                         label: "Skipped" },
   };
-  const style = map[s?.toLowerCase()] ?? { bg: T.inactiveBg, fg: T.muted, label: s || "—" };
+  const style = map[s?.toLowerCase()] ?? { bgCls: "bg-slate-100 dark:bg-slate-800", fgCls: "text-slate-500 dark:text-slate-400", label: s || "—" };
   return (
     <span
-      style={{
-        fontSize: 11,
-        fontWeight: 600,
-        padding: "2px 8px",
-        borderRadius: 10,
-        backgroundColor: style.bg,
-        color: style.fg,
-        whiteSpace: "nowrap",
-      }}
+      className={`text-[11px] font-semibold px-2 py-0.5 rounded-[10px] whitespace-nowrap ${style.bgCls} ${style.fgCls}`}
     >
       {style.label}
     </span>
@@ -181,12 +142,12 @@ function KpiStrip({ kpis }: { kpis: KpiData | undefined }) {
     {
       label: "Total Docs (24h)",
       value: kpis?.total_docs_24h ?? 0,
-      color: T.accent,
+      colorCls: "text-blue-600 dark:text-blue-400",
     },
     {
       label: "Suspects Extracted",
       value: kpis?.total_suspects_24h ?? 0,
-      color: "#7C3AED",
+      colorCls: "text-violet-600 dark:text-violet-400",
     },
     {
       label: "Success Rate",
@@ -194,12 +155,12 @@ function KpiStrip({ kpis }: { kpis: KpiData | undefined }) {
         kpis?.success_rate_pct != null
           ? `${kpis.success_rate_pct}%`
           : "—",
-      color: T.success,
+      colorCls: "text-emerald-500 dark:text-emerald-400",
     },
     {
       label: "Active Sources",
       value: kpis?.active_sources ?? 0,
-      color: T.warning,
+      colorCls: "text-amber-500 dark:text-amber-400",
     },
   ];
 
@@ -207,37 +168,19 @@ function KpiStrip({ kpis }: { kpis: KpiData | undefined }) {
     <div
       role="region"
       aria-label="Ingestion KPIs"
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-        gap: 16,
-        marginBottom: 28,
-      }}
+      className="grid gap-4 mb-7"
+      style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}
     >
       {items.map((item) => (
         <div
           key={item.label}
-          style={{
-            backgroundColor: T.card,
-            border: `1px solid ${T.border}`,
-            borderRadius: 10,
-            padding: "18px 20px",
-          }}
+          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[10px] px-5 py-[18px]"
         >
-          <div
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              color: T.subtle,
-              marginBottom: 6,
-            }}
-          >
+          <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400 dark:text-slate-500 mb-1.5">
             {item.label}
           </div>
           <div
-            style={{ fontSize: 28, fontWeight: 700, color: item.color, lineHeight: 1 }}
+            className={`text-[28px] font-bold leading-none ${item.colorCls}`}
             aria-live="polite"
           >
             {item.value.toLocaleString()}
@@ -274,18 +217,11 @@ function SourceCard({ card, meta, active, onSelect }: SourceCardProps) {
 
   return (
     <div
-      style={{
-        backgroundColor: T.card,
-        border: `2px solid ${active ? T.accent : T.border}`,
-        borderRadius: 10,
-        padding: "16px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-        cursor: "pointer",
-        transition: "border-color 150ms, box-shadow 150ms",
-        boxShadow: active ? `0 0 0 3px ${T.accentBg}` : "none",
-      }}
+      className={`bg-white dark:bg-slate-900 rounded-[10px] p-4 flex flex-col gap-3 cursor-pointer transition-[border-color,box-shadow] duration-150 ${
+        active
+          ? "border-2 border-blue-600 dark:border-blue-400 shadow-[0_0_0_3px_rgba(219,234,254,0.5)] dark:shadow-[0_0_0_3px_rgba(30,58,138,0.3)]"
+          : "border-2 border-slate-200 dark:border-slate-700"
+      }`}
       onClick={() => onSelect(card.id)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -299,68 +235,43 @@ function SourceCard({ card, meta, active, onSelect }: SourceCardProps) {
       aria-label={`${card.name} — status: ${card.status.replace(/_/g, " ")}, ${card.docs_24h} docs in last 24h`}
     >
       {/* Icon + status */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 9,
-            backgroundColor: T.accentBg,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: T.accent,
-          }}
-        >
+      <div className="flex items-center justify-between">
+        <div className="w-9 h-9 rounded-[9px] bg-blue-50 dark:bg-blue-950 flex items-center justify-center text-blue-600 dark:text-blue-400">
           <Icon style={{ width: 18, height: 18 }} aria-hidden="true" />
         </div>
         {statusDot(card.status)}
       </div>
 
       {/* Name */}
-      <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{card.name}</div>
+      <div className="text-[13px] font-semibold text-slate-900 dark:text-slate-50">{card.name}</div>
 
       {/* Counts */}
-      <div style={{ display: "flex", gap: 16 }}>
+      <div className="flex gap-4">
         <div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: T.text, lineHeight: 1 }}>
+          <div className="text-[18px] font-bold text-slate-900 dark:text-slate-50 leading-none">
             {card.docs_24h.toLocaleString()}
           </div>
-          <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>docs 24h</div>
+          <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">docs 24h</div>
         </div>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#7C3AED", lineHeight: 1 }}>
+          <div className="text-[18px] font-bold text-violet-600 dark:text-violet-400 leading-none">
             {card.suspects_24h.toLocaleString()}
           </div>
-          <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>suspects</div>
+          <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">suspects</div>
         </div>
       </div>
 
       {/* Last activity */}
-      <div style={{ fontSize: 11, color: T.subtle }}>
+      <div className="text-[11px] text-slate-400 dark:text-slate-500">
         Last: {relativeTime(card.last_activity)}
       </div>
 
-      {/* Configure link — stops propagation so it doesn't trigger the card click */}
+      {/* Configure link */}
       <Link
         href={card.config_path}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 5,
-          fontSize: 11,
-          fontWeight: 500,
-          color: T.accent,
-          textDecoration: "none",
-          padding: "5px 10px",
-          border: `1px solid ${T.border}`,
-          borderRadius: 6,
-          backgroundColor: T.bg,
-          alignSelf: "flex-start",
-          transition: "background-color 150ms",
-        }}
+        className="inline-flex items-center gap-[5px] text-[11px] font-medium text-blue-600 dark:text-blue-400 no-underline px-2.5 py-[5px] border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800 self-start transition-colors duration-150"
         aria-label={`Configure ${card.name}`}
       >
         <Settings style={{ width: 11, height: 11 }} aria-hidden="true" />
@@ -399,33 +310,19 @@ function ActivityTable({ rows, onRowClick }: ActivityTableProps) {
 
   return (
     <div>
-      <div style={{ overflowX: "auto" }}>
+      <div className="overflow-x-auto">
         <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            fontSize: 13,
-          }}
+          className="w-full border-collapse text-[13px]"
           aria-label="Recent document activity"
         >
           <thead>
-            <tr style={{ borderBottom: `2px solid ${T.border}` }}>
+            <tr className="border-b-2 border-slate-200 dark:border-slate-700">
               {["Timestamp", "Source", "Patient ID", "Filename", "MIME Type", "Suspects", "Status", ""].map(
                 (h) => (
                   <th
                     key={h}
                     scope="col"
-                    style={{
-                      padding: "10px 12px",
-                      textAlign: "left",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: T.muted,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      whiteSpace: "nowrap",
-                      backgroundColor: T.bg,
-                    }}
+                    className="px-3 py-2.5 text-left text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-[0.05em] whitespace-nowrap bg-slate-50 dark:bg-slate-800"
                   >
                     {h}
                   </th>
@@ -438,12 +335,7 @@ function ActivityTable({ rows, onRowClick }: ActivityTableProps) {
               <tr>
                 <td
                   colSpan={8}
-                  style={{
-                    padding: "40px",
-                    textAlign: "center",
-                    color: T.muted,
-                    fontSize: 14,
-                  }}
+                  className="p-10 text-center text-slate-500 dark:text-slate-400 text-sm"
                 >
                   No documents found in the selected window.
                 </td>
@@ -454,12 +346,11 @@ function ActivityTable({ rows, onRowClick }: ActivityTableProps) {
               return (
                 <tr
                   key={`${row.source}-${row.document_id}-${rowIdx}`}
-                  style={{
-                    backgroundColor: i % 2 === 0 ? T.card : T.bg,
-                    borderBottom: `1px solid ${T.border}`,
-                    cursor: "pointer",
-                    transition: "background-color 100ms",
-                  }}
+                  className={`border-b border-slate-200 dark:border-slate-700 cursor-pointer transition-colors duration-100 ${
+                    i % 2 === 0
+                      ? "bg-white dark:bg-slate-900"
+                      : "bg-slate-50 dark:bg-slate-800"
+                  } hover:bg-slate-100 dark:hover:bg-slate-700`}
                   onClick={() => onRowClick(row)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
@@ -471,61 +362,35 @@ function ActivityTable({ rows, onRowClick }: ActivityTableProps) {
                   role="row"
                   aria-label={`Document ${row.filename || row.document_id} — click to view details`}
                 >
-                  <td style={{ padding: "10px 12px", whiteSpace: "nowrap", color: T.muted, fontSize: 12 }}>
+                  <td className="px-3 py-2.5 whitespace-nowrap text-slate-500 dark:text-slate-400 text-xs">
                     {formatTimestamp(row.timestamp)}
                   </td>
-                  <td style={{ padding: "10px 12px" }}>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        padding: "2px 8px",
-                        borderRadius: 10,
-                        backgroundColor: T.accentBg,
-                        color: T.accent,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
+                  <td className="px-3 py-2.5">
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-[10px] bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 whitespace-nowrap">
                       {row.source}
                     </span>
                   </td>
-                  <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: 12, color: T.muted }}>
+                  <td className="px-3 py-2.5 font-mono text-xs text-slate-500 dark:text-slate-400">
                     {row.patient_id ? `PT-${row.patient_id.slice(-6)}` : "—"}
                   </td>
                   <td
-                    style={{
-                      padding: "10px 12px",
-                      maxWidth: 200,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      fontSize: 13,
-                    }}
+                    className="px-3 py-2.5 max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap text-[13px] text-slate-900 dark:text-slate-100"
                     title={row.filename ?? undefined}
                   >
                     {row.filename || "—"}
                   </td>
-                  <td style={{ padding: "10px 12px", fontSize: 11, color: T.muted, whiteSpace: "nowrap" }}>
+                  <td className="px-3 py-2.5 text-[11px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
                     {row.mimetype || "—"}
                   </td>
-                  <td style={{ padding: "10px 12px", fontWeight: 600, color: "#7C3AED", textAlign: "right" }}>
+                  <td className="px-3 py-2.5 font-semibold text-violet-600 dark:text-violet-400 text-right">
                     {row.suspects}
                   </td>
-                  <td style={{ padding: "10px 12px" }}>
+                  <td className="px-3 py-2.5">
                     {statusBadge(row.status)}
                   </td>
-                  <td style={{ padding: "10px 12px" }}>
+                  <td className="px-3 py-2.5">
                     <button
-                      style={{
-                        background: "none",
-                        border: `1px solid ${T.border}`,
-                        borderRadius: 6,
-                        padding: "3px 10px",
-                        fontSize: 11,
-                        fontWeight: 500,
-                        color: T.accent,
-                        cursor: "pointer",
-                      }}
+                      className="bg-transparent border border-slate-200 dark:border-slate-700 rounded-md px-2.5 py-[3px] text-[11px] font-medium text-blue-600 dark:text-blue-400 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
                       onClick={(e) => {
                         e.stopPropagation();
                         onRowClick(row);
@@ -545,34 +410,21 @@ function ActivityTable({ rows, onRowClick }: ActivityTableProps) {
       {/* Pagination */}
       {totalPages > 1 && (
         <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            gap: 8,
-            padding: "12px 0",
-          }}
+          className="flex items-center justify-end gap-2 py-3"
           role="navigation"
           aria-label="Table pagination"
         >
-          <span style={{ fontSize: 12, color: T.muted }}>
+          <span className="text-xs text-slate-500 dark:text-slate-400">
             Page {page + 1} of {totalPages} &nbsp;({rows.length.toLocaleString()} rows)
           </span>
           <button
             disabled={page === 0}
             onClick={() => setPage((p) => p - 1)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 30,
-              height: 30,
-              border: `1px solid ${T.border}`,
-              borderRadius: 6,
-              background: "none",
-              cursor: page === 0 ? "not-allowed" : "pointer",
-              color: page === 0 ? T.subtle : T.text,
-            }}
+            className={`flex items-center justify-center w-[30px] h-[30px] border border-slate-200 dark:border-slate-700 rounded-md bg-transparent ${
+              page === 0
+                ? "cursor-not-allowed text-slate-400 dark:text-slate-500"
+                : "cursor-pointer text-slate-900 dark:text-slate-50"
+            }`}
             aria-label="Previous page"
           >
             <ChevronLeft style={{ width: 14, height: 14 }} aria-hidden="true" />
@@ -580,18 +432,11 @@ function ActivityTable({ rows, onRowClick }: ActivityTableProps) {
           <button
             disabled={page >= totalPages - 1}
             onClick={() => setPage((p) => p + 1)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 30,
-              height: 30,
-              border: `1px solid ${T.border}`,
-              borderRadius: 6,
-              background: "none",
-              cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
-              color: page >= totalPages - 1 ? T.subtle : T.text,
-            }}
+            className={`flex items-center justify-center w-[30px] h-[30px] border border-slate-200 dark:border-slate-700 rounded-md bg-transparent ${
+              page >= totalPages - 1
+                ? "cursor-not-allowed text-slate-400 dark:text-slate-500"
+                : "cursor-pointer text-slate-900 dark:text-slate-50"
+            }`}
             aria-label="Next page"
           >
             <ChevronRight style={{ width: 14, height: 14 }} aria-hidden="true" />
@@ -666,58 +511,28 @@ function DocumentIngestionPageInner() {
     <>
       <main
         id="main-content"
-        style={{
-          minHeight: "100vh",
-          backgroundColor: T.bg,
-          padding: "24px clamp(16px, 4vw, 40px)",
-          fontFamily:
-            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-        }}
+        className="min-h-screen bg-slate-50 dark:bg-slate-950"
+        style={{ padding: "24px clamp(16px, 4vw, 40px)" }}
       >
         {/* Page header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 12,
-            marginBottom: 28,
-          }}
-        >
+        <div className="flex items-start justify-between flex-wrap gap-3 mb-7">
           <div>
             <h1
-              style={{
-                fontSize: "clamp(20px, 3vw, 26px)",
-                fontWeight: 700,
-                color: T.header,
-                margin: 0,
-                lineHeight: 1.2,
-              }}
+              className="font-bold text-slate-900 dark:text-slate-50 m-0 leading-tight"
+              style={{ fontSize: "clamp(20px, 3vw, 26px)" }}
             >
               Document Ingestion
             </h1>
-            <p style={{ fontSize: 14, color: T.muted, margin: "4px 0 0" }}>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               All paths &middot; last 24h
             </p>
           </div>
           <button
             onClick={() => refetch()}
             disabled={isFetching}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 16px",
-              backgroundColor: T.card,
-              border: `1px solid ${T.border}`,
-              borderRadius: 8,
-              fontSize: 13,
-              fontWeight: 500,
-              color: T.text,
-              cursor: isFetching ? "not-allowed" : "pointer",
-              opacity: isFetching ? 0.6 : 1,
-            }}
+            className={`inline-flex items-center gap-1.5 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-[13px] font-medium text-slate-900 dark:text-slate-50 ${
+              isFetching ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+            }`}
             aria-label="Refresh ingestion data"
           >
             <RefreshCw
@@ -736,18 +551,7 @@ function DocumentIngestionPageInner() {
         {isError && (
           <div
             role="alert"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "14px 16px",
-              backgroundColor: "#FEF2F2",
-              border: `1px solid #FECACA`,
-              borderRadius: 10,
-              color: T.danger,
-              marginBottom: 24,
-              fontSize: 13,
-            }}
+            className="flex items-center gap-2.5 px-4 py-3.5 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-[10px] text-red-600 dark:text-red-400 mb-6 text-[13px]"
           >
             <AlertCircle style={{ width: 16, height: 16, flexShrink: 0 }} aria-hidden="true" />
             Failed to load ingestion data. The backend aggregator may not be deployed yet.
@@ -758,37 +562,15 @@ function DocumentIngestionPageInner() {
         <KpiStrip kpis={data?.kpis} />
 
         {/* Source card grid */}
-        <section aria-label="Ingestion source cards" style={{ marginBottom: 36 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 14,
-            }}
-          >
-            <h2
-              style={{
-                fontSize: 15,
-                fontWeight: 600,
-                color: T.header,
-                margin: 0,
-              }}
-            >
+        <section aria-label="Ingestion source cards" className="mb-9">
+          <div className="flex items-center justify-between mb-3.5">
+            <h2 className="text-[15px] font-semibold text-slate-900 dark:text-slate-50 m-0">
               Ingestion Sources
             </h2>
             {activeSource && (
               <button
                 onClick={() => router.push("/admin/document-ingestion")}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: T.accent,
-                  fontSize: 12,
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  padding: 0,
-                }}
+                className="bg-transparent border-none text-blue-600 dark:text-blue-400 text-xs font-medium cursor-pointer p-0"
                 aria-label="Clear source filter"
               >
                 Clear filter
@@ -800,22 +582,13 @@ function DocumentIngestionPageInner() {
             <div
               role="status"
               aria-live="polite"
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-                gap: 14,
-              }}
+              className="grid gap-3.5"
+              style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}
             >
               {SOURCE_META.map((m) => (
                 <div
                   key={m.id}
-                  style={{
-                    height: 180,
-                    backgroundColor: T.card,
-                    border: `1px solid ${T.border}`,
-                    borderRadius: 10,
-                    animation: "pulse 1.5s ease-in-out infinite",
-                  }}
+                  className="h-[180px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[10px] animate-pulse"
                   aria-hidden="true"
                 />
               ))}
@@ -823,12 +596,10 @@ function DocumentIngestionPageInner() {
             </div>
           ) : (
             <div
+              className="grid gap-3.5"
               style={{
-                display: "grid",
-                // 1 col on phone, 2 on tablet, 4 on desktop
                 gridTemplateColumns:
                   "repeat(auto-fill, minmax(clamp(160px, 20vw, 220px), 1fr))",
-                gap: 14,
               }}
             >
               {sourceCards.map((card) => {
@@ -849,25 +620,18 @@ function DocumentIngestionPageInner() {
 
         {/* Recent activity table */}
         <section aria-label="Recent document activity">
-          <div style={{ marginBottom: 14 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 600, color: T.header, margin: 0 }}>
+          <div className="mb-3.5">
+            <h2 className="text-[15px] font-semibold text-slate-900 dark:text-slate-50 m-0">
               Recent Activity
               {activeSource && (
-                <span style={{ fontSize: 12, color: T.muted, fontWeight: 400, marginLeft: 8 }}>
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-normal ml-2">
                   filtered: {activeSource}
                 </span>
               )}
             </h2>
           </div>
 
-          <div
-            style={{
-              backgroundColor: T.card,
-              border: `1px solid ${T.border}`,
-              borderRadius: 10,
-              overflow: "hidden",
-            }}
-          >
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[10px] overflow-hidden">
             <ActivityTable rows={filteredDocs} onRowClick={setSelectedDoc} />
           </div>
         </section>
@@ -885,10 +649,6 @@ function DocumentIngestionPageInner() {
       {/* Spin keyframe */}
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
         .sr-only {
           position: absolute; width: 1px; height: 1px;
           padding: 0; margin: -1px; overflow: hidden;
@@ -905,7 +665,7 @@ function DocumentIngestionPageInner() {
 
 export default function DocumentIngestionPage() {
   return (
-    <Suspense fallback={<div style={{ padding: 40, color: "#64748B" }}>Loading…</div>}>
+    <Suspense fallback={<div className="p-10 text-slate-500 dark:text-slate-400">Loading…</div>}>
       <DocumentIngestionPageInner />
     </Suspense>
   );

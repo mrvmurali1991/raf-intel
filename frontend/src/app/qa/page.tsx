@@ -102,39 +102,41 @@ async function postTier2(reviewId: number, rating: Rating, note?: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Style tokens (mirrors /suspects + /disputes palette)
+// Column config — Tailwind class-based for dark mode
 // ---------------------------------------------------------------------------
-
-const T = {
-  white: "#FFFFFF",
-  slate50: "#F8FAFC",
-  slate100: "#F1F5F9",
-  slate200: "#E2E8F0",
-  slate400: "#64748B",
-  slate500: "#64748B",
-  slate600: "#475569",
-  slate700: "#334155",
-  slate800: "#1E293B",
-  blue50: "#EFF6FF",
-  blue600: "#2563EB",
-  amber50: "#FFFBEB",
-  amber600: "#D97706",
-  emerald50: "#ECFDF5",
-  emerald600: "#059669",
-  red50: "#FEF2F2",
-  red600: "#DC2626",
-} as const;
 
 const COLUMNS: {
   key: "pending" | "escalated" | "closed";
   label: string;
-  accent: string;
-  bg: string;
-  icon: React.ComponentType<{ size?: number }>;
+  accentText: string;
+  badgeCls: string;
+  borderCls: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
 }[] = [
-  { key: "pending", label: "Awaiting secondary review", accent: T.amber600, bg: T.amber50, icon: ShieldCheck },
-  { key: "escalated", label: "Escalated", accent: T.red600, bg: T.red50, icon: AlertTriangle },
-  { key: "closed", label: "Closed (today)", accent: T.emerald600, bg: T.emerald50, icon: CheckCheck },
+  {
+    key: "pending",
+    label: "Awaiting secondary review",
+    accentText: "text-amber-600 dark:text-amber-400",
+    badgeCls: "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400",
+    borderCls: "border-l-amber-600 dark:border-l-amber-400",
+    icon: ShieldCheck,
+  },
+  {
+    key: "escalated",
+    label: "Escalated",
+    accentText: "text-red-600 dark:text-red-400",
+    badgeCls: "bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400",
+    borderCls: "border-l-red-600 dark:border-l-red-400",
+    icon: AlertTriangle,
+  },
+  {
+    key: "closed",
+    label: "Closed (today)",
+    accentText: "text-emerald-600 dark:text-emerald-400",
+    badgeCls: "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400",
+    borderCls: "border-l-emerald-600 dark:border-l-emerald-400",
+    icon: CheckCheck,
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -206,14 +208,7 @@ export default function QAReviewPage() {
   );
 
   return (
-    <div
-      style={{
-        maxWidth: 1600,
-        margin: "0 auto",
-        padding: "24px 16px",
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-      }}
-    >
+    <div className="max-w-[1600px] mx-auto px-4 py-6">
       <PageHeader
         title="QA Audit"
         subtitle="Multi-rater quality assurance. Each accepted suspect gets a second pair of eyes; disagreements escalate to tier-2 adjudication."
@@ -221,29 +216,15 @@ export default function QAReviewPage() {
       />
 
       {/* Metrics strip */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: 16,
-          marginBottom: 24,
-        }}
-      >
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-6">
         <MetricCard label="Awaiting secondary" value={counts.pending} icon={<ShieldCheck size={18} />} intent="warning" />
         <MetricCard label="Escalated" value={counts.escalated} icon={<AlertTriangle size={18} />} intent="danger" />
         <MetricCard label="Closed today" value={counts.closed} icon={<CheckCheck size={18} />} intent="success" />
       </div>
 
       {/* Kanban */}
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "100%",
-          overflowX: "auto",
-          WebkitOverflowScrolling: "touch",
-        }}
-      >
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(280px, 1fr))", gap: 12 }}>
+      <div className="w-full max-w-full overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+        <div className="grid grid-cols-3 gap-3" style={{ minWidth: 840 }}>
           {COLUMNS.map((col) => {
             const dataQ =
               col.key === "pending"
@@ -255,8 +236,9 @@ export default function QAReviewPage() {
               <Column
                 key={col.key}
                 label={col.label}
-                accent={col.accent}
-                bg={col.bg}
+                accentText={col.accentText}
+                badgeCls={col.badgeCls}
+                borderCls={col.borderCls}
                 Icon={col.icon}
                 loading={dataQ.isLoading}
                 items={dataQ.data?.items ?? []}
@@ -286,9 +268,10 @@ function emptyHintFor(k: "pending" | "escalated" | "closed"): string {
 
 function Column(props: {
   label: string;
-  accent: string;
-  bg: string;
-  Icon: React.ComponentType<{ size?: number }>;
+  accentText: string;
+  badgeCls: string;
+  borderCls: string;
+  Icon: React.ComponentType<{ size?: number; className?: string }>;
   loading: boolean;
   items: QAReview[];
   emptyHint: string;
@@ -302,66 +285,32 @@ function Column(props: {
     <section
       role="region"
       aria-label={props.label}
-      style={{
-        background: T.slate50,
-        borderRadius: 10,
-        padding: 10,
-        minHeight: 400,
-      }}
+      className="bg-slate-50 dark:bg-slate-800/50 rounded-[10px] p-2.5 min-h-[400px]"
     >
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 10,
-          padding: "0 4px",
-        }}
-      >
+      <header className="flex items-center justify-between mb-2.5 px-1">
         <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            fontSize: 12,
-            fontWeight: 700,
-            color: props.accent,
-            textTransform: "uppercase",
-            letterSpacing: 0.5,
-          }}
+          className={`inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide ${props.accentText}`}
         >
           <Icon size={14} />
           {props.label}
         </span>
         <span
-          style={{
-            background: props.bg,
-            color: props.accent,
-            fontSize: 11,
-            fontWeight: 700,
-            padding: "2px 8px",
-            borderRadius: 999,
-          }}
+          className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${props.badgeCls}`}
         >
           {props.items.length}
         </span>
       </header>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="flex flex-col gap-2">
         {props.loading && Array.from({ length: 3 }).map((_, i) => (
           <div
             key={i}
-            style={{
-              height: 110,
-              background: T.slate100,
-              borderRadius: 8,
-              animation: "pulse 1.5s infinite",
-            }}
+            className="h-[110px] bg-slate-100 dark:bg-slate-700 rounded-lg animate-pulse"
           />
         ))}
 
         {!props.loading && props.items.length === 0 && (
-          <div style={{ fontSize: 12, color: T.slate400, textAlign: "center", padding: 24 }}>
+          <div className="text-xs text-slate-500 dark:text-slate-400 text-center p-6">
             {props.emptyHint}
           </div>
         )}
@@ -370,7 +319,7 @@ function Column(props: {
           <Card
             key={r.id}
             review={r}
-            accent={props.accent}
+            borderCls={props.borderCls}
             onSecondary={(rating) => props.onSecondary(r.id, rating)}
             onTier2={(rating) => props.onTier2(r.id, rating)}
             actionsKind={props.actionsKind}
@@ -388,7 +337,7 @@ function Column(props: {
 
 function Card(props: {
   review: QAReview;
-  accent: string;
+  borderCls: string;
   onSecondary: (rating: Rating) => void;
   onTier2: (rating: Rating) => void;
   actionsKind: "pending" | "escalated" | "closed";
@@ -403,28 +352,21 @@ function Card(props: {
   return (
     <article
       aria-label={`QA review ${r.id}`}
-      style={{
-        background: T.white,
-        border: `1px solid ${T.slate200}`,
-        borderLeft: `3px solid ${props.accent}`,
-        borderRadius: 8,
-        padding: 10,
-        boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-      }}
+      className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 border-l-[3px] ${props.borderCls} rounded-lg p-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.2)]`}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
-        <span style={{ fontSize: 11, color: T.slate500, fontWeight: 600 }}>
+      <div className="flex justify-between items-start">
+        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
           QA #{r.id}
           {r.patient_id != null ? ` · pid ${r.patient_id}` : ""}
         </span>
         <OutcomeBadge outcome={r.final_outcome} />
       </div>
 
-      <div style={{ marginTop: 6, fontSize: 12, color: T.slate800, fontWeight: 600 }}>
+      <div className="mt-1.5 text-xs text-slate-800 dark:text-slate-100 font-semibold">
         {r.patient_id != null ? (
           <a
             href={`/patients/${r.patient_id}`}
-            style={{ color: T.blue600, textDecoration: "none" }}
+            className="text-blue-600 dark:text-blue-400 no-underline hover:underline"
             aria-label={`View patient ${r.patient_name ?? r.patient_id} — ${target}`}
           >
             {target}
@@ -432,10 +374,10 @@ function Card(props: {
         ) : target}
       </div>
       {r.patient_name && (
-        <div style={{ marginTop: 2, fontSize: 11, color: T.slate500 }}>{r.patient_name}</div>
+        <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{r.patient_name}</div>
       )}
 
-      <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+      <div className="mt-2 flex flex-col gap-1">
         <RaterLine label="Primary" userId={r.primary_rater_user_id} rating={r.primary_rating} />
         {r.secondary_rating && (
           <RaterLine label="Secondary" userId={r.secondary_rater_user_id} rating={r.secondary_rating} />
@@ -482,8 +424,8 @@ function RaterLine({
   rating: Rating;
 }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <span style={{ fontSize: 11, color: T.slate500 }}>
+    <div className="flex justify-between items-center">
+      <span className="text-[11px] text-slate-500 dark:text-slate-400">
         {label} {userId != null ? `· user ${userId}` : ""}
       </span>
       <RatingPill rating={rating} />
@@ -492,49 +434,32 @@ function RaterLine({
 }
 
 function RatingPill({ rating }: { rating: Rating }) {
-  const { bg, fg, label } =
-    rating === "accept"
-      ? { bg: T.emerald50, fg: T.emerald600, label: "Accept" }
-      : rating === "reject"
-      ? { bg: T.red50, fg: T.red600, label: "Reject" }
-      : { bg: T.amber50, fg: T.amber600, label: "Unclear" };
+  const styles: Record<Rating, string> = {
+    accept: "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400",
+    reject: "bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400",
+    unclear: "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400",
+  };
+  const labels: Record<Rating, string> = {
+    accept: "Accept",
+    reject: "Reject",
+    unclear: "Unclear",
+  };
   return (
-    <span
-      style={{
-        background: bg,
-        color: fg,
-        fontSize: 10,
-        fontWeight: 700,
-        padding: "2px 6px",
-        borderRadius: 4,
-      }}
-    >
-      {label}
+    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${styles[rating]}`}>
+      {labels[rating]}
     </span>
   );
 }
 
 function OutcomeBadge({ outcome }: { outcome: Outcome }) {
-  const { bg, fg } =
-    outcome === "accepted"
-      ? { bg: T.emerald50, fg: T.emerald600 }
-      : outcome === "rejected"
-      ? { bg: T.red50, fg: T.red600 }
-      : outcome === "escalated"
-      ? { bg: T.red50, fg: T.red600 }
-      : { bg: T.slate100, fg: T.slate600 };
+  const styles: Record<Outcome, string> = {
+    accepted: "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400",
+    rejected: "bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400",
+    escalated: "bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400",
+    pending: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300",
+  };
   return (
-    <span
-      style={{
-        background: bg,
-        color: fg,
-        fontSize: 10,
-        fontWeight: 700,
-        padding: "2px 6px",
-        borderRadius: 4,
-        textTransform: "uppercase",
-      }}
-    >
+    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${styles[outcome]}`}>
       {outcome}
     </span>
   );
@@ -554,29 +479,26 @@ function ActionRow(props: {
     <div
       role="group"
       aria-label={props.ariaLabel}
-      style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}
+      className="flex gap-1.5 mt-2.5 flex-wrap"
     >
       <ActionButton
         onClick={props.onAccept}
         disabled={props.disabled}
-        bg={T.emerald50}
-        fg={T.emerald600}
+        colorCls="bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400"
         icon={<CheckCircle2 size={12} />}
         label={props.acceptLabel}
       />
       <ActionButton
         onClick={props.onReject}
         disabled={props.disabled}
-        bg={T.red50}
-        fg={T.red600}
+        colorCls="bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400"
         icon={<XCircle size={12} />}
         label={props.rejectLabel}
       />
       <ActionButton
         onClick={props.onUnclear}
         disabled={props.disabled}
-        bg={T.amber50}
-        fg={T.amber600}
+        colorCls="bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400"
         icon={<HelpCircle size={12} />}
         label={props.unclearLabel ?? "Unclear"}
       />
@@ -587,8 +509,7 @@ function ActionRow(props: {
 function ActionButton(props: {
   onClick: () => void;
   disabled: boolean;
-  bg: string;
-  fg: string;
+  colorCls: string;
   icon: React.ReactNode;
   label: string;
 }) {
@@ -597,20 +518,7 @@ function ActionButton(props: {
       type="button"
       onClick={props.onClick}
       disabled={props.disabled}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-        background: props.bg,
-        color: props.fg,
-        border: "none",
-        fontSize: 11,
-        fontWeight: 700,
-        padding: "4px 8px",
-        borderRadius: 4,
-        cursor: props.disabled ? "not-allowed" : "pointer",
-        opacity: props.disabled ? 0.5 : 1,
-      }}
+      className={`inline-flex items-center gap-1 border-none text-[11px] font-bold px-2 py-1 rounded cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${props.colorCls}`}
     >
       {props.icon}
       {props.label}

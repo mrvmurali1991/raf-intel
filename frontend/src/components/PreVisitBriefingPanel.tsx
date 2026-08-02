@@ -12,9 +12,6 @@
  * Each card has a "Print huddle sheet" button that prints just that card
  * via a scoped print stylesheet. The empty-state UI is rendered when no
  * upcoming visits are returned.
- *
- * Design language matches the rest of the providers page (slate / blue /
- * emerald palette, inline styles, no Tailwind dependency).
  */
 import React, { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -27,37 +24,6 @@ import {
 } from "@/lib/api";
 
 type PreVisitHccStatus = PreVisitHcc["status"];
-
-// ---------------------------------------------------------------------------
-// Design tokens (mirrors providers page)
-// ---------------------------------------------------------------------------
-const T = {
-  white: "#FFFFFF",
-  slate900: "#0F172A",
-  slate700: "#334155",
-  slate600: "#475569",
-  slate500: "#64748B",
-  slate400: "#64748B",
-  slate300: "#CBD5E1",
-  slate200: "#E2E8F0",
-  slate100: "#F1F5F9",
-  slate50: "#F8FAFC",
-  blue700: "#1D4ED8",
-  blue600: "#2563EB",
-  blue100: "#DBEAFE",
-  blue50: "#EFF6FF",
-  emerald700: "#065F46",
-  emerald600: "#059669",
-  emerald100: "#D1FAE5",
-  emerald50: "#ECFDF5",
-  amber700: "#92400E",
-  amber600: "#D97706",
-  amber100: "#FEF3C7",
-  amber50: "#FFFBEB",
-  violet700: "#5B21B6",
-  violet100: "#EDE9FE",
-  violet50: "#F5F3FF",
-};
 
 // ---------------------------------------------------------------------------
 // Formatters
@@ -99,23 +65,23 @@ function formatVisitDate(date: string, time: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Status palette
+// Status palette — returns Tailwind class strings
 // ---------------------------------------------------------------------------
 
 function statusStyle(status: PreVisitHccStatus): {
-  bg: string;
-  fg: string;
+  bgClass: string;
+  fgClass: string;
   label: string;
 } {
   switch (status) {
     case "suspect":
-      return { bg: T.blue100, fg: T.blue700, label: "Suspect" };
+      return { bgClass: "bg-blue-100 dark:bg-blue-900", fgClass: "text-blue-700 dark:text-blue-300", label: "Suspect" };
     case "recapture":
-      return { bg: T.amber100, fg: T.amber700, label: "Recapture" };
+      return { bgClass: "bg-amber-100 dark:bg-amber-900", fgClass: "text-amber-700 dark:text-amber-300", label: "Recapture" };
     case "meat_weak":
-      return { bg: T.violet100, fg: T.violet700, label: "MEAT gap" };
+      return { bgClass: "bg-violet-100 dark:bg-violet-900", fgClass: "text-violet-700 dark:text-violet-300", label: "MEAT gap" };
     default:
-      return { bg: T.slate100, fg: T.slate700, label: status };
+      return { bgClass: "bg-slate-100 dark:bg-slate-800", fgClass: "text-slate-700 dark:text-slate-200", label: status };
   }
 }
 
@@ -140,14 +106,7 @@ export default function PreVisitBriefingPanel({
   });
 
   return (
-    <div
-      style={{
-        background: T.white,
-        border: `1px solid ${T.slate200}`,
-        borderRadius: 14,
-        padding: 20,
-      }}
-    >
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[14px] p-5">
       <Header
         days={days}
         count={q.data?.briefings?.length ?? 0}
@@ -165,7 +124,7 @@ export default function PreVisitBriefingPanel({
           {q.data.briefings.length === 0 ? (
             <EmptyState message={q.data.message ?? "No upcoming visits."} days={days} />
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="flex flex-col gap-3.5">
               {q.data.briefings.map((b) => (
                 <BriefingCard key={b.encounter_id} briefing={b} />
               ))}
@@ -216,55 +175,25 @@ function Header({
 }) {
   return (
     <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 16,
-      }}
-      className="pvb-no-print"
+      className="pvb-no-print flex items-center justify-between mb-4"
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div className="flex items-center gap-2.5">
         <div
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            background: T.blue50,
-            color: T.blue600,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
+          className="bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center"
+          style={{ width: 36, height: 36, borderRadius: 10 }}
         >
           <Calendar size={18} />
         </div>
         <div>
-          <div
-            style={{
-              fontSize: 15,
-              fontWeight: 700,
-              color: T.slate900,
-              lineHeight: 1.2,
-            }}
-          >
+          <div className="text-[15px] font-bold text-slate-900 dark:text-slate-50 leading-tight">
             Upcoming visits (next {days} day{days !== 1 ? "s" : ""})
           </div>
-          <div style={{ fontSize: 12, color: T.slate500, marginTop: 2 }}>
+          <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Top HCC gaps to address during each huddle
           </div>
         </div>
       </div>
-      <div
-        style={{
-          padding: "5px 10px",
-          background: T.slate100,
-          color: T.slate700,
-          borderRadius: 999,
-          fontSize: 12,
-          fontWeight: 600,
-        }}
-      >
+      <div className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-full text-xs font-semibold px-2.5 py-1">
         {loading ? "…" : count} briefing{count === 1 ? "" : "s"}
       </div>
     </div>
@@ -281,7 +210,6 @@ function BriefingCard({ briefing }: { briefing: PreVisitBriefing }) {
   function handlePrint() {
     if (!ref.current) return;
     ref.current.classList.add("pvb-print-target");
-    // setTimeout lets the class apply before the print dialog snapshots the DOM
     setTimeout(() => {
       window.print();
       ref.current?.classList.remove("pvb-print-target");
@@ -291,45 +219,15 @@ function BriefingCard({ briefing }: { briefing: PreVisitBriefing }) {
   return (
     <div
       ref={ref}
-      style={{
-        background: T.white,
-        border: `1px solid ${T.slate200}`,
-        borderRadius: 10,
-        padding: 16,
-      }}
+      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[10px] p-4"
     >
       {/* Patient + visit row */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 12,
-          marginBottom: 14,
-          paddingBottom: 14,
-          borderBottom: `1px solid ${T.slate100}`,
-        }}
-      >
+      <div className="flex items-start justify-between gap-3 mb-3.5 pb-3.5 border-b border-slate-100 dark:border-slate-800">
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div
-            style={{
-              fontSize: 16,
-              fontWeight: 700,
-              color: T.slate900,
-              marginBottom: 4,
-            }}
-          >
+          <div className="text-base font-bold text-slate-900 dark:text-slate-50 mb-1">
             {briefing.patient_name}
           </div>
-          <div
-            style={{
-              fontSize: 12,
-              color: T.slate500,
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 10,
-            }}
-          >
+          <div className="text-xs text-slate-500 dark:text-slate-400 flex flex-wrap gap-2.5">
             {briefing.dob && (
               <span>
                 DOB {briefing.dob}
@@ -340,28 +238,13 @@ function BriefingCard({ briefing }: { briefing: PreVisitBriefing }) {
             {briefing.mrn && <span>MRN {briefing.mrn}</span>}
           </div>
         </div>
-        <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: T.blue700,
-              marginBottom: 2,
-            }}
-          >
+        <div className="text-right shrink-0">
+          <div className="text-[13px] font-semibold text-blue-700 dark:text-blue-300 mb-0.5">
             {formatVisitDate(briefing.visit_date, briefing.visit_time ?? "")}
           </div>
           {briefing.encounter_reason && (
             <div
-              style={{
-                fontSize: 12,
-                color: T.slate600,
-                fontStyle: "italic",
-                maxWidth: 220,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
+              className="text-xs text-slate-600 dark:text-slate-300 italic max-w-[220px] overflow-hidden text-ellipsis whitespace-nowrap"
               title={briefing.encounter_reason}
             >
               CC: {briefing.encounter_reason}
@@ -372,19 +255,11 @@ function BriefingCard({ briefing }: { briefing: PreVisitBriefing }) {
 
       {/* Top HCCs */}
       {briefing.top_hccs.length === 0 ? (
-        <div
-          style={{
-            fontSize: 13,
-            color: T.slate500,
-            padding: "12px 0",
-            textAlign: "center",
-            fontStyle: "italic",
-          }}
-        >
+        <div className="text-[13px] text-slate-500 dark:text-slate-400 py-3 text-center italic">
           No open HCC gaps for this patient — code the visit as documented.
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="flex flex-col gap-2">
           {briefing.top_hccs.map((h, i) => (
             <HccRow key={`${h.hcc_code}-${i}`} hcc={h} />
           ))}
@@ -392,49 +267,20 @@ function BriefingCard({ briefing }: { briefing: PreVisitBriefing }) {
       )}
 
       {/* Footer: total + print */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginTop: 14,
-          paddingTop: 14,
-          borderTop: `1px solid ${T.slate100}`,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <Sparkles size={14} color={T.emerald600} />
-          <span style={{ fontSize: 12, color: T.slate600 }}>
+      <div className="flex items-center justify-between mt-3.5 pt-3.5 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex items-center gap-1.5">
+          <Sparkles size={14} className="text-emerald-600 dark:text-emerald-400" />
+          <span className="text-xs text-slate-600 dark:text-slate-300">
             Total potential
           </span>
-          <span
-            style={{
-              fontSize: 14,
-              fontWeight: 700,
-              color: T.emerald700,
-              marginLeft: 4,
-            }}
-          >
+          <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300 ml-1">
             {formatUSD(briefing.total_potential_dollars)}
           </span>
         </div>
         <button
           type="button"
           onClick={handlePrint}
-          className="pvb-no-print"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "6px 12px",
-            background: T.white,
-            color: T.slate700,
-            border: `1px solid ${T.slate300}`,
-            borderRadius: 8,
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
+          className="pvb-no-print flex items-center gap-1.5 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-semibold cursor-pointer px-3 py-1.5"
           aria-label={`Print huddle sheet for ${briefing.patient_name}`}
         >
           <Printer size={13} />
@@ -452,65 +298,24 @@ function BriefingCard({ briefing }: { briefing: PreVisitBriefing }) {
 function HccRow({ hcc }: { hcc: PreVisitHcc }) {
   const sty = statusStyle(hcc.status);
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "10px 12px",
-        background: T.slate50,
-        borderRadius: 10,
-        border: `1px solid ${T.slate100}`,
-      }}
-    >
+    <div className="flex items-center gap-2.5 bg-slate-50 dark:bg-slate-800 rounded-[10px] border border-slate-100 dark:border-slate-800 px-3 py-2.5">
       {/* Code chip */}
-      <div
-        style={{
-          padding: "3px 8px",
-          background: T.slate900,
-          color: T.white,
-          borderRadius: 6,
-          fontSize: 11,
-          fontWeight: 700,
-          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-          flexShrink: 0,
-        }}
-      >
+      <div className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-md text-[11px] font-bold font-mono shrink-0 px-2 py-0.5">
         HCC {hcc.hcc_code}
       </div>
 
       {/* Label + evidence */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
-          style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: T.slate900,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
+          className="text-[13px] font-semibold text-slate-900 dark:text-slate-50 overflow-hidden text-ellipsis whitespace-nowrap"
           title={hcc.hcc_label}
         >
           {hcc.hcc_label}
         </div>
-        <div
-          style={{
-            fontSize: 11,
-            color: T.slate500,
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            marginTop: 2,
-          }}
-        >
+        <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
           <FileText size={10} />
           <span
-            style={{
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
+            className="overflow-hidden text-ellipsis whitespace-nowrap"
             title={hcc.evidence_snippet ?? undefined}
           >
             {hcc.evidence_snippet}
@@ -520,34 +325,15 @@ function HccRow({ hcc }: { hcc: PreVisitHcc }) {
 
       {/* Status pill */}
       <div
-        style={{
-          padding: "3px 8px",
-          background: sty.bg,
-          color: sty.fg,
-          borderRadius: 999,
-          fontSize: 10,
-          fontWeight: 700,
-          textTransform: "uppercase",
-          letterSpacing: "0.04em",
-          flexShrink: 0,
-        }}
+        className={`${sty.bgClass} ${sty.fgClass} rounded-full text-[10px] font-bold uppercase tracking-wide shrink-0 px-2 py-0.5`}
       >
         {sty.label}
       </div>
 
       {/* $ pill */}
       <div
-        style={{
-          padding: "3px 8px",
-          background: T.emerald50,
-          color: T.emerald700,
-          borderRadius: 999,
-          fontSize: 11,
-          fontWeight: 700,
-          flexShrink: 0,
-          minWidth: 50,
-          textAlign: "center",
-        }}
+        className="bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded-full text-[11px] font-bold shrink-0 text-center px-2 py-0.5"
+        style={{ minWidth: 50 }}
         title={`Confidence ${(hcc.confidence * 100).toFixed(0)}%`}
       >
         {formatUSD(hcc.expected_dollars)}
@@ -562,31 +348,15 @@ function HccRow({ hcc }: { hcc: PreVisitHcc }) {
 
 function EmptyState({ message, days }: { message: string; days: number }) {
   return (
-    <div
-      style={{
-        padding: "32px 20px",
-        textAlign: "center",
-        background: T.slate50,
-        borderRadius: 10,
-        border: `1px dashed ${T.slate200}`,
-      }}
-    >
+    <div className="bg-slate-50 dark:bg-slate-800 rounded-[10px] border border-dashed border-slate-200 dark:border-slate-700 text-center px-5 py-8">
       <Calendar
         size={28}
-        color={T.slate400}
-        style={{ marginBottom: 10 }}
+        className="text-slate-500 dark:text-slate-400 mb-2.5 mx-auto"
       />
-      <div
-        style={{
-          fontSize: 14,
-          fontWeight: 600,
-          color: T.slate700,
-          marginBottom: 4,
-        }}
-      >
+      <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">
         No upcoming visits in next {days} day{days !== 1 ? "s" : ""}
       </div>
-      <div style={{ fontSize: 12, color: T.slate500, lineHeight: 1.5 }}>
+      <div className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
         {message ||
           "When new visits are scheduled in OpenEMR, huddle cards will appear here."}
         <br />
@@ -598,14 +368,7 @@ function EmptyState({ message, days }: { message: string; days: number }) {
 
 function LoadingState() {
   return (
-    <div
-      style={{
-        padding: 32,
-        textAlign: "center",
-        color: T.slate500,
-        fontSize: 13,
-      }}
-    >
+    <div className="p-8 text-center text-slate-500 dark:text-slate-400 text-[13px]">
       Loading upcoming visits…
     </div>
   );
@@ -613,30 +376,13 @@ function LoadingState() {
 
 function ErrorState({ message }: { message: string }) {
   return (
-    <div
-      style={{
-        padding: 20,
-        background: T.amber50,
-        border: `1px solid ${T.amber100}`,
-        borderRadius: 10,
-        display: "flex",
-        gap: 10,
-        alignItems: "flex-start",
-      }}
-    >
-      <AlertCircle size={16} color={T.amber600} style={{ flexShrink: 0 }} />
+    <div className="bg-amber-50 dark:bg-amber-950 border border-amber-100 dark:border-amber-900 rounded-[10px] flex gap-2.5 items-start p-5">
+      <AlertCircle size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />
       <div>
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: T.amber700,
-            marginBottom: 2,
-          }}
-        >
+        <div className="text-[13px] font-semibold text-amber-700 dark:text-amber-300 mb-0.5">
           Pre-visit briefing unavailable
         </div>
-        <div style={{ fontSize: 12, color: T.slate600 }}>{message}</div>
+        <div className="text-xs text-slate-600 dark:text-slate-300">{message}</div>
       </div>
     </div>
   );

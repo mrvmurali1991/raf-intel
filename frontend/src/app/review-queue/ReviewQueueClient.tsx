@@ -205,6 +205,7 @@ export default function ReviewQueueClient() {
   const [tab, setTab] = useState<ItemKind>("hcc_candidate");
   const [editing, setEditing] = useState<{ id: string; icd10: string } | null>(null);
   const [sortBy, setSortBy] = useState<SortBy>("deadline");
+  const [search, setSearch] = useState("");
   const [pendingAccept, setPendingAccept] = useState<ReviewItem | null>(null);
 
   const { data, isLoading, isError } = useQuery({
@@ -257,7 +258,17 @@ export default function ReviewQueueClient() {
     router.push(`/patients/${it.patient_id}?${q.toString()}`);
   };
 
-  const items = data?.items ?? [];
+  const rawItems = data?.items ?? [];
+  const items = useMemo(() => {
+    if (!search.trim()) return rawItems;
+    const s = search.toLowerCase();
+    return rawItems.filter((it) =>
+      (it.patient_name || "").toLowerCase().includes(s) ||
+      (it.icd10 || "").toLowerCase().includes(s) ||
+      (it.hcc != null && `hcc ${it.hcc}`.includes(s)) ||
+      (it.condition || "").toLowerCase().includes(s)
+    );
+  }, [rawItems, search]);
   const hasCutoff = items.some((it) => it.days_to_cutoff != null);
   const hasDollars = items.some((it) => it.expected_dollar_impact != null);
 
@@ -344,6 +355,24 @@ export default function ReviewQueueClient() {
             </button>
           );
         })}
+      </div>
+
+      {/* Search */}
+      <div style={{ marginBottom: 16 }}>
+        <input
+          type="text"
+          placeholder="Search by patient, ICD, or HCC..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          aria-label="Search review queue"
+          style={{
+            width: "100%", maxWidth: 360, height: 36,
+            padding: "0 12px", fontSize: 13,
+            border: `1px solid ${C.border}`, borderRadius: 8,
+            backgroundColor: C.bgCard, color: C.text,
+            fontFamily: FONT_SYS,
+          }}
+        />
       </div>
 
       {isError && (
@@ -446,9 +475,13 @@ export default function ReviewQueueClient() {
         {!isLoading && !isError && items.length === 0 && (
           <div style={{ padding: 56, textAlign: "center" }}>
             <FileSearch size={30} color={C.brand} aria-hidden="true" />
-            <div style={{ marginTop: 10, fontWeight: 700 }}>Queue is empty</div>
+            <div style={{ marginTop: 10, fontWeight: 700 }}>
+              {search.trim() ? "No matching items" : "Queue is empty"}
+            </div>
             <div style={{ fontSize: 13, color: C.textSubtle }}>
-              No open items in this category. All candidates have been reviewed.
+              {search.trim()
+                ? "No items match your search. Try a different term."
+                : "No open items in this category. All candidates have been reviewed."}
             </div>
           </div>
         )}

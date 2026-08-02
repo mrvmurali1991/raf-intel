@@ -14,7 +14,6 @@
 
 import React, { useCallback, useMemo, useState } from "react";
 import api from "@/lib/api";
-import { tokens } from "@/styles/tokens";
 import WorkflowProgressBar from "@/components/WorkflowProgressBar";
 import {
   FileText,
@@ -52,60 +51,6 @@ interface ValidatorBlock {
   }>;
 }
 
-const T = {
-  bg: tokens.slate50,
-  white: tokens.white,
-  border: tokens.slate200,
-  text: tokens.slate900,
-  muted: tokens.slate600,
-  primary: tokens.primary || "#2563EB",
-  danger: tokens.danger || "#DC2626",
-  warning: "#D97706",
-  success: tokens.success || "#16A34A",
-};
-
-const card: React.CSSProperties = {
-  background: T.white,
-  border: `1px solid ${T.border}`,
-  borderRadius: 10,
-  padding: 20,
-  marginBottom: 16,
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: 12,
-  fontWeight: 600,
-  color: T.muted,
-  marginBottom: 4,
-  textTransform: "uppercase",
-  letterSpacing: 0.4,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 12px",
-  border: `1px solid ${T.border}`,
-  borderRadius: 8,
-  fontSize: 14,
-  color: T.text,
-  background: T.white,
-};
-
-const primaryButton: React.CSSProperties = {
-  background: T.primary,
-  color: T.white,
-  border: "none",
-  borderRadius: 8,
-  padding: "10px 18px",
-  fontWeight: 600,
-  fontSize: 14,
-  cursor: "pointer",
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 8,
-};
-
 function parsePatientIds(raw: string): number[] {
   return Array.from(
     new Set(
@@ -123,38 +68,31 @@ export default function EdiGenerationPage(): React.JSX.Element {
   const [tab, setTab] = useState<TabKey>("837");
 
   return (
-    <div style={{ minHeight: "100vh", background: T.bg, padding: 24 }}>
-      <div style={{ maxWidth: 960, margin: "0 auto" }}>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-6">
+      <div className="max-w-[960px] mx-auto">
         <WorkflowProgressBar currentStage="edi-generation" />
-        <header style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: T.text, margin: 0 }}>
+        <header className="mb-5">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-50 m-0">
             EDI Generation
           </h1>
-          <p style={{ color: T.muted, marginTop: 6 }}>
+          <p className="text-slate-600 dark:text-slate-300 mt-1.5 text-sm">
             Outbound X12 5010 transactions — 837 (encounter) and 834
             (enrollment maintenance).
           </p>
         </header>
 
         {/* Tab bar */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 16 }}>
+        <div className="flex gap-1 mb-4">
           {(["837", "834"] as const).map((k) => (
             <button
               key={k}
               type="button"
               onClick={() => setTab(k)}
-              style={{
-                padding: "10px 16px",
-                background: tab === k ? T.primary : T.white,
-                color: tab === k ? T.white : T.text,
-                border: `1px solid ${tab === k ? T.primary : T.border}`,
-                borderRadius: 8,
-                fontWeight: 600,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-              }}
+              className={`px-4 py-2.5 rounded-lg font-semibold cursor-pointer inline-flex items-center gap-2 border ${
+                tab === k
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 border-slate-200 dark:border-slate-700"
+              }`}
             >
               <FileText size={16} />
               {k === "837" ? "837 Encounter" : "834 Enrollment"}
@@ -166,7 +104,7 @@ export default function EdiGenerationPage(): React.JSX.Element {
           <section aria-labelledby="edi-837-heading">
             <h2
               id="edi-837-heading"
-              style={{ fontSize: 16, fontWeight: 700, color: T.text, margin: "0 0 16px" }}
+              className="text-base font-bold text-slate-900 dark:text-slate-50 mb-4"
             >
               837 Encounter Generation
             </h2>
@@ -176,7 +114,7 @@ export default function EdiGenerationPage(): React.JSX.Element {
           <section aria-labelledby="edi-834-heading">
             <h2
               id="edi-834-heading"
-              style={{ fontSize: 16, fontWeight: 700, color: T.text, margin: "0 0 16px" }}
+              className="text-base font-bold text-slate-900 dark:text-slate-50 mb-4"
             >
               834 Enrollment Generation
             </h2>
@@ -263,10 +201,10 @@ function Generate837(): React.JSX.Element {
   );
 
   return (
-    <div style={card}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[10px] p-5 mb-4">
+      <div className="grid grid-cols-2 gap-4">
         <div>
-          <label style={labelStyle} htmlFor="payment_year">
+          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1 uppercase tracking-wide" htmlFor="payment_year">
             Payment Year
           </label>
           <input
@@ -276,26 +214,26 @@ function Generate837(): React.JSX.Element {
             max={2030}
             value={paymentYear}
             onChange={(e) => setPaymentYear(Number(e.target.value))}
-            style={inputStyle}
+            className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-50 bg-white dark:bg-slate-800"
           />
         </div>
         <div>
-          <label style={labelStyle}>Validator Gate</label>
-          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1 uppercase tracking-wide">Validator Gate</label>
+          <label className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={runValidator}
               onChange={(e) => setRunValidator(e.target.checked)}
             />
-            <span style={{ fontSize: 13, color: T.text }}>
+            <span className="text-[13px] text-slate-900 dark:text-slate-50">
               Run R1-R6 pre-submission validator
             </span>
           </label>
         </div>
       </div>
 
-      <div style={{ marginTop: 16 }}>
-        <label style={labelStyle} htmlFor="patient_ids">
+      <div className="mt-4">
+        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1 uppercase tracking-wide" htmlFor="patient_ids">
           Patient IDs (comma or space separated)
         </label>
         <textarea
@@ -304,22 +242,19 @@ function Generate837(): React.JSX.Element {
           value={patientIdsRaw}
           onChange={(e) => setPatientIdsRaw(e.target.value)}
           placeholder="e.g. 3, 4, 5"
-          style={{ ...inputStyle, fontFamily: "monospace" }}
+          className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-50 bg-white dark:bg-slate-800 font-mono"
         />
-        <div style={{ fontSize: 12, color: T.muted, marginTop: 4 }}>
+        <div className="text-xs text-slate-600 dark:text-slate-300 mt-1">
           {patientIds.length} patient{patientIds.length === 1 ? "" : "s"} parsed
         </div>
       </div>
 
-      <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
+      <div className="mt-4 flex justify-end">
         <button
           type="button"
           onClick={() => submit(false)}
           disabled={busy || patientIds.length === 0}
-          style={{
-            ...primaryButton,
-            opacity: busy || patientIds.length === 0 ? 0.6 : 1,
-          }}
+          className="bg-blue-600 text-white border-none rounded-lg px-[18px] py-2.5 font-semibold text-sm cursor-pointer inline-flex items-center gap-2 disabled:opacity-60"
         >
           {busy ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
           Generate 837
@@ -327,16 +262,8 @@ function Generate837(): React.JSX.Element {
       </div>
 
       {error && (
-        <div
-          style={{
-            ...card,
-            background: "#FEF2F2",
-            borderColor: T.danger,
-            marginTop: 16,
-            marginBottom: 0,
-          }}
-        >
-          <div style={{ color: T.danger, display: "flex", alignItems: "center", gap: 8 }}>
+        <div className="bg-red-50 dark:bg-red-950 border border-red-600 dark:border-red-500 rounded-[10px] p-5 mt-4">
+          <div className="text-red-600 dark:text-red-400 flex items-center gap-2">
             <AlertTriangle size={16} /> {error}
           </div>
         </div>
@@ -397,10 +324,10 @@ function Generate834(): React.JSX.Element {
   }, [patientIds, planYear]);
 
   return (
-    <div style={card}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[10px] p-5 mb-4">
+      <div className="grid grid-cols-2 gap-4">
         <div>
-          <label style={labelStyle} htmlFor="plan_year">Plan Year</label>
+          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1 uppercase tracking-wide" htmlFor="plan_year">Plan Year</label>
           <input
             id="plan_year"
             type="number"
@@ -408,13 +335,13 @@ function Generate834(): React.JSX.Element {
             max={2030}
             value={planYear}
             onChange={(e) => setPlanYear(Number(e.target.value))}
-            style={inputStyle}
+            className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-50 bg-white dark:bg-slate-800"
           />
         </div>
       </div>
 
-      <div style={{ marginTop: 16 }}>
-        <label style={labelStyle} htmlFor="patient_ids_834">
+      <div className="mt-4">
+        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1 uppercase tracking-wide" htmlFor="patient_ids_834">
           Patient IDs to enroll
         </label>
         <textarea
@@ -423,22 +350,19 @@ function Generate834(): React.JSX.Element {
           value={patientIdsRaw}
           onChange={(e) => setPatientIdsRaw(e.target.value)}
           placeholder="e.g. 3, 4, 5"
-          style={{ ...inputStyle, fontFamily: "monospace" }}
+          className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-50 bg-white dark:bg-slate-800 font-mono"
         />
-        <div style={{ fontSize: 12, color: T.muted, marginTop: 4 }}>
+        <div className="text-xs text-slate-600 dark:text-slate-300 mt-1">
           {patientIds.length} patient{patientIds.length === 1 ? "" : "s"} parsed
         </div>
       </div>
 
-      <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
+      <div className="mt-4 flex justify-end">
         <button
           type="button"
           onClick={submit}
           disabled={busy || patientIds.length === 0}
-          style={{
-            ...primaryButton,
-            opacity: busy || patientIds.length === 0 ? 0.6 : 1,
-          }}
+          className="bg-blue-600 text-white border-none rounded-lg px-[18px] py-2.5 font-semibold text-sm cursor-pointer inline-flex items-center gap-2 disabled:opacity-60"
         >
           {busy ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
           Generate 834
@@ -446,16 +370,8 @@ function Generate834(): React.JSX.Element {
       </div>
 
       {error && (
-        <div
-          style={{
-            ...card,
-            background: "#FEF2F2",
-            borderColor: T.danger,
-            marginTop: 16,
-            marginBottom: 0,
-          }}
-        >
-          <div style={{ color: T.danger, display: "flex", alignItems: "center", gap: 8 }}>
+        <div className="bg-red-50 dark:bg-red-950 border border-red-600 dark:border-red-500 rounded-[10px] p-5 mt-4">
+          <div className="text-red-600 dark:text-red-400 flex items-center gap-2">
             <AlertTriangle size={16} /> {error}
           </div>
         </div>
@@ -483,28 +399,20 @@ function OverridePrompt(props: {
   const { block, confirm, setConfirm, reason, setReason, onForce, onCancel, busy } = props;
   const ready = confirm.trim() === "OVERRIDE" && reason.trim().length >= 10;
   return (
-    <div
-      style={{
-        ...card,
-        background: "#FFFBEB",
-        borderColor: T.warning,
-        marginTop: 16,
-        marginBottom: 0,
-      }}
-    >
-      <h3 style={{ color: T.warning, fontSize: 16, margin: 0, display: "flex", gap: 8, alignItems: "center" }}>
+    <div className="bg-amber-50 dark:bg-amber-950 border border-amber-600 dark:border-amber-500 rounded-[10px] p-5 mt-4">
+      <h3 className="text-amber-600 dark:text-amber-400 text-base font-bold m-0 flex gap-2 items-center">
         <AlertTriangle size={18} /> HIGH-severity findings — override required
       </h3>
-      <p style={{ color: T.text, fontSize: 14, marginTop: 8 }}>
+      <p className="text-slate-900 dark:text-slate-50 text-sm mt-2">
         {block.high_severity_total} HIGH-severity issue
         {block.high_severity_total === 1 ? "" : "s"} blocked these patient IDs:{" "}
         <code>{block.failed_patient_ids.join(", ")}</code>
       </p>
-      <details style={{ marginTop: 8 }}>
-        <summary style={{ cursor: "pointer", fontSize: 13, color: T.muted }}>
+      <details className="mt-2">
+        <summary className="cursor-pointer text-[13px] text-slate-600 dark:text-slate-300">
           View findings
         </summary>
-        <ul style={{ fontSize: 13, color: T.text }}>
+        <ul className="text-[13px] text-slate-900 dark:text-slate-50">
           {block.per_patient
             .filter((p) => p.findings && p.findings.length)
             .map((p) => (
@@ -521,39 +429,32 @@ function OverridePrompt(props: {
             ))}
         </ul>
       </details>
-      <div style={{ marginTop: 12 }}>
-        <label style={labelStyle} htmlFor="override_reason">Override Reason (≥ 10 chars)</label>
+      <div className="mt-3">
+        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1 uppercase tracking-wide" htmlFor="override_reason">Override Reason (≥ 10 chars)</label>
         <textarea
           id="override_reason"
           rows={2}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          style={inputStyle}
+          className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-50 bg-white dark:bg-slate-800"
         />
       </div>
-      <div style={{ marginTop: 12 }}>
-        <label style={labelStyle} htmlFor="override_typed">
+      <div className="mt-3">
+        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1 uppercase tracking-wide" htmlFor="override_typed">
           Type <code>OVERRIDE</code> to confirm
         </label>
         <input
           id="override_typed"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
-          style={inputStyle}
+          className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-50 bg-white dark:bg-slate-800"
         />
       </div>
-      <div style={{ marginTop: 12, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+      <div className="mt-3 flex gap-2 justify-end">
         <button
           type="button"
           onClick={onCancel}
-          style={{
-            background: T.white,
-            color: T.text,
-            border: `1px solid ${T.border}`,
-            borderRadius: 8,
-            padding: "8px 14px",
-            cursor: "pointer",
-          }}
+          className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 border border-slate-200 dark:border-slate-700 rounded-lg px-3.5 py-2 cursor-pointer"
         >
           Cancel
         </button>
@@ -561,11 +462,7 @@ function OverridePrompt(props: {
           type="button"
           onClick={onForce}
           disabled={!ready || busy}
-          style={{
-            ...primaryButton,
-            background: T.danger,
-            opacity: !ready || busy ? 0.6 : 1,
-          }}
+          className="bg-red-600 text-white border-none rounded-lg px-4 py-2.5 font-semibold text-sm cursor-pointer inline-flex items-center gap-2 disabled:opacity-60"
         >
           {busy ? <Loader2 size={16} className="animate-spin" /> : <AlertTriangle size={16} />}
           Override &amp; Generate
@@ -577,25 +474,17 @@ function OverridePrompt(props: {
 
 function ResultPanel({ result }: { result: GenerateResponse }): React.JSX.Element {
   return (
-    <div
-      style={{
-        ...card,
-        background: "#F0FDF4",
-        borderColor: T.success,
-        marginTop: 16,
-        marginBottom: 0,
-      }}
-    >
-      <h3 style={{ color: T.success, fontSize: 16, margin: 0, display: "flex", gap: 8, alignItems: "center" }}>
+    <div className="bg-green-50 dark:bg-green-950 border border-green-600 dark:border-green-500 rounded-[10px] p-5 mt-4">
+      <h3 className="text-green-600 dark:text-green-400 text-base font-bold m-0 flex gap-2 items-center">
         <CheckCircle size={18} /> {result.transaction} generated
       </h3>
-      <dl style={{ fontSize: 13, color: T.text, marginTop: 12 }}>
+      <dl className="text-[13px] text-slate-900 dark:text-slate-50 mt-3">
         <div><strong>File ID:</strong> <code>{result.file_id}</code></div>
         <div><strong>Records:</strong> {result.total_encounters}</div>
         <div><strong>Size:</strong> {result.file_size.toLocaleString()} bytes</div>
-        <div><strong>SHA-256:</strong> <code style={{ fontSize: 11 }}>{result.sha256}</code></div>
+        <div><strong>SHA-256:</strong> <code className="text-[11px]">{result.sha256}</code></div>
         {result.override_applied && (
-          <div style={{ color: T.warning }}>
+          <div className="text-amber-600 dark:text-amber-400">
             <strong>Override applied:</strong> HIGH-severity gate bypassed.
           </div>
         )}
@@ -609,18 +498,7 @@ function ResultPanel({ result }: { result: GenerateResponse }): React.JSX.Elemen
       <a
         href={result.download_url}
         download
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 8,
-          marginTop: 12,
-          padding: "10px 18px",
-          background: T.success,
-          color: T.white,
-          borderRadius: 8,
-          fontWeight: 600,
-          textDecoration: "none",
-        }}
+        className="inline-flex items-center gap-2 mt-3 px-[18px] py-2.5 bg-green-600 text-white rounded-lg font-semibold no-underline"
       >
         <Download size={16} /> Download {result.transaction} file
       </a>

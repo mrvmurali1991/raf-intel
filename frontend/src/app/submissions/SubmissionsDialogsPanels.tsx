@@ -9,7 +9,6 @@
 import React, { useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
-import { tokens } from "@/styles/tokens";
 import {
   Send,
   AlertCircle,
@@ -27,48 +26,6 @@ import {
   XCircle,
   AlertTriangle,
 } from "lucide-react";
-
-// ─────────────────────────────────────────────
-// Local design tokens
-// ─────────────────────────────────────────────
-
-const T = {
-  white:      tokens.white,
-  slate50:    tokens.slate50,
-  slate100:   tokens.slate100,
-  slate200:   tokens.slate200,
-  slate300:   tokens.slate300,
-  slate400:   tokens.slate400,
-  slate500:   tokens.slate500,
-  slate600:   tokens.slate600,
-  slate700:   tokens.slate700,
-  slate800:   tokens.slate800,
-  slate900:   tokens.slate900,
-  blue50:     tokens.primarySoft,
-  blue100:    "rgba(37,99,235,0.12)",
-  blue500:    tokens.infoBlue,
-  blue600:    tokens.primary,
-  blue700:    tokens.primaryDark,
-  emerald50:  tokens.successSoft,
-  emerald100: tokens.emerald100,
-  emerald500: tokens.success,
-  emerald600: tokens.riskLow,
-  amber50:    tokens.warningSoft,
-  amber100:   tokens.warningSoft,
-  amber500:   tokens.warningStrong,
-  amber600:   tokens.riskMedium,
-  red50:      tokens.riskHighSoft,
-  red100:     tokens.dangerSoft,
-  red500:     tokens.riskHigh,
-  red600:     tokens.danger,
-  violet50:   "rgba(139,92,246,0.08)",
-  violet500:  tokens.accentPurple,
-  violet600:  "rgba(124,58,237,1)",
-  gray100:    tokens.slate100,
-  gray200:    tokens.slate200,
-  gray400:    tokens.slate400,
-  gray500:    tokens.slate500,
-};
 
 // ─────────────────────────────────────────────
 // Local types
@@ -169,24 +126,24 @@ async function fetchBatchDetail(batchId: string): Promise<BatchDetail> {
 }
 
 // ─────────────────────────────────────────────
-// Local badge helpers (needed inside this file)
+// Local badge helpers
 // ─────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: BatchStatus }) {
-  const map: Record<BatchStatus, { label: string; bg: string; color: string; dot: string; icon: React.ReactNode }> = {
-    draft:      { label: "Draft",         bg: T.slate100,           color: T.slate600,  dot: T.slate400,  icon: null },
-    validating: { label: "Validating",    bg: T.blue100,            color: T.blue700,   dot: T.blue500,   icon: <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} /> },
-    validated:  { label: "Validated",     bg: T.emerald50,          color: T.emerald600, dot: T.emerald500, icon: <CheckCircle size={11} /> },
-    submitted:  { label: "Submitted",     bg: `${T.emerald500}18`,  color: T.emerald600, dot: T.emerald500, icon: <Send size={11} /> },
-    accepted:   { label: "Accepted",      bg: T.emerald100,         color: T.emerald600, dot: T.emerald500, icon: <CheckCircle size={11} /> },
-    rejected:   { label: "Rejected",      bg: T.red100,             color: T.red600,    dot: T.red500,    icon: <XCircle size={11} /> },
-    partial:    { label: "Partial Accept",bg: T.amber100,           color: T.amber600,  dot: T.amber500,  icon: <AlertCircle size={11} /> },
-    error:      { label: "Error",         bg: T.red50,              color: T.red500,    dot: T.red500,    icon: <XCircle size={11} /> },
+  const map: Record<BatchStatus, { label: string; cls: string; dotCls: string; icon: React.ReactNode }> = {
+    draft:      { label: "Draft",          cls: "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300",           dotCls: "bg-slate-400",          icon: null },
+    validating: { label: "Validating",     cls: "bg-blue-600/10 text-blue-700 dark:text-blue-300",                             dotCls: "bg-blue-500",           icon: <Loader2 size={11} className="animate-spin" /> },
+    validated:  { label: "Validated",      cls: "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400",    dotCls: "bg-emerald-500",        icon: <CheckCircle size={11} /> },
+    submitted:  { label: "Submitted",      cls: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",                    dotCls: "bg-emerald-500",        icon: <Send size={11} /> },
+    accepted:   { label: "Accepted",       cls: "bg-emerald-100 dark:bg-emerald-900 text-emerald-600 dark:text-emerald-400",   dotCls: "bg-emerald-500",        icon: <CheckCircle size={11} /> },
+    rejected:   { label: "Rejected",       cls: "bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400",                   dotCls: "bg-red-500",            icon: <XCircle size={11} /> },
+    partial:    { label: "Partial Accept", cls: "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400",            dotCls: "bg-amber-500",          icon: <AlertCircle size={11} /> },
+    error:      { label: "Error",          cls: "bg-red-50 dark:bg-red-950 text-red-500 dark:text-red-400",                    dotCls: "bg-red-500",            icon: <XCircle size={11} /> },
   };
-  const cfg = map[status] ?? { label: status, bg: T.gray100, color: T.gray500, dot: T.gray400, icon: null };
+  const cfg = map[status] ?? { label: status, cls: "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400", dotCls: "bg-slate-400", icon: null };
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600, backgroundColor: cfg.bg, color: cfg.color, whiteSpace: "nowrap", border: `1px solid ${cfg.color}20` }}>
-      <span style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: cfg.dot, boxShadow: `0 0 6px ${cfg.dot}60`, flexShrink: 0 }} />
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap border border-current/10 ${cfg.cls}`}>
+      <span className={`w-[7px] h-[7px] rounded-full shrink-0 ${cfg.dotCls}`} />
       {cfg.icon}
       {cfg.label}
     </span>
@@ -196,7 +153,11 @@ function StatusBadge({ status }: { status: BatchStatus }) {
 function TypeBadge({ type }: { type: SubmissionType }) {
   const isRAPS = type === "RAPS";
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", padding: "3px 9px", borderRadius: 6, fontSize: 11, fontWeight: 700, backgroundColor: isRAPS ? T.violet50 : T.blue50, color: isRAPS ? T.violet600 : T.blue700, border: `1px solid ${isRAPS ? T.violet500 + "33" : T.blue500 + "33"}`, letterSpacing: "0.04em" }}>
+    <span className={`inline-flex items-center px-2 py-[3px] rounded-md text-[11px] font-bold tracking-wide border ${
+      isRAPS
+        ? "bg-violet-50 dark:bg-violet-950 text-violet-600 dark:text-violet-400 border-violet-500/20"
+        : "bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-500/20"
+    }`}>
       {type}
     </span>
   );
@@ -204,28 +165,28 @@ function TypeBadge({ type }: { type: SubmissionType }) {
 
 function ValidationBadge({ status }: { status: "pass" | "warning" | "error" }) {
   const map = {
-    pass:    { label: "Pass",    bg: T.emerald50, color: T.emerald600 },
-    warning: { label: "Warning", bg: T.amber50,   color: T.amber600 },
-    error:   { label: "Error",   bg: T.red50,     color: T.red500 },
+    pass:    { label: "Pass",    cls: "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400" },
+    warning: { label: "Warning", cls: "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400" },
+    error:   { label: "Error",   cls: "bg-red-50 dark:bg-red-950 text-red-500 dark:text-red-400" },
   };
   const cfg = map[status];
   return (
-    <span style={{ padding: "2px 7px", borderRadius: 4, fontSize: 11, fontWeight: 600, backgroundColor: cfg.bg, color: cfg.color }}>
+    <span className={`px-[7px] py-[2px] rounded text-[11px] font-semibold ${cfg.cls}`}>
       {cfg.label}
     </span>
   );
 }
 
 function CmsStatusBadge({ status }: { status: "accepted" | "rejected" | "pending" | null }) {
-  if (!status) return <span style={{ color: T.slate400, fontSize: 12 }}>—</span>;
+  if (!status) return <span className="text-slate-400 dark:text-slate-500 text-xs">—</span>;
   const map = {
-    accepted: { label: "Accepted", color: T.emerald600, bg: T.emerald50 },
-    rejected: { label: "Rejected", color: T.red600,     bg: T.red50 },
-    pending:  { label: "Pending",  color: T.amber600,   bg: T.amber50 },
+    accepted: { label: "Accepted", cls: "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400" },
+    rejected: { label: "Rejected", cls: "bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400" },
+    pending:  { label: "Pending",  cls: "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400" },
   };
   const cfg = map[status];
   return (
-    <span style={{ padding: "2px 7px", borderRadius: 4, fontSize: 11, fontWeight: 600, backgroundColor: cfg.bg, color: cfg.color }}>
+    <span className={`px-[7px] py-[2px] rounded text-[11px] font-semibold ${cfg.cls}`}>
       {cfg.label}
     </span>
   );
@@ -289,36 +250,39 @@ export function GenerateDialog({ onClose, onSuccess }: GenerateDialogProps) {
   }
 
   return (
-    <div
-      style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}
-      role="dialog" aria-modal="true" aria-labelledby="gen-dialog-title"
-    >
-      <div style={{ backgroundColor: T.white, borderRadius: 14, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
+      role="dialog" aria-modal="true" aria-labelledby="gen-dialog-title">
+      <div className="bg-white dark:bg-slate-800 rounded-[14px] w-full max-w-[480px] shadow-2xl overflow-hidden">
         {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px", borderBottom: `1px solid ${T.slate200}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: `${T.blue600}1A`, display: "flex", alignItems: "center", justifyContent: "center", color: T.blue600 }}>
+        <div className="flex items-center justify-between px-5 py-[18px] border-b border-slate-200 dark:border-slate-700">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-[10px] bg-blue-600/10 flex items-center justify-center text-blue-600 dark:text-blue-400">
               <Send size={18} />
             </div>
             <div>
-              <h2 id="gen-dialog-title" style={{ margin: 0, fontSize: 16, fontWeight: 700, color: T.slate900 }}>Generate Submission</h2>
-              <p style={{ margin: "2px 0 0", fontSize: 12, color: T.slate500 }}>Create a new CMS submission batch</p>
+              <h2 id="gen-dialog-title" className="m-0 text-base font-bold text-slate-900 dark:text-slate-50">Generate Submission</h2>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Create a new CMS submission batch</p>
             </div>
           </div>
-          <button onClick={onClose} disabled={generating} aria-label="Close dialog" style={{ background: "none", border: `1px solid ${T.slate200}`, borderRadius: 8, width: 32, height: 32, cursor: generating ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: T.slate500 }}>
+          <button onClick={onClose} disabled={generating} aria-label="Close dialog"
+            className="bg-transparent border border-slate-200 dark:border-slate-700 rounded-lg w-8 h-8 flex items-center justify-center text-slate-500 dark:text-slate-400 disabled:cursor-not-allowed cursor-pointer">
             <X size={16} />
           </button>
         </div>
 
         {/* Body */}
-        <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div className="px-6 py-5 flex flex-col gap-4">
           {/* Submission Type */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: T.slate700 }}>Submission Type</label>
-            <div style={{ display: "flex", gap: 8 }}>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-200">Submission Type</label>
+            <div className="flex gap-2">
               {(["RAPS", "EDPS"] as SubmissionType[]).map((t) => (
                 <button key={t} onClick={() => setSubmissionType(t)} disabled={generating}
-                  style={{ flex: 1, padding: "10px 16px", borderRadius: 8, border: `2px solid ${submissionType === t ? T.blue600 : T.slate200}`, backgroundColor: submissionType === t ? T.blue50 : T.white, color: submissionType === t ? T.blue700 : T.slate600, fontWeight: 700, fontSize: 14, cursor: generating ? "not-allowed" : "pointer", transition: "all 0.12s" }}>
+                  className={`flex-1 px-4 py-2.5 rounded-lg font-bold text-sm transition-all disabled:cursor-not-allowed cursor-pointer border-2 ${
+                    submissionType === t
+                      ? "border-blue-600 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300"
+                      : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                  }`}>
                   {t}
                 </button>
               ))}
@@ -326,21 +290,25 @@ export function GenerateDialog({ onClose, onSuccess }: GenerateDialogProps) {
           </div>
 
           {/* Payment Year */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: T.slate700 }}>Payment Year</label>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-200">Payment Year</label>
             <select value={paymentYear} onChange={(e) => setPaymentYear(Number(e.target.value))} disabled={generating}
-              style={{ padding: "9px 12px", borderRadius: 8, border: `1px solid ${T.slate200}`, fontSize: 14, color: T.slate800, backgroundColor: T.white, cursor: generating ? "not-allowed" : "pointer" }}>
+              className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 disabled:cursor-not-allowed cursor-pointer">
               {years.map((y) => <option key={y} value={y}>PY{y}</option>)}
             </select>
           </div>
 
           {/* Sweep Type */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: T.slate700 }}>Sweep Type</label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-200">Sweep Type</label>
+            <div className="grid grid-cols-2 gap-2">
               {(["Initial", "Mid-Year", "Final", "Supplemental"] as SweepType[]).map((s) => (
                 <button key={s} onClick={() => setSweepType(s)} disabled={generating}
-                  style={{ padding: "8px 12px", borderRadius: 8, border: `2px solid ${sweepType === s ? T.blue600 : T.slate200}`, backgroundColor: sweepType === s ? T.blue50 : T.white, color: sweepType === s ? T.blue700 : T.slate600, fontWeight: 600, fontSize: 13, cursor: generating ? "not-allowed" : "pointer", transition: "all 0.12s" }}>
+                  className={`px-3 py-2 rounded-lg font-semibold text-[13px] transition-all disabled:cursor-not-allowed cursor-pointer border-2 ${
+                    sweepType === s
+                      ? "border-blue-600 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300"
+                      : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                  }`}>
                   {s}
                 </button>
               ))}
@@ -349,31 +317,33 @@ export function GenerateDialog({ onClose, onSuccess }: GenerateDialogProps) {
 
           {/* Error */}
           {generateError && (
-            <div style={{ backgroundColor: T.red50, border: `1px solid ${T.red500}40`, borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "flex-start", gap: 8 }} role="alert">
-              <AlertCircle size={15} className="text-destructive" style={{ flexShrink: 0, marginTop: 1 }} />
-              <span style={{ fontSize: 13, color: T.red600 }}>{generateError}</span>
+            <div className="bg-red-50 dark:bg-red-950 border border-red-500/40 rounded-lg px-3.5 py-3 flex items-start gap-2" role="alert">
+              <AlertCircle size={15} className="text-destructive shrink-0 mt-px" />
+              <span className="text-[13px] text-red-600 dark:text-red-400">{generateError}</span>
             </div>
           )}
 
           {/* Progress */}
           {generating && (
-            <div style={{ backgroundColor: T.blue50, borderRadius: 10, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Loader2 size={14} style={{ color: T.blue600, animation: "spin 1s linear infinite" }} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: T.blue700 }}>{progressLabel}</span>
-                <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: T.blue700 }}>{progress}%</span>
+            <div className="bg-blue-50 dark:bg-blue-950 rounded-[10px] px-4 py-3.5 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Loader2 size={14} className="text-blue-600 dark:text-blue-400 animate-spin" />
+                <span className="text-[13px] font-semibold text-blue-700 dark:text-blue-300">{progressLabel}</span>
+                <span className="ml-auto text-xs font-bold text-blue-700 dark:text-blue-300">{progress}%</span>
               </div>
-              <div style={{ height: 6, borderRadius: 3, backgroundColor: T.blue100, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${progress}%`, borderRadius: 3, backgroundColor: T.blue600, transition: "width 0.4s ease" }} />
+              <div className="h-1.5 rounded-sm bg-blue-600/10 overflow-hidden">
+                <div className="h-full rounded-sm bg-blue-600 transition-[width] duration-400" style={{ width: `${progress}%` }} />
               </div>
             </div>
           )}
 
           {/* Generate Button */}
-          <button onClick={handleGenerate} disabled={generating} className={generating ? "" : "sub-gradient-btn"}
-            style={{ width: "100%", padding: "12px 20px", borderRadius: 10, border: "none", ...(generating ? { backgroundColor: T.slate300 } : {}), color: T.white, fontWeight: 700, fontSize: 14, cursor: generating ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          <button onClick={handleGenerate} disabled={generating}
+            className={`w-full px-5 py-3 rounded-[10px] border-none text-white font-bold text-sm flex items-center justify-center gap-2 ${
+              generating ? "bg-slate-300 dark:bg-slate-600 cursor-not-allowed" : "sub-gradient-btn cursor-pointer"
+            }`}>
             {generating ? (
-              <><Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />Generating…</>
+              <><Loader2 size={16} className="animate-spin" />Generating…</>
             ) : (
               <><Play size={16} />Generate &amp; Validate</>
             )}
@@ -435,33 +405,38 @@ export function UploadResponseDialog({ batchId, batchName, onClose, onSuccess }:
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
       role="dialog" aria-modal="true" aria-labelledby="upload-dialog-title">
-      <div style={{ backgroundColor: T.white, borderRadius: 14, width: "100%", maxWidth: 460, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+      <div className="bg-white dark:bg-slate-800 rounded-[14px] w-full max-w-[460px] shadow-2xl overflow-hidden">
         {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px", borderBottom: `1px solid ${T.slate200}` }}>
+        <div className="flex items-center justify-between px-5 py-[18px] border-b border-slate-200 dark:border-slate-700">
           <div>
-            <h2 id="upload-dialog-title" style={{ margin: 0, fontSize: 16, fontWeight: 700, color: T.slate900 }}>Upload CMS Response</h2>
-            <p style={{ margin: "2px 0 0", fontSize: 12, color: T.slate500 }}>{batchName}</p>
+            <h2 id="upload-dialog-title" className="m-0 text-base font-bold text-slate-900 dark:text-slate-50">Upload CMS Response</h2>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{batchName}</p>
           </div>
-          <button onClick={onClose} aria-label="Close dialog" style={{ background: "none", border: `1px solid ${T.slate200}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: T.slate500 }}>
+          <button onClick={onClose} aria-label="Close dialog"
+            className="bg-transparent border border-slate-200 dark:border-slate-700 rounded-lg w-8 h-8 cursor-pointer flex items-center justify-center text-slate-500 dark:text-slate-400">
             <X size={16} />
           </button>
         </div>
 
-        <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div className="px-6 py-5 flex flex-col gap-4">
           {/* File type selector */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: T.slate700 }}>Response File Type</label>
-            <div style={{ display: "flex", gap: 8 }}>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-200">Response File Type</label>
+            <div className="flex gap-2">
               {(["MAO-002", "MAO-004"] as const).map((t) => (
                 <button key={t} onClick={() => setFileType(t)} disabled={uploading}
-                  style={{ flex: 1, padding: "9px 12px", borderRadius: 8, border: `2px solid ${fileType === t ? T.blue600 : T.slate200}`, backgroundColor: fileType === t ? T.blue50 : T.white, color: fileType === t ? T.blue700 : T.slate600, fontWeight: 700, fontSize: 13, cursor: uploading ? "not-allowed" : "pointer", transition: "all 0.12s" }}>
+                  className={`flex-1 px-3 py-2 rounded-lg font-bold text-[13px] transition-all disabled:cursor-not-allowed cursor-pointer border-2 ${
+                    fileType === t
+                      ? "border-blue-600 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300"
+                      : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                  }`}>
                   {t}
                 </button>
               ))}
             </div>
-            <p style={{ margin: 0, fontSize: 11, color: T.slate400 }}>
+            <p className="m-0 text-[11px] text-slate-400 dark:text-slate-500">
               {fileType === "MAO-002" ? "MAO-002: CMS acknowledgement of receipt (RAPS)" : "MAO-004: CMS transaction error report"}
             </p>
           </div>
@@ -469,72 +444,80 @@ export function UploadResponseDialog({ batchId, batchName, onClose, onSuccess }:
           {/* Drop zone */}
           <div onDrop={handleDrop} onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)}
             onClick={() => !uploading && inputRef.current?.click()}
-            style={{ border: `2px dashed ${dragOver ? T.blue500 : file ? T.emerald500 : T.slate300}`, borderRadius: 10, padding: "28px 20px", textAlign: "center", cursor: uploading ? "not-allowed" : "pointer", backgroundColor: dragOver ? T.blue50 : file ? T.emerald50 : T.slate50, transition: "all 0.12s" }}>
-            <input ref={inputRef} type="file" accept=".txt,.dat" style={{ display: "none" }} onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
+            className={`border-2 border-dashed rounded-[10px] px-5 py-7 text-center transition-all ${
+              uploading ? "cursor-not-allowed" : "cursor-pointer"
+            } ${
+              dragOver ? "border-blue-500 bg-blue-50 dark:bg-blue-950"
+              : file ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950"
+              : "border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800"
+            }`}>
+            <input ref={inputRef} type="file" accept=".txt,.dat" className="hidden" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
             {file ? (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                <FileCheck size={28} style={{ color: T.emerald600 }} />
-                <span style={{ fontSize: 14, fontWeight: 600, color: T.slate800 }}>{file.name}</span>
-                <span style={{ fontSize: 12, color: T.slate500 }}>{(file.size / 1024).toFixed(1)} KB</span>
+              <div className="flex flex-col items-center gap-1.5">
+                <FileCheck size={28} className="text-emerald-600 dark:text-emerald-400" />
+                <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{file.name}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">{(file.size / 1024).toFixed(1)} KB</span>
                 {!uploading && (
                   <button onClick={(e) => { e.stopPropagation(); setFile(null); setParsed(null); }}
-                    style={{ fontSize: 11, color: T.slate500, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                    className="text-[11px] text-slate-500 dark:text-slate-400 bg-transparent border-none cursor-pointer underline">
                     Remove
                   </button>
                 )}
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+              <div className="flex flex-col items-center gap-1.5">
                 <Upload size={28} className="text-muted-foreground" />
-                <span style={{ fontSize: 14, fontWeight: 600, color: T.slate700 }}>Drop response file here</span>
-                <span style={{ fontSize: 12, color: T.slate500 }}>or click to browse — .txt, .dat</span>
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Drop response file here</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">or click to browse — .txt, .dat</span>
               </div>
             )}
           </div>
 
           {/* Upload error */}
           {uploadError && (
-            <div style={{ backgroundColor: T.red50, border: `1px solid ${T.red500}40`, borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "flex-start", gap: 8 }} role="alert">
-              <AlertCircle size={15} className="text-destructive" style={{ flexShrink: 0, marginTop: 1 }} />
-              <span style={{ fontSize: 13, color: T.red600 }}>{uploadError}</span>
+            <div className="bg-red-50 dark:bg-red-950 border border-red-500/40 rounded-lg px-3.5 py-3 flex items-start gap-2" role="alert">
+              <AlertCircle size={15} className="text-destructive shrink-0 mt-px" />
+              <span className="text-[13px] text-red-600 dark:text-red-400">{uploadError}</span>
             </div>
           )}
 
           {/* Parsed results */}
           {parsed && (
-            <div style={{ backgroundColor: T.emerald50, border: `1px solid ${T.emerald500}33`, borderRadius: 10, padding: "14px 16px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-                <CheckCircle size={15} style={{ color: T.emerald600 }} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: T.emerald600 }}>File parsed successfully</span>
+            <div className="bg-emerald-50 dark:bg-emerald-950 border border-emerald-500/20 rounded-[10px] px-4 py-3.5">
+              <div className="flex items-center gap-1.5 mb-2.5">
+                <CheckCircle size={15} className="text-emerald-600 dark:text-emerald-400" />
+                <span className="text-[13px] font-bold text-emerald-600 dark:text-emerald-400">File parsed successfully</span>
               </div>
-              <div style={{ display: "flex", gap: 20 }}>
+              <div className="flex gap-5">
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: T.slate900 }}>{parsed.total?.toLocaleString() ?? "0"}</div>
-                  <div style={{ fontSize: 11, color: T.slate500 }}>Total Records</div>
+                  <div className="text-lg font-extrabold text-slate-900 dark:text-slate-50">{parsed.total?.toLocaleString() ?? "0"}</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Total Records</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: T.emerald600 }}>{parsed.accepted?.toLocaleString() ?? "0"}</div>
-                  <div style={{ fontSize: 11, color: T.slate500 }}>Accepted</div>
+                  <div className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">{parsed.accepted?.toLocaleString() ?? "0"}</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Accepted</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: T.red600 }}>{parsed.rejected?.toLocaleString() ?? "0"}</div>
-                  <div style={{ fontSize: 11, color: T.slate500 }}>Rejected</div>
+                  <div className="text-lg font-extrabold text-red-600 dark:text-red-400">{parsed.rejected?.toLocaleString() ?? "0"}</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Rejected</div>
                 </div>
               </div>
             </div>
           )}
 
           {/* Actions */}
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="flex gap-2">
             <button onClick={onClose}
-              style={{ flex: 1, padding: "10px", borderRadius: 8, border: `1px solid ${T.slate200}`, backgroundColor: T.white, color: T.slate600, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+              className="flex-1 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold text-[13px] cursor-pointer">
               {parsed ? "Close" : "Cancel"}
             </button>
             {!parsed && (
-              <button onClick={handleUpload} disabled={!file || uploading} className={!file || uploading ? "" : "sub-gradient-btn"}
-                style={{ flex: 2, padding: "10px", borderRadius: 8, border: "none", ...(!file || uploading ? { backgroundColor: T.slate300 } : {}), color: T.white, fontWeight: 700, fontSize: 13, cursor: !file || uploading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <button onClick={handleUpload} disabled={!file || uploading}
+                className={`flex-[2] py-2.5 rounded-lg border-none text-white font-bold text-[13px] flex items-center justify-center gap-1.5 ${
+                  !file || uploading ? "bg-slate-300 dark:bg-slate-600 cursor-not-allowed" : "sub-gradient-btn cursor-pointer"
+                }`}>
                 {uploading ? (
-                  <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />Parsing…</>
+                  <><Loader2 size={14} className="animate-spin" />Parsing…</>
                 ) : (
                   <><Upload size={14} />Upload &amp; Parse</>
                 )}
@@ -542,7 +525,7 @@ export function UploadResponseDialog({ batchId, batchName, onClose, onSuccess }:
             )}
             {parsed && (
               <button onClick={() => { onSuccess(); onClose(); }}
-                style={{ flex: 2, padding: "10px", borderRadius: 8, border: "none", backgroundColor: T.emerald600, color: T.white, fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                className="flex-[2] py-2.5 rounded-lg border-none bg-emerald-600 text-white font-bold text-[13px] cursor-pointer flex items-center justify-center gap-1.5">
                 <CheckCircle size={14} />Save Results
               </button>
             )}
@@ -580,43 +563,33 @@ export function BatchDetailPanel({ batchId, onClose, onUploadResponse }: BatchDe
     { key: "reconciliation", label: "Reconciliation", icon: <DollarSign size={13} /> },
   ];
 
-  const colHeader: React.CSSProperties = {
-    padding: "9px 12px", fontSize: 11, fontWeight: 700, color: T.slate500,
-    textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "left",
-    borderBottom: `2px solid ${T.slate200}`,
-    background: `linear-gradient(180deg, ${T.slate50} 0%, ${T.white} 100%)`,
-    whiteSpace: "nowrap",
-  };
-
-  const cell: React.CSSProperties = {
-    padding: "11px 12px", fontSize: 12, color: T.slate700,
-    borderBottom: `1px solid ${T.slate100}`, verticalAlign: "middle",
-    transition: "background-color 0.15s ease",
-  };
-
   return (
-    <div className="premium-card animate-fade-in" style={{ overflow: "hidden", marginTop: 16 }}>
+    <div className="premium-card animate-fade-in overflow-hidden mt-4">
       {/* Panel header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: `1px solid ${T.slate200}`, backgroundColor: T.slate50 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <FileText size={16} style={{ color: T.blue600 }} />
-          <span style={{ fontSize: 14, fontWeight: 700, color: T.slate900 }}>Batch {data?.batch.batch_id ?? batchId}</span>
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+        <div className="flex items-center gap-2.5">
+          <FileText size={16} className="text-blue-600 dark:text-blue-400" />
+          <span className="text-sm font-bold text-slate-900 dark:text-slate-50">Batch {data?.batch.batch_id ?? batchId}</span>
           {data && <StatusBadge status={data.batch.status} />}
           {data && <TypeBadge type={data.batch.submission_type} />}
         </div>
         <button onClick={onClose} aria-label="Close detail panel"
-          style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${T.slate200}`, background: T.white, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: T.slate500 }}>
+          className="w-7 h-7 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 cursor-pointer flex items-center justify-center text-slate-500 dark:text-slate-400">
           <X size={14} />
         </button>
       </div>
 
       {/* Tab strip */}
-      <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${T.slate200}`, backgroundColor: T.white, overflowX: "auto" }}>
+      <div className="flex gap-0 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-x-auto">
         {tabs.map((t) => {
           const active = tab === t.key;
           return (
             <button key={t.key} onClick={() => setTab(t.key)}
-              style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "11px 18px", fontSize: 13, fontWeight: active ? 700 : 500, color: active ? T.blue600 : T.slate500, background: "none", border: "none", borderBottom: active ? `2px solid ${T.blue600}` : "2px solid transparent", cursor: "pointer", whiteSpace: "nowrap", transition: "color 0.12s" }}>
+              className={`inline-flex items-center gap-[5px] px-[18px] py-[11px] text-[13px] bg-transparent border-none cursor-pointer whitespace-nowrap transition-colors border-b-2 ${
+                active
+                  ? "font-bold text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400"
+                  : "font-medium text-slate-500 dark:text-slate-400 border-transparent"
+              }`}>
               {t.icon}{t.label}
             </button>
           );
@@ -625,73 +598,68 @@ export function BatchDetailPanel({ batchId, onClose, onUploadResponse }: BatchDe
 
       {/* Tab content */}
       {isLoading ? (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 48, gap: 10, color: T.slate400 }}>
-          <Loader2 size={20} style={{ animation: "spin 1s linear infinite" }} />
-          <span style={{ fontSize: 14 }}>Loading batch detail…</span>
+        <div className="flex items-center justify-center p-12 gap-2.5 text-slate-400 dark:text-slate-500">
+          <Loader2 size={20} className="animate-spin" />
+          <span className="text-sm">Loading batch detail…</span>
         </div>
       ) : isError ? (
-        <div style={{ margin: 20, padding: "14px 16px", borderRadius: 10, border: `1px solid ${T.red500}40`, backgroundColor: T.red50, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }} role="alert">
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <AlertCircle size={16} style={{ color: T.red600, flexShrink: 0 }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: T.red600 }}>
+        <div className="m-5 px-4 py-3.5 rounded-[10px] border border-red-500/40 bg-red-50 dark:bg-red-950 flex items-center justify-between gap-3" role="alert">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={16} className="text-red-600 dark:text-red-400 shrink-0" />
+            <span className="text-[13px] font-semibold text-red-600 dark:text-red-400">
               {(error as any)?.response?.data?.detail ?? (error as any)?.message ?? "Failed to load batch detail."}
             </span>
           </div>
           <button onClick={() => refetch()}
-            style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid ${T.red500}40`, backgroundColor: T.white, color: T.red600, fontWeight: 600, fontSize: 12, cursor: "pointer", flexShrink: 0 }}>
+            className="px-3 py-[5px] rounded-md border border-red-500/40 bg-white dark:bg-slate-800 text-red-600 dark:text-red-400 font-semibold text-xs cursor-pointer shrink-0">
             Retry
           </button>
         </div>
       ) : !data ? null : (
-        <div style={{ padding: 0 }}>
+        <div>
           {/* ── RECORDS TAB ── */}
           {tab === "records" && (
             <>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse" style={{ minWidth: 860 }}>
                   <thead>
                     <tr>
-                      <th style={colHeader}>Patient</th>
-                      <th style={colHeader}>ICD-10</th>
-                      <th style={colHeader}>HCC</th>
-                      <th style={colHeader}>DOS</th>
-                      <th style={colHeader}>Through Date</th>
-                      <th style={colHeader}>Provider NPI</th>
-                      <th style={colHeader}>Validation</th>
-                      <th style={colHeader}>CMS Status</th>
+                      {["Patient", "ICD-10", "HCC", "DOS", "Through Date", "Provider NPI", "Validation", "CMS Status"].map(h => (
+                        <th key={h} className="px-3 py-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-left border-b-2 border-slate-200 dark:border-slate-700 bg-gradient-to-b from-slate-50 dark:from-slate-800 to-white dark:to-slate-900 whitespace-nowrap">{h}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
                     {(data.records ?? []).slice(recordPage * PAGE, (recordPage + 1) * PAGE).map((r) => (
-                      <tr key={r.id} style={{ transition: "background-color 0.1s" }}>
-                        <td style={cell}>
-                          <div style={{ fontWeight: 600, color: T.slate800, fontSize: 12 }}>{r.patient_name}</div>
-                          <div style={{ fontSize: 10, color: T.slate400, fontFamily: "monospace" }}>{r.patient_id}</div>
+                      <tr key={r.id} className="transition-colors">
+                        <td className="px-3 py-[11px] text-xs text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 align-middle">
+                          <div className="font-semibold text-slate-800 dark:text-slate-100 text-xs">{r.patient_name}</div>
+                          <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">{r.patient_id}</div>
                         </td>
-                        <td style={cell}>
-                          <span style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: T.blue700, backgroundColor: T.blue50, padding: "2px 6px", borderRadius: 4 }}>
+                        <td className="px-3 py-[11px] text-xs text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 align-middle">
+                          <span className="font-mono text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950 px-1.5 py-[2px] rounded">
                             {r.icd10_code}
                           </span>
                         </td>
-                        <td style={cell}>
+                        <td className="px-3 py-[11px] text-xs text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 align-middle">
                           {r.hcc_code ? (
                             <div>
-                              <span style={{ fontWeight: 700, color: T.violet600, fontSize: 12 }}>HCC{r.hcc_code}</span>
-                              <div style={{ fontSize: 10, color: T.slate400, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.hcc_description}</div>
+                              <span className="font-bold text-violet-600 dark:text-violet-400 text-xs">HCC{r.hcc_code}</span>
+                              <div className="text-[10px] text-slate-400 dark:text-slate-500 max-w-[140px] overflow-hidden text-ellipsis whitespace-nowrap">{r.hcc_description}</div>
                             </div>
                           ) : (
-                            <span style={{ color: T.slate400, fontSize: 12 }}>—</span>
+                            <span className="text-slate-400 dark:text-slate-500 text-xs">—</span>
                           )}
                         </td>
-                        <td style={{ ...cell, fontFamily: "monospace", color: T.slate600 }}>{r.date_of_service}</td>
-                        <td style={{ ...cell, fontFamily: "monospace", color: T.slate600 }}>{r.through_date}</td>
-                        <td style={{ ...cell, fontFamily: "monospace", fontSize: 11, color: T.slate500 }}>{r.provider_id}</td>
-                        <td style={cell}><ValidationBadge status={r.validation_status} /></td>
-                        <td style={cell}>
+                        <td className="px-3 py-[11px] text-xs font-mono text-slate-600 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800 align-middle">{r.date_of_service}</td>
+                        <td className="px-3 py-[11px] text-xs font-mono text-slate-600 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800 align-middle">{r.through_date}</td>
+                        <td className="px-3 py-[11px] text-[11px] font-mono text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 align-middle">{r.provider_id}</td>
+                        <td className="px-3 py-[11px] text-xs text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 align-middle"><ValidationBadge status={r.validation_status} /></td>
+                        <td className="px-3 py-[11px] text-xs text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 align-middle">
                           <div>
                             <CmsStatusBadge status={r.cms_status} />
                             {r.rejection_reason && (
-                              <div style={{ fontSize: 10, color: T.red500, marginTop: 3, maxWidth: 140 }}>{r.rejection_reason}</div>
+                              <div className="text-[10px] text-red-500 dark:text-red-400 mt-[3px] max-w-[140px]">{r.rejection_reason}</div>
                             )}
                           </div>
                         </td>
@@ -701,17 +669,17 @@ export function BatchDetailPanel({ batchId, onClose, onUploadResponse }: BatchDe
                 </table>
               </div>
               {/* Pagination */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderTop: `1px solid ${T.slate100}` }}>
-                <span style={{ fontSize: 12, color: T.slate500 }}>
+              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800">
+                <span className="text-xs text-slate-500 dark:text-slate-400">
                   Showing {recordPage * PAGE + 1}–{Math.min((recordPage + 1) * PAGE, (data.records ?? []).length)} of {(data.records ?? []).length}
                 </span>
-                <div style={{ display: "flex", gap: 6 }}>
+                <div className="flex gap-1.5">
                   <button onClick={() => setRecordPage((p) => Math.max(0, p - 1))} disabled={recordPage === 0}
-                    style={{ padding: "4px 12px", borderRadius: 6, border: `1px solid ${T.slate200}`, background: T.white, color: recordPage === 0 ? T.slate300 : T.slate600, cursor: recordPage === 0 ? "not-allowed" : "pointer", fontSize: 12 }}>
+                    className="px-3 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs disabled:text-slate-300 dark:disabled:text-slate-600 text-slate-600 dark:text-slate-300 disabled:cursor-not-allowed cursor-pointer">
                     Prev
                   </button>
                   <button onClick={() => setRecordPage((p) => p + 1)} disabled={(recordPage + 1) * PAGE >= (data.records ?? []).length}
-                    style={{ padding: "4px 12px", borderRadius: 6, border: `1px solid ${T.slate200}`, background: T.white, color: (recordPage + 1) * PAGE >= (data.records ?? []).length ? T.slate300 : T.slate600, cursor: (recordPage + 1) * PAGE >= (data.records ?? []).length ? "not-allowed" : "pointer", fontSize: 12 }}>
+                    className="px-3 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs disabled:text-slate-300 dark:disabled:text-slate-600 text-slate-600 dark:text-slate-300 disabled:cursor-not-allowed cursor-pointer">
                     Next
                   </button>
                 </div>
@@ -721,49 +689,52 @@ export function BatchDetailPanel({ batchId, onClose, onUploadResponse }: BatchDe
 
           {/* ── VALIDATION TAB ── */}
           {tab === "validation" && (
-            <div style={{ padding: 20 }}>
-              <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-                <div style={{ flex: 1, backgroundColor: T.red50, border: `1px solid ${T.red500}33`, borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-                  <XCircle size={24} style={{ color: T.red600, flexShrink: 0 }} />
+            <div className="p-5">
+              <div className="flex gap-3 mb-5">
+                <div className="flex-1 bg-red-50 dark:bg-red-950 border border-red-500/20 rounded-[10px] px-4 py-3.5 flex items-center gap-3">
+                  <XCircle size={24} className="text-red-600 dark:text-red-400 shrink-0" />
                   <div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: T.red600 }}>
+                    <div className="text-[22px] font-extrabold text-red-600 dark:text-red-400">
                       {(data.validation_issues ?? []).filter((i) => i.severity === "error").reduce((s, i) => s + i.count, 0)}
                     </div>
-                    <div style={{ fontSize: 12, color: T.red500, fontWeight: 600 }}>Errors</div>
+                    <div className="text-xs text-red-500 dark:text-red-400 font-semibold">Errors</div>
                   </div>
                 </div>
-                <div style={{ flex: 1, backgroundColor: T.amber50, border: `1px solid ${T.amber500}33`, borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-                  <AlertTriangle size={24} style={{ color: T.amber600, flexShrink: 0 }} />
+                <div className="flex-1 bg-amber-50 dark:bg-amber-950 border border-amber-500/20 rounded-[10px] px-4 py-3.5 flex items-center gap-3">
+                  <AlertTriangle size={24} className="text-amber-600 dark:text-amber-400 shrink-0" />
                   <div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: T.amber600 }}>
+                    <div className="text-[22px] font-extrabold text-amber-600 dark:text-amber-400">
                       {(data.validation_issues ?? []).filter((i) => i.severity === "warning").reduce((s, i) => s + i.count, 0)}
                     </div>
-                    <div style={{ fontSize: 12, color: T.amber500, fontWeight: 600 }}>Warnings</div>
+                    <div className="text-xs text-amber-500 dark:text-amber-400 font-semibold">Warnings</div>
                   </div>
                 </div>
               </div>
               {(data.validation_issues ?? []).length === 0 ? (
-                <div style={{ padding: 40, textAlign: "center", color: T.slate400, border: `2px dashed ${T.slate200}`, borderRadius: 10 }}>
-                  <CheckCircle size={28} style={{ color: T.emerald500, marginBottom: 8, opacity: 0.7 }} />
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: T.emerald600 }}>No validation issues found</p>
+                <div className="p-10 text-center text-slate-400 dark:text-slate-500 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-[10px]">
+                  <CheckCircle size={28} className="text-emerald-500 dark:text-emerald-400 mb-2 opacity-70 mx-auto" />
+                  <p className="m-0 text-sm font-medium text-emerald-600 dark:text-emerald-400">No validation issues found</p>
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div className="flex flex-col gap-2.5">
                   {(data.validation_issues ?? []).map((issue) => (
-                    <div key={issue.rule_id} className="hover-lift"
-                      style={{ border: `1px solid ${issue.severity === "error" ? T.red500 + "33" : T.amber500 + "33"}`, borderLeft: `4px solid ${issue.severity === "error" ? T.red500 : T.amber500}`, borderRadius: 8, padding: "14px 16px", backgroundColor: issue.severity === "error" ? T.red50 : T.amber50 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          {issue.severity === "error" ? <XCircle size={14} style={{ color: T.red600 }} /> : <AlertTriangle size={14} style={{ color: T.amber600 }} />}
-                          <span style={{ fontSize: 13, fontWeight: 700, color: T.slate800 }}>{issue.rule_name}</span>
-                          <span style={{ fontSize: 10, color: T.slate500, fontFamily: "monospace" }}>{issue.rule_id}</span>
+                    <div key={issue.rule_id} className={`hover-lift rounded-lg px-4 py-3.5 border-l-4 border ${
+                      issue.severity === "error"
+                        ? "border-red-500/20 border-l-red-500 bg-red-50 dark:bg-red-950"
+                        : "border-amber-500/20 border-l-amber-500 bg-amber-50 dark:bg-amber-950"
+                    }`}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2">
+                          {issue.severity === "error" ? <XCircle size={14} className="text-red-600 dark:text-red-400" /> : <AlertTriangle size={14} className="text-amber-600 dark:text-amber-400" />}
+                          <span className="text-[13px] font-bold text-slate-800 dark:text-slate-100">{issue.rule_name}</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{issue.rule_id}</span>
                         </div>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: issue.severity === "error" ? T.red600 : T.amber600 }}>{issue.count} affected</span>
+                        <span className={`text-xs font-bold ${issue.severity === "error" ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}>{issue.count} affected</span>
                       </div>
-                      <p style={{ margin: "0 0 6px", fontSize: 12, color: T.slate600 }}>{issue.description}</p>
-                      <div style={{ display: "flex", alignItems: "flex-start", gap: 6, backgroundColor: "rgba(255,255,255,0.6)", borderRadius: 6, padding: "8px 10px" }}>
-                        <CheckCircle size={12} style={{ color: T.emerald600, flexShrink: 0, marginTop: 1 }} />
-                        <span style={{ fontSize: 12, color: T.slate700 }}>{issue.recommendation}</span>
+                      <p className="m-0 mb-1.5 text-xs text-slate-600 dark:text-slate-300">{issue.description}</p>
+                      <div className="flex items-start gap-1.5 bg-white/60 dark:bg-slate-800/60 rounded-md px-2.5 py-2">
+                        <CheckCircle size={12} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-px" />
+                        <span className="text-xs text-slate-700 dark:text-slate-200">{issue.recommendation}</span>
                       </div>
                     </div>
                   ))}
@@ -774,46 +745,49 @@ export function BatchDetailPanel({ batchId, onClose, onUploadResponse }: BatchDe
 
           {/* ── RESPONSES TAB ── */}
           {tab === "responses" && (
-            <div style={{ padding: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: T.slate800 }}>Uploaded Response Files</span>
-                <button onClick={() => onUploadResponse(data.batch.id, data.batch.batch_id)} className="sub-gradient-btn"
-                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "none", color: T.white, fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-sm font-bold text-slate-800 dark:text-slate-100">Uploaded Response Files</span>
+                <button onClick={() => onUploadResponse(data.batch.id, data.batch.batch_id)}
+                  className="sub-gradient-btn flex items-center gap-1.5 px-3.5 py-[7px] rounded-lg border-none text-white font-semibold text-xs cursor-pointer">
                   <Upload size={13} />Upload Response
                 </button>
               </div>
               {(data.response_files ?? []).length === 0 ? (
-                <div style={{ padding: 40, textAlign: "center", color: T.slate400, border: `2px dashed ${T.slate200}`, borderRadius: 10 }}>
-                  <Inbox size={32} style={{ marginBottom: 8, opacity: 0.5 }} />
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>No response files uploaded yet</p>
+                <div className="p-10 text-center text-slate-400 dark:text-slate-500 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-[10px]">
+                  <Inbox size={32} className="mb-2 opacity-50 mx-auto" />
+                  <p className="m-0 text-sm font-medium">No response files uploaded yet</p>
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div className="flex flex-col gap-2.5">
                   {(data.response_files ?? []).map((rf) => (
-                    <div key={rf.id} className="hover-lift"
-                      style={{ border: `1px solid ${T.slate200}`, borderRadius: 10, padding: "14px 16px", backgroundColor: T.white, display: "flex", alignItems: "center", gap: 16 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: T.blue50, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: T.blue600 }}>
+                    <div key={rf.id} className="hover-lift border border-slate-200 dark:border-slate-700 rounded-[10px] px-4 py-3.5 bg-white dark:bg-slate-800 flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-[10px] bg-blue-50 dark:bg-blue-950 flex items-center justify-center shrink-0 text-blue-600 dark:text-blue-400">
                         <FileText size={18} />
                       </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 13, color: T.slate800 }}>{rf.file_name}</div>
-                        <div style={{ fontSize: 11, color: T.slate500, marginTop: 2 }}>{rf.file_type} · Uploaded {new Date(rf.uploaded_at).toLocaleDateString()}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-[13px] text-slate-800 dark:text-slate-100">{rf.file_name}</div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{rf.file_type} · Uploaded {new Date(rf.uploaded_at).toLocaleDateString()}</div>
                       </div>
-                      <div style={{ display: "flex", gap: 20, textAlign: "center" }}>
+                      <div className="flex gap-5 text-center">
                         <div>
-                          <div style={{ fontSize: 16, fontWeight: 800, color: T.slate900 }}>{rf.records_parsed?.toLocaleString() ?? "0"}</div>
-                          <div style={{ fontSize: 10, color: T.slate400 }}>Parsed</div>
+                          <div className="text-base font-extrabold text-slate-900 dark:text-slate-50">{rf.records_parsed?.toLocaleString() ?? "0"}</div>
+                          <div className="text-[10px] text-slate-400 dark:text-slate-500">Parsed</div>
                         </div>
                         <div>
-                          <div style={{ fontSize: 16, fontWeight: 800, color: T.emerald600 }}>{rf.accepted?.toLocaleString() ?? "0"}</div>
-                          <div style={{ fontSize: 10, color: T.slate400 }}>Accepted</div>
+                          <div className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">{rf.accepted?.toLocaleString() ?? "0"}</div>
+                          <div className="text-[10px] text-slate-400 dark:text-slate-500">Accepted</div>
                         </div>
                         <div>
-                          <div style={{ fontSize: 16, fontWeight: 800, color: T.red600 }}>{rf.rejected?.toLocaleString() ?? "0"}</div>
-                          <div style={{ fontSize: 10, color: T.slate400 }}>Rejected</div>
+                          <div className="text-base font-extrabold text-red-600 dark:text-red-400">{rf.rejected?.toLocaleString() ?? "0"}</div>
+                          <div className="text-[10px] text-slate-400 dark:text-slate-500">Rejected</div>
                         </div>
                       </div>
-                      <span style={{ padding: "3px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, backgroundColor: rf.status === "parsed" ? T.emerald50 : T.amber50, color: rf.status === "parsed" ? T.emerald600 : T.amber600, flexShrink: 0 }}>
+                      <span className={`px-2 py-[3px] rounded text-[11px] font-semibold shrink-0 ${
+                        rf.status === "parsed"
+                          ? "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400"
+                          : "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400"
+                      }`}>
                         {rf.status === "parsed" ? "Parsed" : "Processing"}
                       </span>
                     </div>
@@ -825,42 +799,47 @@ export function BatchDetailPanel({ batchId, onClose, onUploadResponse }: BatchDe
 
           {/* ── RECONCILIATION TAB ── */}
           {tab === "reconciliation" && (
-            <div style={{ padding: 20 }}>
-              <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-                <div style={{ flex: 1, backgroundColor: T.emerald50, border: `1px solid ${T.emerald500}33`, borderRadius: 10, padding: "14px 16px" }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: T.slate500, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Total Payment Impact</div>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: T.emerald600 }}>${data.total_payment_impact?.toLocaleString() ?? "0"}</div>
+            <div className="p-5">
+              <div className="flex gap-3 mb-5">
+                <div className="flex-1 bg-emerald-50 dark:bg-emerald-950 border border-emerald-500/20 rounded-[10px] px-4 py-3.5">
+                  <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Total Payment Impact</div>
+                  <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">${data.total_payment_impact?.toLocaleString() ?? "0"}</div>
                 </div>
-                <div style={{ flex: 1, backgroundColor: T.blue50, border: `1px solid ${T.blue500}33`, borderRadius: 10, padding: "14px 16px" }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: T.slate500, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Risk Score Adjustment</div>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: T.blue700 }}>+{(data.risk_score_adjustment ?? 0).toFixed(3)}</div>
+                <div className="flex-1 bg-blue-50 dark:bg-blue-950 border border-blue-500/20 rounded-[10px] px-4 py-3.5">
+                  <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Risk Score Adjustment</div>
+                  <div className="text-2xl font-extrabold text-blue-700 dark:text-blue-300">+{(data.risk_score_adjustment ?? 0).toFixed(3)}</div>
                 </div>
               </div>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
                   <thead>
                     <tr>
-                      <th style={colHeader}>HCC</th>
-                      <th style={colHeader}>Description</th>
-                      <th style={{ ...colHeader, textAlign: "right" }}>Patients</th>
-                      <th style={{ ...colHeader, textAlign: "right" }}>Risk Score Delta</th>
-                      <th style={{ ...colHeader, textAlign: "right" }}>Payment Impact</th>
-                      <th style={colHeader}>CMS Status</th>
+                      {["HCC", "Description"].map(h => (
+                        <th key={h} className="px-3 py-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-left border-b-2 border-slate-200 dark:border-slate-700 bg-gradient-to-b from-slate-50 dark:from-slate-800 to-white dark:to-slate-900 whitespace-nowrap">{h}</th>
+                      ))}
+                      {["Patients", "Risk Score Delta", "Payment Impact"].map(h => (
+                        <th key={h} className="px-3 py-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right border-b-2 border-slate-200 dark:border-slate-700 bg-gradient-to-b from-slate-50 dark:from-slate-800 to-white dark:to-slate-900 whitespace-nowrap">{h}</th>
+                      ))}
+                      <th className="px-3 py-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-left border-b-2 border-slate-200 dark:border-slate-700 bg-gradient-to-b from-slate-50 dark:from-slate-800 to-white dark:to-slate-900 whitespace-nowrap">CMS Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(data.reconciliation ?? []).map((r) => (
                       <tr key={r.hcc_code}>
-                        <td style={cell}><span style={{ fontWeight: 700, color: T.violet600, fontFamily: "monospace" }}>HCC{r.hcc_code}</span></td>
-                        <td style={{ ...cell, maxWidth: 200 }}><span style={{ fontSize: 12, color: T.slate700 }}>{r.hcc_description}</span></td>
-                        <td style={{ ...cell, textAlign: "right", fontWeight: 600 }}>{r.patient_count}</td>
-                        <td style={{ ...cell, textAlign: "right" }}>
-                          <span style={{ fontWeight: 700, color: T.blue700, fontFamily: "monospace" }}>+{(r.risk_score_delta ?? 0).toFixed(3)}</span>
+                        <td className="px-3 py-[11px] text-xs text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 align-middle">
+                          <span className="font-bold text-violet-600 dark:text-violet-400 font-mono">HCC{r.hcc_code}</span>
                         </td>
-                        <td style={{ ...cell, textAlign: "right" }}>
-                          <span style={{ fontWeight: 700, color: T.emerald600, fontFamily: "monospace" }}>${r.payment_delta?.toLocaleString() ?? "0"}</span>
+                        <td className="px-3 py-[11px] text-xs text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 align-middle max-w-[200px]">
+                          <span className="text-xs text-slate-700 dark:text-slate-200">{r.hcc_description}</span>
                         </td>
-                        <td style={cell}><CmsStatusBadge status={r.cms_status} /></td>
+                        <td className="px-3 py-[11px] text-xs text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 align-middle text-right font-semibold">{r.patient_count}</td>
+                        <td className="px-3 py-[11px] text-xs border-b border-slate-100 dark:border-slate-800 align-middle text-right">
+                          <span className="font-bold text-blue-700 dark:text-blue-300 font-mono">+{(r.risk_score_delta ?? 0).toFixed(3)}</span>
+                        </td>
+                        <td className="px-3 py-[11px] text-xs border-b border-slate-100 dark:border-slate-800 align-middle text-right">
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">${r.payment_delta?.toLocaleString() ?? "0"}</span>
+                        </td>
+                        <td className="px-3 py-[11px] text-xs text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 align-middle"><CmsStatusBadge status={r.cms_status} /></td>
                       </tr>
                     ))}
                   </tbody>

@@ -9,17 +9,6 @@ import { Download, ChevronDown } from "lucide-react";
 
 import { downloadCfoExport } from "@/lib/api";
 
-const T = {
-  white: "#FFFFFF",
-  slate900: "#0F172A",
-  slate700: "#334155",
-  slate500: "#64748B",
-  slate200: "#E2E8F0",
-  slate100: "#F1F5F9",
-  blue600: "#2563EB",
-  blue700: "#1D4ED8",
-};
-
 interface Props {
   year?: number;
 }
@@ -51,59 +40,23 @@ export default function CfoExportButton({ year }: Props) {
   }
 
   return (
-    <div style={{ position: "relative" }}>
+    <div className="relative">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          padding: "8px 14px",
-          borderRadius: 8,
-          border: `1px solid ${T.slate200}`,
-          background: T.white,
-          color: T.slate900,
-          fontSize: 13,
-          fontWeight: 600,
-          cursor: "pointer",
-        }}
+        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 text-[13px] font-semibold cursor-pointer"
       >
         <Download size={14} />
         Export
         <ChevronDown size={12} />
       </button>
       {open && (
-        <div
-          style={{
-            position: "absolute",
-            right: 0,
-            marginTop: 4,
-            minWidth: 160,
-            background: T.white,
-            border: `1px solid ${T.slate200}`,
-            borderRadius: 8,
-            boxShadow: "0 4px 16px rgba(15,23,42,0.08)",
-            zIndex: 20,
-            overflow: "hidden",
-          }}
-        >
+        <div className="absolute right-0 mt-1 min-w-[160px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-20 overflow-hidden">
           <button
             type="button"
             onClick={() => exportAs("csv")}
             disabled={busy !== null}
-            style={{
-              width: "100%",
-              textAlign: "left",
-              padding: "10px 14px",
-              border: "none",
-              background: "transparent",
-              cursor: busy ? "wait" : "pointer",
-              fontSize: 13,
-              color: T.slate900,
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = T.slate100)}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            className="w-full text-left px-3.5 py-2.5 border-none bg-transparent text-[13px] text-slate-900 dark:text-slate-50 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer disabled:cursor-wait"
           >
             {busy === "csv" ? "Exporting CSV…" : "Export CSV"}
           </button>
@@ -111,19 +64,7 @@ export default function CfoExportButton({ year }: Props) {
             type="button"
             onClick={() => exportAs("json")}
             disabled={busy !== null}
-            style={{
-              width: "100%",
-              textAlign: "left",
-              padding: "10px 14px",
-              border: "none",
-              background: "transparent",
-              cursor: busy ? "wait" : "pointer",
-              fontSize: 13,
-              color: T.slate900,
-              borderTop: `1px solid ${T.slate100}`,
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = T.slate100)}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            className="w-full text-left px-3.5 py-2.5 border-none border-t border-t-slate-100 dark:border-t-slate-800 bg-transparent text-[13px] text-slate-900 dark:text-slate-50 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer disabled:cursor-wait"
           >
             {busy === "json" ? "Exporting JSON…" : "Export JSON"}
           </button>

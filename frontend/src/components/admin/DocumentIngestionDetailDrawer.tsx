@@ -51,32 +51,13 @@ interface DrawerProps {
 }
 
 // ---------------------------------------------------------------------------
-// Design tokens (match existing palette)
-// ---------------------------------------------------------------------------
-
-const T = {
-  bg: "#FFFFFF",
-  border: "#E2E8F0",
-  text: "#0F172A",
-  muted: "#64748B",
-  subtle: "#94A3B8",
-  accent: "#2563EB",
-  accentBg: "#EFF6FF",
-  success: "#10B981",
-  warning: "#F59E0B",
-  danger: "#DC2626",
-  overlay: "rgba(15, 23, 42, 0.55)",
-  badgeBg: "#F1F5F9",
-} as const;
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function confidenceColor(score: number): string {
-  if (score >= 0.8) return T.success;
-  if (score >= 0.5) return T.warning;
-  return T.danger;
+function confidenceColorClass(score: number): string {
+  if (score >= 0.8) return "text-emerald-500 dark:text-emerald-400";
+  if (score >= 0.5) return "text-amber-500 dark:text-amber-400";
+  return "text-red-600 dark:text-red-400";
 }
 
 function formatBytes(n: number | null | undefined): string {
@@ -111,27 +92,11 @@ const DISPLAY_FIELDS = [
 
 function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "flex-start",
-        padding: "8px 0",
-        borderBottom: `1px solid ${T.border}`,
-        gap: 12,
-      }}
-    >
-      <span style={{ fontSize: 12, color: T.muted, fontWeight: 500, flexShrink: 0 }}>
+    <div className="flex justify-between items-start py-2 border-b border-slate-200 dark:border-slate-700 gap-3">
+      <span className="text-xs text-slate-500 dark:text-slate-400 font-medium shrink-0">
         {label}
       </span>
-      <span
-        style={{
-          fontSize: 13,
-          color: T.text,
-          textAlign: "right",
-          wordBreak: "break-all",
-        }}
-      >
+      <span className="text-[13px] text-slate-900 dark:text-slate-50 text-right break-all">
         {value ?? "—"}
       </span>
     </div>
@@ -142,37 +107,28 @@ function SuspectRow({ suspect, idx }: { suspect: Suspect; idx: number }) {
   const pct = Math.round(suspect.confidence_score * 100);
   return (
     <tr
-      style={{
-        backgroundColor: idx % 2 === 0 ? T.bg : T.badgeBg,
-      }}
+      className={
+        idx % 2 === 0
+          ? "bg-white dark:bg-slate-900"
+          : "bg-slate-100 dark:bg-slate-800"
+      }
     >
-      <td style={{ padding: "8px 10px", fontSize: 12, fontFamily: "monospace", color: T.accent }}>
+      <td className="px-2.5 py-2 text-xs font-mono text-blue-600 dark:text-blue-400">
         {suspect.hcc_code || "—"}
       </td>
-      <td style={{ padding: "8px 10px", fontSize: 12, fontFamily: "monospace" }}>
+      <td className="px-2.5 py-2 text-xs font-mono text-slate-900 dark:text-slate-100">
         {suspect.icd10_code || "—"}
       </td>
-      <td style={{ padding: "8px 10px", fontSize: 12 }}>
+      <td className="px-2.5 py-2 text-xs">
         <span
-          style={{
-            fontWeight: 600,
-            color: confidenceColor(suspect.confidence_score),
-          }}
+          className={`font-semibold ${confidenceColorClass(suspect.confidence_score)}`}
           aria-label={`Confidence ${pct}%`}
         >
           {pct}%
         </span>
       </td>
       <td
-        style={{
-          padding: "8px 10px",
-          fontSize: 11,
-          color: T.muted,
-          maxWidth: 260,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
+        className="px-2.5 py-2 text-[11px] text-slate-500 dark:text-slate-400 max-w-[260px] overflow-hidden text-ellipsis whitespace-nowrap"
         title={suspect.evidence_sentence}
       >
         {suspect.evidence_sentence || "—"}
@@ -195,14 +151,12 @@ export function DocumentIngestionDetailDrawer({
   const overlayRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
-  // Focus trap: focus close button on open
   useEffect(() => {
     if (open) {
       setTimeout(() => closeRef.current?.focus(), 50);
     }
   }, [open]);
 
-  // ESC to close
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape" && open) onClose();
@@ -211,7 +165,6 @@ export function DocumentIngestionDetailDrawer({
     return () => document.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
-  // Prevent body scroll while open
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
     return () => {
@@ -236,12 +189,10 @@ export function DocumentIngestionDetailDrawer({
   const record = (data?.record ?? {}) as DocumentRecord;
   const suspects: Suspect[] = data?.suspects ?? [];
 
-  // Pick display fields present in the record
   const displayEntries = DISPLAY_FIELDS.filter((k) => k in record).map(
     (k) => [k, record[k]] as [string, unknown]
   );
 
-  // Also show remaining fields not in display list
   const extraEntries = Object.entries(record).filter(
     ([k]) => !DISPLAY_FIELDS.includes(k)
   );
@@ -255,13 +206,8 @@ export function DocumentIngestionDetailDrawer({
       <div
         ref={overlayRef}
         onClick={onClose}
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 40,
-          backgroundColor: T.overlay,
-          backdropFilter: "blur(2px)",
-        }}
+        className="fixed inset-0 z-40 backdrop-blur-sm"
+        style={{ backgroundColor: "rgba(15, 23, 42, 0.55)" }}
         aria-hidden="true"
       />
 
@@ -270,45 +216,21 @@ export function DocumentIngestionDetailDrawer({
         role="dialog"
         aria-modal="true"
         aria-label="Document detail"
-        style={{
-          position: "fixed",
-          top: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 50,
-          width: "min(560px, 100vw)",
-          backgroundColor: T.bg,
-          borderLeft: `1px solid ${T.border}`,
-          display: "flex",
-          flexDirection: "column",
-          boxShadow: "-4px 0 24px rgba(0,0,0,0.12)",
-          overflowY: "auto",
-        }}
+        className="fixed top-0 right-0 bottom-0 z-50 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 flex flex-col shadow-[-4px_0_24px_rgba(0,0,0,0.12)] overflow-y-auto"
+        style={{ width: "min(560px, 100vw)" }}
       >
         {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "16px 20px",
-            borderBottom: `1px solid ${T.border}`,
-            position: "sticky",
-            top: 0,
-            backgroundColor: T.bg,
-            zIndex: 1,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <FileText style={{ width: 18, height: 18, color: T.accent }} aria-hidden="true" />
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-900 z-[1]">
+          <div className="flex items-center gap-2.5">
+            <FileText className="w-[18px] h-[18px] text-blue-600 dark:text-blue-400" aria-hidden="true" />
             <div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>
+              <div className="text-[15px] font-semibold text-slate-900 dark:text-slate-50">
                 Document Detail
               </div>
-              <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                 {sourceId} &nbsp;
                 <ChevronRight
-                  style={{ width: 10, height: 10, display: "inline", verticalAlign: "middle" }}
+                  className="w-2.5 h-2.5 inline align-middle"
                   aria-hidden="true"
                 />
                 &nbsp;{documentId}
@@ -318,27 +240,18 @@ export function DocumentIngestionDetailDrawer({
           <button
             ref={closeRef}
             onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: 6,
-              borderRadius: 6,
-              color: T.muted,
-              display: "flex",
-              alignItems: "center",
-            }}
+            className="bg-transparent border-none cursor-pointer p-1.5 rounded-md text-slate-500 dark:text-slate-400 flex items-center hover:bg-slate-100 dark:hover:bg-slate-800"
             aria-label="Close document detail drawer"
           >
-            <X style={{ width: 18, height: 18 }} />
+            <X className="w-[18px] h-[18px]" />
           </button>
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, padding: "20px", overflowY: "auto" }}>
+        <div className="flex-1 p-5 overflow-y-auto">
           {isLoading && (
             <div
-              style={{ textAlign: "center", padding: "40px 0", color: T.muted }}
+              className="text-center py-10 text-slate-500 dark:text-slate-400"
               role="status"
               aria-live="polite"
             >
@@ -348,20 +261,11 @@ export function DocumentIngestionDetailDrawer({
 
           {isError && (
             <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "16px",
-                backgroundColor: "#FEF2F2",
-                border: `1px solid #FECACA`,
-                borderRadius: 8,
-                color: T.danger,
-              }}
+              className="flex items-center gap-2 p-4 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400"
               role="alert"
             >
-              <AlertCircle style={{ width: 16, height: 16, flexShrink: 0 }} aria-hidden="true" />
-              <span style={{ fontSize: 13 }}>
+              <AlertCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span className="text-[13px]">
                 Failed to load document details. The source table may not exist yet.
               </span>
             </div>
@@ -371,36 +275,18 @@ export function DocumentIngestionDetailDrawer({
             <>
               {/* Processing engine badge */}
               <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  backgroundColor: T.accentBg,
-                  border: `1px solid #BFDBFE`,
-                  borderRadius: 14,
-                  padding: "4px 12px",
-                  marginBottom: 20,
-                }}
+                className="inline-flex items-center gap-1.5 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-[14px] px-3 py-1 mb-5"
                 aria-label={`Processing engine: ${processingEngine}`}
               >
-                <Cpu style={{ width: 13, height: 13, color: T.accent }} aria-hidden="true" />
-                <span style={{ fontSize: 12, fontWeight: 600, color: T.accent }}>
+                <Cpu className="w-[13px] h-[13px] text-blue-600 dark:text-blue-400" aria-hidden="true" />
+                <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
                   {processingEngine}
                 </span>
               </div>
 
               {/* Metadata section */}
               <section aria-label="Document metadata">
-                <h2
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.07em",
-                    color: T.subtle,
-                    marginBottom: 4,
-                  }}
-                >
+                <h2 className="text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-400 dark:text-slate-500 mb-1">
                   Metadata
                 </h2>
                 <div>
@@ -423,48 +309,27 @@ export function DocumentIngestionDetailDrawer({
 
               {/* Suspects section */}
               {suspects.length > 0 && (
-                <section aria-label="Extracted suspects" style={{ marginTop: 24 }}>
-                  <h2
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.07em",
-                      color: T.subtle,
-                      marginBottom: 8,
-                    }}
-                  >
+                <section aria-label="Extracted suspects" className="mt-6">
+                  <h2 className="text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-400 dark:text-slate-500 mb-2">
                     Suspects extracted ({suspects.length})
                   </h2>
-                  <div style={{ overflowX: "auto", borderRadius: 8, border: `1px solid ${T.border}` }}>
+                  <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
                     <table
-                      style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}
+                      className="w-full border-collapse text-xs"
                       aria-label="Extracted suspect conditions"
                     >
                       <thead>
-                        <tr style={{ backgroundColor: T.badgeBg }}>
-                          <th
-                            scope="col"
-                            style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, color: T.muted, fontSize: 11 }}
-                          >
+                        <tr className="bg-slate-100 dark:bg-slate-800">
+                          <th scope="col" className="px-2.5 py-2 text-left font-semibold text-slate-500 dark:text-slate-400 text-[11px]">
                             HCC
                           </th>
-                          <th
-                            scope="col"
-                            style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, color: T.muted, fontSize: 11 }}
-                          >
+                          <th scope="col" className="px-2.5 py-2 text-left font-semibold text-slate-500 dark:text-slate-400 text-[11px]">
                             ICD-10
                           </th>
-                          <th
-                            scope="col"
-                            style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, color: T.muted, fontSize: 11 }}
-                          >
+                          <th scope="col" className="px-2.5 py-2 text-left font-semibold text-slate-500 dark:text-slate-400 text-[11px]">
                             Confidence
                           </th>
-                          <th
-                            scope="col"
-                            style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, color: T.muted, fontSize: 11 }}
-                          >
+                          <th scope="col" className="px-2.5 py-2 text-left font-semibold text-slate-500 dark:text-slate-400 text-[11px]">
                             Evidence
                           </th>
                         </tr>
@@ -480,17 +345,7 @@ export function DocumentIngestionDetailDrawer({
               )}
 
               {suspects.length === 0 && !isLoading && (
-                <div
-                  style={{
-                    marginTop: 24,
-                    padding: "16px",
-                    backgroundColor: T.badgeBg,
-                    borderRadius: 8,
-                    textAlign: "center",
-                    color: T.muted,
-                    fontSize: 13,
-                  }}
-                >
+                <div className="mt-6 p-4 bg-slate-100 dark:bg-slate-800 rounded-lg text-center text-slate-500 dark:text-slate-400 text-[13px]">
                   No suspects extracted from this document.
                 </div>
               )}
@@ -500,43 +355,29 @@ export function DocumentIngestionDetailDrawer({
 
         {/* Footer: Re-process action (admin only) */}
         {isAdmin && data && (
-          <div
-            style={{
-              padding: "16px 20px",
-              borderTop: `1px solid ${T.border}`,
-              backgroundColor: T.bg,
-              position: "sticky",
-              bottom: 0,
-            }}
-          >
-            <div style={{ fontSize: 12, color: T.muted, marginBottom: 8 }}>
+          <div className="px-5 py-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 sticky bottom-0">
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">
               Re-process with different engine:
             </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div className="flex gap-2 flex-wrap">
               {["gemini_vision", "ocr_fallback", "clinical_nlp"].map((engine) => (
                 <button
                   key={engine}
                   disabled={reprocessMutation.isPending}
                   onClick={() => reprocessMutation.mutate(engine)}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 5,
-                    padding: "6px 14px",
-                    backgroundColor:
-                      processingEngine === engine ? T.accentBg : T.badgeBg,
-                    border: `1px solid ${processingEngine === engine ? T.accent : T.border}`,
-                    borderRadius: 6,
-                    fontSize: 12,
-                    fontWeight: 500,
-                    color: processingEngine === engine ? T.accent : T.text,
-                    cursor: reprocessMutation.isPending ? "not-allowed" : "pointer",
-                    opacity: reprocessMutation.isPending ? 0.6 : 1,
-                  }}
+                  className={`inline-flex items-center gap-[5px] px-3.5 py-1.5 rounded-md text-xs font-medium ${
+                    processingEngine === engine
+                      ? "bg-blue-50 dark:bg-blue-950 border border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400"
+                      : "bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-50"
+                  } ${
+                    reprocessMutation.isPending
+                      ? "cursor-not-allowed opacity-60"
+                      : "cursor-pointer"
+                  }`}
                   aria-label={`Re-process with ${engine}`}
                   aria-pressed={processingEngine === engine}
                 >
-                  <RotateCcw style={{ width: 12, height: 12 }} aria-hidden="true" />
+                  <RotateCcw className="w-3 h-3" aria-hidden="true" />
                   {engine}
                 </button>
               ))}
@@ -545,7 +386,7 @@ export function DocumentIngestionDetailDrawer({
               <div
                 role="status"
                 aria-live="polite"
-                style={{ marginTop: 8, fontSize: 12, color: T.success }}
+                className="mt-2 text-xs text-emerald-500 dark:text-emerald-400"
               >
                 Re-processing queued successfully.
               </div>
@@ -553,7 +394,7 @@ export function DocumentIngestionDetailDrawer({
             {reprocessMutation.isError && (
               <div
                 role="alert"
-                style={{ marginTop: 8, fontSize: 12, color: T.danger }}
+                className="mt-2 text-xs text-red-600 dark:text-red-400"
               >
                 Failed to queue re-processing. Try again.
               </div>

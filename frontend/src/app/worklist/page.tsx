@@ -458,6 +458,7 @@ export default function WorklistPage() {
 
   const [heatmapOpen, setHeatmapOpen] = useState(true);
   const [filterProviderId, setFilterProviderId] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
 
   // Bulk-select state
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -496,7 +497,21 @@ export default function WorklistPage() {
       staleTime: 120_000,
     });
 
-  const visibleItems = useMemo(() => data?.items ?? [], [data]);
+  const visibleItems = useMemo(() => {
+    const all = data?.items ?? [];
+    if (!search.trim()) return all;
+    const s = search.toLowerCase();
+    return all.filter((item) =>
+      item.patient_name.toLowerCase().includes(s) ||
+      item.open_recapture_gaps?.some((g) =>
+        g.hcc_code.toLowerCase().includes(s) ||
+        g.icd10_codes?.some((c) => c.toLowerCase().includes(s))
+      ) ||
+      item.suspect_conditions?.some((sc) =>
+        sc.hcc_code.toLowerCase().includes(s)
+      )
+    );
+  }, [data, search]);
 
   // Keyboard shortcuts: Cmd/Ctrl+A selects all visible, Esc clears
   useEffect(() => {
@@ -711,6 +726,18 @@ export default function WorklistPage() {
           icon={<Stethoscope size={20} />}
           actions={<HelpButton />}
         />
+
+        {/* Search */}
+        <div className="mt-4 mb-2">
+          <input
+            type="text"
+            placeholder="Search by patient name, HCC, or ICD..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search worklist"
+            className="w-full max-w-sm px-3 py-2 text-sm border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
 
         {/* Provider Workload Heatmap — elevated roles only */}
         {isElevated && (

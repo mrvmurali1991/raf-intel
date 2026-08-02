@@ -10,19 +10,6 @@ import { useQuery } from "@tanstack/react-query";
 
 import { getCfoSummary, type CfoExecutiveSummary } from "@/lib/api";
 
-const T = {
-  white: "#FFFFFF",
-  slate900: "#0F172A",
-  slate700: "#334155",
-  slate500: "#64748B",
-  slate300: "#CBD5E1",
-  slate200: "#E2E8F0",
-  slate100: "#F1F5F9",
-  slate50: "#F8FAFC",
-  emerald500: "#10B981",
-  red500: "#EF4444",
-};
-
 function formatUSD(n: number): string {
   if (!Number.isFinite(n)) return "$0";
   if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
@@ -42,27 +29,14 @@ interface BarProps {
 function Bar({ label, sub, amount, max, color, align }: BarProps) {
   const pct = max > 0 ? (amount / max) * 100 : 0;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          fontSize: 12,
-          color: T.slate700,
-        }}
-      >
-        <span style={{ fontWeight: 600 }}>{label}</span>
-        <span style={{ fontVariantNumeric: "tabular-nums", color: T.slate500 }}>{sub}</span>
+    <div className="flex flex-col gap-1">
+      <div className="flex justify-between text-xs text-slate-700 dark:text-slate-200">
+        <span className="font-semibold">{label}</span>
+        <span className="tabular-nums text-slate-500 dark:text-slate-400">{sub}</span>
       </div>
       <div
-        style={{
-          background: T.slate100,
-          borderRadius: 6,
-          height: 10,
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: align === "right" ? "row-reverse" : "row",
-        }}
+        className="bg-slate-100 dark:bg-slate-800 rounded-md h-2.5 overflow-hidden flex"
+        style={{ flexDirection: align === "right" ? "row-reverse" : "row" }}
       >
         <div
           style={{
@@ -74,13 +48,8 @@ function Bar({ label, sub, amount, max, color, align }: BarProps) {
         />
       </div>
       <div
-        style={{
-          fontSize: 12,
-          fontWeight: 700,
-          color: T.slate900,
-          textAlign: align === "right" ? "right" : "left",
-          fontVariantNumeric: "tabular-nums",
-        }}
+        className="text-xs font-bold text-slate-900 dark:text-slate-50 tabular-nums"
+        style={{ textAlign: align === "right" ? "right" : "left" }}
       >
         {formatUSD(amount)}
       </div>
@@ -101,15 +70,7 @@ export default function RecapturedByCondition({ year }: Props) {
 
   if (isLoading) {
     return (
-      <div
-        style={{
-          background: T.white,
-          border: `1px solid ${T.slate200}`,
-          borderRadius: 10,
-          padding: 16,
-          height: 220,
-        }}
-      />
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[10px] p-4 h-[220px]" />
     );
   }
   if (isError || !data) return null;
@@ -120,36 +81,19 @@ export default function RecapturedByCondition({ year }: Props) {
   const maxRisk = Math.max(1, ...risk.map((c) => c.dollars));
 
   return (
-    <div
-      style={{
-        background: T.white,
-        border: `1px solid ${T.slate200}`,
-        borderRadius: 10,
-        padding: 16,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 12,
-          fontSize: 13,
-          fontWeight: 600,
-          color: T.slate700,
-        }}
-      >
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[10px] p-4">
+      <div className="flex items-center justify-between mb-3 text-[13px] font-semibold text-slate-700 dark:text-slate-200">
         <span>Recaptured by condition (top 3)</span>
-        <span style={{ color: T.slate500 }}>vs $ at risk</span>
+        <span className="text-slate-500 dark:text-slate-400">vs $ at risk</span>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontSize: 11, color: T.emerald500, fontWeight: 700, textTransform: "uppercase" }}>
+      <div className="grid grid-cols-2 gap-6">
+        <div className="flex flex-col gap-3">
+          <div className="text-[11px] text-emerald-500 dark:text-emerald-400 font-bold uppercase">
             $ Recaptured
           </div>
           {recap.length === 0 ? (
-            <div style={{ fontSize: 12, color: T.slate500 }}>No closures yet this year.</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">No closures yet this year.</div>
           ) : (
             recap.map((c) => (
               <Bar
@@ -158,27 +102,19 @@ export default function RecapturedByCondition({ year }: Props) {
                 sub={`HCC ${c.hcc_code} · ${c.count}`}
                 amount={c.dollars}
                 max={maxRecap}
-                color={T.emerald500}
+                color="#10B981"
                 align="left"
               />
             ))
           )}
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div
-            style={{
-              fontSize: 11,
-              color: T.red500,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              textAlign: "right",
-            }}
-          >
+        <div className="flex flex-col gap-3">
+          <div className="text-[11px] text-red-500 dark:text-red-400 font-bold uppercase text-right">
             $ At Risk
           </div>
           {risk.length === 0 ? (
-            <div style={{ fontSize: 12, color: T.slate500, textAlign: "right" }}>
+            <div className="text-xs text-slate-500 dark:text-slate-400 text-right">
               No open gaps.
             </div>
           ) : (
@@ -189,7 +125,7 @@ export default function RecapturedByCondition({ year }: Props) {
                 sub={`HCC ${c.hcc_code} · ${c.count}`}
                 amount={c.dollars}
                 max={maxRisk}
-                color={T.red500}
+                color="#EF4444"
                 align="right"
               />
             ))

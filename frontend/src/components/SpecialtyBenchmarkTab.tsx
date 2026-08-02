@@ -31,29 +31,6 @@ interface SpecialtyCohort {
 }
 interface SpecialtyBenchmarks { measurement_year: number; specialties: SpecialtyCohort[] }
 
-// ---------------------------------------------------------------------------
-// Tokens
-// ---------------------------------------------------------------------------
-const T = {
-  emerald: "#10B981",
-  emerald50: "#ECFDF5",
-  blue: "#2563EB",
-  blue50: "#EFF6FF",
-  amber: "#F59E0B",
-  amber50: "#FFFBEB",
-  red: "#EF4444",
-  red50: "#FEF2F2",
-  slate100: "#F1F5F9",
-  slate200: "#E2E8F0",
-  slate300: "#CBD5E1",
-  slate400: "#64748B",
-  slate500: "#64748B",
-  slate700: "#334155",
-  slate900: "#0F172A",
-  white: "#FFFFFF",
-  primaryLight: "#EFF6FF",
-};
-
 const COLUMNS: { key: PeerKpiKey; label: string; format: "raf" | "pct" | "usd" }[] = [
   { key: "average_raf",                 label: "Avg RAF",     format: "raf" },
   { key: "hcc_capture_rate",            label: "Capture",     format: "pct" },
@@ -72,23 +49,21 @@ function fmt(value: number | null | undefined, kind: "raf" | "pct" | "usd"): str
   return `$${Math.round(value).toLocaleString()}`;
 }
 
-function chipColor(percentile: number | null): { fg: string; bg: string } {
+function chipColor(percentile: number | null): { fgClass: string; bgClass: string } {
   if (percentile === null || percentile === undefined) {
-    return { fg: T.slate400, bg: T.slate100 };
+    return { fgClass: "text-slate-500 dark:text-slate-400", bgClass: "bg-slate-100 dark:bg-slate-800" };
   }
-  if (percentile >= 75) return { fg: T.emerald, bg: T.emerald50 };
-  if (percentile >= 50) return { fg: T.blue, bg: T.blue50 };
-  if (percentile >= 25) return { fg: T.amber, bg: T.amber50 };
-  return { fg: T.red, bg: T.red50 };
+  if (percentile >= 75) return { fgClass: "text-emerald-500 dark:text-emerald-400", bgClass: "bg-emerald-50 dark:bg-emerald-950" };
+  if (percentile >= 50) return { fgClass: "text-blue-600 dark:text-blue-400", bgClass: "bg-blue-50 dark:bg-blue-950" };
+  if (percentile >= 25) return { fgClass: "text-amber-500 dark:text-amber-400", bgClass: "bg-amber-50 dark:bg-amber-950" };
+  return { fgClass: "text-red-500 dark:text-red-400", bgClass: "bg-red-50 dark:bg-red-950" };
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 export interface SpecialtyBenchmarkTabProps {
-  /** The currently-focused provider — its row gets highlighted. */
   providerId: number;
-  /** Specialty string used to find the cohort.  Required — pass from drawer. */
   specialty: string | null | undefined;
   year?: number;
 }
@@ -113,7 +88,7 @@ export default function SpecialtyBenchmarkTab({
 
   if (q.isLoading) {
     return (
-      <div style={{ padding: 18, color: T.slate500, fontSize: 13 }}>
+      <div className="p-[18px] text-slate-500 dark:text-slate-400 text-[13px]">
         Loading specialty benchmarks…
       </div>
     );
@@ -121,7 +96,7 @@ export default function SpecialtyBenchmarkTab({
 
   if (q.isError) {
     return (
-      <div style={{ padding: 18, color: T.red, fontSize: 13 }}>
+      <div className="p-[18px] text-red-500 dark:text-red-400 text-[13px]">
         Specialty benchmarks unavailable. {(q.error as Error)?.message ?? ""}
       </div>
     );
@@ -129,20 +104,20 @@ export default function SpecialtyBenchmarkTab({
 
   if (!cohort) {
     return (
-      <div style={{ padding: 18, color: T.slate500, fontSize: 13 }}>
+      <div className="p-[18px] text-slate-500 dark:text-slate-400 text-[13px]">
         No cohort data for{" "}
-        <strong style={{ color: T.slate700 }}>{specialty ?? "this specialty"}</strong>.
+        <strong className="text-slate-700 dark:text-slate-200">{specialty ?? "this specialty"}</strong>.
       </div>
     );
   }
 
   if (cohort.insufficient_peers) {
     return (
-      <div style={{ padding: 18, fontSize: 13 }}>
-        <div style={{ fontWeight: 600, color: T.slate900, marginBottom: 4 }}>
+      <div className="p-[18px] text-[13px]">
+        <div className="font-semibold text-slate-900 dark:text-slate-50 mb-1">
           {cohort.specialty}
         </div>
-        <div style={{ color: T.slate500 }}>
+        <div className="text-slate-500 dark:text-slate-400">
           Cohort has only {cohort.cohort_size} provider{cohort.cohort_size === 1 ? "" : "s"} —
           peer benchmarking requires ≥3 providers in the same specialty.
         </div>
@@ -153,68 +128,42 @@ export default function SpecialtyBenchmarkTab({
   const peerCount = Math.max(0, cohort.cohort_size - 1);
 
   return (
-    <div style={{ padding: 18 }}>
+    <div className="p-[18px]">
       {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-          marginBottom: 12,
-        }}
-      >
+      <div className="flex items-baseline justify-between mb-3">
         <div>
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              color: T.slate400,
-            }}
-          >
+          <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
             Specialty Cohort
           </div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: T.slate900 }}>
+          <div className="text-base font-bold text-slate-900 dark:text-slate-50">
             {cohort.specialty}
           </div>
         </div>
-        <div style={{ fontSize: 12, color: T.slate500 }}>
+        <div className="text-xs text-slate-500 dark:text-slate-400">
           {cohort.cohort_size} providers · {peerCount} peers
         </div>
       </div>
 
       {/* Cohort summary strip */}
       <div
+        className="bg-slate-100 dark:bg-slate-800 rounded-lg mb-3.5"
         style={{
           display: "grid",
           gridTemplateColumns: `repeat(${COLUMNS.length}, minmax(0, 1fr))`,
           gap: 8,
           padding: "10px 12px",
-          background: T.slate100,
-          borderRadius: 8,
-          marginBottom: 14,
         }}
       >
         {COLUMNS.map((c) => {
           const stat = cohort.cohort_summary[c.key];
           return (
             <div key={c.key}>
-              <div
-                style={{
-                  fontSize: 9,
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.04em",
-                  color: T.slate400,
-                  marginBottom: 4,
-                }}
-              >
+              <div className="text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
                 {c.label}
               </div>
-              <div style={{ fontSize: 11, color: T.slate700 }}>
+              <div className="text-[11px] text-slate-700 dark:text-slate-200">
                 <div>med {fmt(stat?.median, c.format)}</div>
-                <div style={{ color: T.slate400, fontSize: 10 }}>
+                <div className="text-slate-500 dark:text-slate-400 text-[10px]">
                   {fmt(stat?.min, c.format)} – {fmt(stat?.max, c.format)}
                 </div>
               </div>
@@ -224,50 +173,17 @@ export default function SpecialtyBenchmarkTab({
       </div>
 
       {/* Provider table */}
-      <div
-        style={{
-          border: `1px solid ${T.slate200}`,
-          borderRadius: 8,
-          overflow: "auto",
-        }}
-      >
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            fontSize: 12,
-          }}
-        >
+      <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-auto">
+        <table className="w-full border-collapse text-xs">
           <thead>
-            <tr style={{ background: T.slate100 }}>
-              <th
-                style={{
-                  textAlign: "left",
-                  padding: "8px 12px",
-                  color: T.slate500,
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  fontSize: 10,
-                  letterSpacing: "0.04em",
-                  borderBottom: `1px solid ${T.slate200}`,
-                }}
-              >
+            <tr className="bg-slate-100 dark:bg-slate-800">
+              <th className="text-left px-3 py-2 text-slate-500 dark:text-slate-400 font-semibold uppercase text-[10px] tracking-wide border-b border-slate-200 dark:border-slate-700">
                 Provider
               </th>
               {COLUMNS.map((c) => (
                 <th
                   key={c.key}
-                  style={{
-                    textAlign: "left",
-                    padding: "8px 8px",
-                    color: T.slate500,
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    fontSize: 10,
-                    letterSpacing: "0.04em",
-                    borderBottom: `1px solid ${T.slate200}`,
-                    whiteSpace: "nowrap",
-                  }}
+                  className="text-left px-2 py-2 text-slate-500 dark:text-slate-400 font-semibold uppercase text-[10px] tracking-wide border-b border-slate-200 dark:border-slate-700 whitespace-nowrap"
                 >
                   {c.label}
                 </th>
@@ -286,14 +202,7 @@ export default function SpecialtyBenchmarkTab({
         </table>
       </div>
 
-      <div
-        style={{
-          marginTop: 10,
-          fontSize: 10,
-          color: T.slate400,
-          lineHeight: 1.5,
-        }}
-      >
+      <div className="mt-2.5 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
         Chips encode percentile-rank inside this cohort: emerald ≥75 ·
         blue ≥50 · amber ≥25 · red &lt;25.  Higher is better for every KPI.
       </div>
@@ -316,34 +225,20 @@ function ProviderRow({
   const name = r.full_name?.trim() || `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || row.provider_name;
   return (
     <tr
-      style={{
-        background: isCurrent ? T.primaryLight : T.white,
-        borderBottom: `1px solid ${T.slate100}`,
-      }}
+      className={`border-b border-slate-100 dark:border-slate-800 ${
+        isCurrent ? "bg-blue-50 dark:bg-blue-950" : "bg-white dark:bg-slate-900"
+      }`}
     >
       <td
-        style={{
-          padding: "10px 12px",
-          color: isCurrent ? T.blue : T.slate900,
-          fontWeight: isCurrent ? 700 : 600,
-          whiteSpace: "nowrap",
-        }}
+        className={`px-3 py-2.5 whitespace-nowrap ${
+          isCurrent
+            ? "text-blue-600 dark:text-blue-400 font-bold"
+            : "text-slate-900 dark:text-slate-50 font-semibold"
+        }`}
       >
         {name || `Provider ${row.provider_id}`}
         {isCurrent && (
-          <span
-            style={{
-              marginLeft: 6,
-              fontSize: 9,
-              fontWeight: 700,
-              color: T.blue,
-              background: T.blue50,
-              padding: "2px 6px",
-              borderRadius: 999,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-            }}
-          >
+          <span className="ml-1.5 text-[9px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 rounded-full uppercase tracking-wide px-1.5 py-0.5">
             You
           </span>
         )}
@@ -351,36 +246,20 @@ function ProviderRow({
       {COLUMNS.map((c) => {
         const value = row.kpis[c.key] ?? null;
         const pct = row.percentiles[c.key] ?? null;
-        const { fg, bg } = chipColor(pct);
+        const { fgClass, bgClass } = chipColor(pct);
         return (
-          <td key={c.key} style={{ padding: "10px 8px", whiteSpace: "nowrap" }}>
+          <td key={c.key} className="px-2 py-2.5 whitespace-nowrap">
             <div
               title={
                 pct !== null && pct !== undefined
                   ? `${c.label}: ${Math.round(pct)}th percentile`
                   : `${c.label}: no peer data`
               }
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "3px 8px",
-                background: bg,
-                color: fg,
-                borderRadius: 999,
-                fontWeight: 700,
-                fontSize: 11,
-              }}
+              className={`inline-flex items-center gap-1.5 rounded-full font-bold text-[11px] px-2 py-0.5 ${bgClass} ${fgClass}`}
             >
               <span>{fmt(value, c.format)}</span>
               {pct !== null && pct !== undefined && (
-                <span
-                  style={{
-                    fontSize: 9,
-                    opacity: 0.85,
-                    fontWeight: 600,
-                  }}
-                >
+                <span className="text-[9px] opacity-85 font-semibold">
                   · p{Math.round(pct)}
                 </span>
               )}

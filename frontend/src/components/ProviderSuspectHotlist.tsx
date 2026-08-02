@@ -8,19 +8,6 @@
  * Backed by GET /api/providers/{id}/suspect-hotlist which returns the top
  * open suspects across the provider's panel ranked by a blended urgency
  * score (confidence + expected $ + days_open).
- *
- * UX:
- *   - Header strip with "X open / Y high-confidence / $Z avg per code".
- *   - Confidence threshold filter (0.5 / 0.7 / 0.9).
- *   - List of compact cards, color-coded by urgency:
- *       red    : urgency >= 0.8
- *       amber  : 0.6 <= urgency < 0.8
- *       blue   : urgency < 0.6
- *   - Each card links to the patient detail page.
- *   - Auto-refreshes every 60s via React Query.
- *
- * Design language matches the rest of the providers page (slate / blue /
- * emerald / amber / red palette).
  */
 import React from "react";
 import Link from "next/link";
@@ -30,31 +17,6 @@ import {
   type ProviderSuspectHotlist,
   type SuspectHotlistItem,
 } from "@/lib/api";
-
-// ---------------------------------------------------------------------------
-// Tokens (mirrors providers/page.tsx so the panel feels native to the drawer)
-// ---------------------------------------------------------------------------
-const T = {
-  white: "#FFFFFF",
-  slate900: "#0F172A",
-  slate700: "#334155",
-  slate500: "#64748B",
-  slate400: "#64748B",
-  slate300: "#CBD5E1",
-  slate200: "#E2E8F0",
-  slate100: "#F1F5F9",
-  slate50: "#F8FAFC",
-  blue600: "#2563EB",
-  blue50: "#EFF6FF",
-  amber600: "#D97706",
-  amber500: "#F59E0B",
-  amber50: "#FFFBEB",
-  red600: "#DC2626",
-  red500: "#EF4444",
-  red50: "#FEF2F2",
-  emerald600: "#059669",
-  emerald50: "#ECFDF5",
-};
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -67,14 +29,19 @@ function fmt$(n: number | null | undefined): string {
   return `$${Math.round(n).toLocaleString()}`;
 }
 
-function urgencyTone(score: number): { fg: string; bg: string; border: string; label: string } {
+function urgencyTone(score: number): {
+  fgClass: string;
+  bgClass: string;
+  borderClass: string;
+  label: string;
+} {
   if (score >= 0.8) {
-    return { fg: T.red600, bg: T.red50, border: T.red500, label: "Urgent" };
+    return { fgClass: "text-red-600 dark:text-red-400", bgClass: "bg-red-50 dark:bg-red-950", borderClass: "border-l-red-500 dark:border-l-red-400", label: "Urgent" };
   }
   if (score >= 0.6) {
-    return { fg: T.amber600, bg: T.amber50, border: T.amber500, label: "High" };
+    return { fgClass: "text-amber-600 dark:text-amber-400", bgClass: "bg-amber-50 dark:bg-amber-950", borderClass: "border-l-amber-500 dark:border-l-amber-400", label: "High" };
   }
-  return { fg: T.blue600, bg: T.blue50, border: T.blue600, label: "Watch" };
+  return { fgClass: "text-blue-600 dark:text-blue-400", bgClass: "bg-blue-50 dark:bg-blue-950", borderClass: "border-l-blue-600 dark:border-l-blue-400", label: "Watch" };
 }
 
 // ---------------------------------------------------------------------------
@@ -96,7 +63,7 @@ const CONFIDENCE_OPTIONS = [
   { label: ">= 0.90", value: 0.9 },
 ];
 
-export default function ProviderSuspectHotlist({
+export default function ProviderSuspectHotlistPanel({
   providerId,
   year,
   limit = 20,
@@ -111,7 +78,6 @@ export default function ProviderSuspectHotlist({
         limit,
         minConfidence,
       }),
-    // Real-time feel: poll every 60s, treat as stale immediately on focus.
     refetchInterval: 60_000,
     staleTime: 60_000,
     refetchOnWindowFocus: true,
@@ -127,11 +93,11 @@ export default function ProviderSuspectHotlist({
       />
 
       {q.isError ? (
-        <div style={{ padding: 16, color: T.red600, fontSize: 13 }}>
+        <div className="p-4 text-red-600 dark:text-red-400 text-[13px]">
           Hot-list unavailable. {(q.error as Error)?.message ?? ""}
         </div>
       ) : q.isLoading ? (
-        <div style={{ padding: 24, color: T.slate500, fontSize: 13, textAlign: "center" }}>
+        <div className="p-6 text-slate-500 dark:text-slate-400 text-[13px] text-center">
           Calculating urgency scores…
         </div>
       ) : !q.data || q.data.items.length === 0 ? (
@@ -150,15 +116,7 @@ export default function ProviderSuspectHotlist({
 // ---------------------------------------------------------------------------
 function Card({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      style={{
-        background: T.white,
-        border: `1px solid ${T.slate200}`,
-        borderRadius: 10,
-        boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
-        overflow: "hidden",
-      }}
-    >
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[10px] shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
       {children}
     </div>
   );
@@ -176,36 +134,13 @@ function Header({
   onChangeMinConfidence: (v: number) => void;
 }) {
   return (
-    <div
-      style={{
-        padding: "16px 18px",
-        borderBottom: `1px solid ${T.slate100}`,
-        background: T.slate50,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 12,
-          flexWrap: "wrap",
-        }}
-      >
+    <div className="px-[18px] py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              color: T.slate400,
-              marginBottom: 4,
-            }}
-          >
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">
             Real-Time Suspect Hot-List
           </div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: T.slate900 }}>
+          <div className="text-base font-bold text-slate-900 dark:text-slate-50">
             Action this week
           </div>
         </div>
@@ -214,13 +149,7 @@ function Header({
         <div
           role="radiogroup"
           aria-label="Minimum confidence filter"
-          style={{
-            display: "inline-flex",
-            background: T.white,
-            border: `1px solid ${T.slate200}`,
-            borderRadius: 8,
-            padding: 2,
-          }}
+          className="inline-flex bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5"
         >
           {CONFIDENCE_OPTIONS.map((opt) => {
             const active = Math.abs(opt.value - minConfidence) < 1e-6;
@@ -230,17 +159,11 @@ function Header({
                 role="radio"
                 aria-checked={active}
                 onClick={() => onChangeMinConfidence(opt.value)}
-                style={{
-                  border: "none",
-                  background: active ? T.blue600 : "transparent",
-                  color: active ? T.white : T.slate500,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  padding: "5px 10px",
-                  borderRadius: 6,
-                  cursor: "pointer",
-                  letterSpacing: "0.02em",
-                }}
+                className={`border-none text-[11px] font-semibold rounded-md cursor-pointer tracking-tight px-2.5 py-1 ${
+                  active
+                    ? "bg-blue-600 text-white"
+                    : "bg-transparent text-slate-500 dark:text-slate-400"
+                }`}
               >
                 {opt.label}
               </button>
@@ -250,18 +173,11 @@ function Header({
       </div>
 
       {/* Summary strip */}
-      <div
-        style={{
-          marginTop: 12,
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: 12,
-        }}
-      >
+      <div className="mt-3 grid grid-cols-3 gap-3">
         <Stat
           label="Open"
           value={loading ? "…" : (summary?.total_open ?? 0).toLocaleString()}
-          color={T.slate900}
+          colorClass="text-slate-900 dark:text-slate-50"
         />
         <Stat
           label={`High-Confidence (>= ${
@@ -270,34 +186,25 @@ function Header({
               : 80
           }%)`}
           value={loading ? "…" : (summary?.high_confidence_count ?? 0).toLocaleString()}
-          color={T.emerald600}
+          colorClass="text-emerald-600 dark:text-emerald-400"
         />
         <Stat
           label="Avg $ / Code"
           value={loading ? "…" : fmt$(summary?.avg_dollars_per_suspect ?? 0)}
-          color={T.blue600}
+          colorClass="text-blue-600 dark:text-blue-400"
         />
       </div>
     </div>
   );
 }
 
-function Stat({ label, value, color }: { label: string; value: string; color: string }) {
+function Stat({ label, value, colorClass }: { label: string; value: string; colorClass: string }) {
   return (
     <div>
-      <div
-        style={{
-          fontSize: 10,
-          fontWeight: 600,
-          textTransform: "uppercase",
-          letterSpacing: "0.04em",
-          color: T.slate400,
-          marginBottom: 4,
-        }}
-      >
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
         {label}
       </div>
-      <div style={{ fontSize: 16, fontWeight: 700, color, lineHeight: 1.1 }}>
+      <div className={`text-base font-bold leading-tight ${colorClass}`}>
         {value}
       </div>
     </div>
@@ -306,16 +213,7 @@ function Stat({ label, value, color }: { label: string; value: string; color: st
 
 function ItemList({ items }: { items: SuspectHotlistItem[] }) {
   return (
-    <ul
-      style={{
-        listStyle: "none",
-        margin: 0,
-        padding: "12px 12px 14px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-      }}
-    >
+    <ul className="list-none m-0 flex flex-col gap-2 px-3 py-3">
       {items.map((it) => (
         <SuspectCard key={it.suspect_id} item={it} />
       ))}
@@ -329,122 +227,48 @@ function SuspectCard({ item }: { item: SuspectHotlistItem }) {
     <li>
       <Link
         href={`/patients/${item.patient_id}`}
-        style={{
-          display: "block",
-          textDecoration: "none",
-          color: "inherit",
-        }}
+        className="block no-underline text-inherit"
       >
         <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr auto",
-            gap: 12,
-            alignItems: "center",
-            padding: "12px 14px",
-            border: `1px solid ${T.slate200}`,
-            borderLeft: `4px solid ${tone.border}`,
-            borderRadius: 10,
-            background: T.white,
-            transition: "background 120ms ease",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLDivElement).style.background = T.slate50;
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLDivElement).style.background = T.white;
-          }}
+          className={`grid grid-cols-[1fr_auto] gap-3 items-center p-3 border border-slate-200 dark:border-slate-700 border-l-4 ${tone.borderClass} rounded-[10px] bg-white dark:bg-slate-900 transition-colors duration-[120ms] hover:bg-slate-50 dark:hover:bg-slate-800`}
         >
           <div style={{ minWidth: 0 }}>
             {/* Top row: patient + urgency tag */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                marginBottom: 6,
-                flexWrap: "wrap",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: T.slate900,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  maxWidth: 220,
-                }}
-              >
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+              <span className="text-[13px] font-bold text-slate-900 dark:text-slate-50 whitespace-nowrap overflow-hidden text-ellipsis max-w-[220px]">
                 {item.patient_name}
               </span>
               <Pill
-                fg={tone.fg}
-                bg={tone.bg}
+                className={`${tone.bgClass} ${tone.fgClass}`}
                 label={`${tone.label} · ${(item.urgency_score * 100).toFixed(0)}`}
               />
             </div>
 
             {/* Bottom row: HCC chip + label + confidence + $ + days */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                flexWrap: "wrap",
-                fontSize: 12,
-              }}
-            >
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  padding: "2px 8px",
-                  background: T.blue50,
-                  color: T.blue600,
-                  borderRadius: 6,
-                  fontWeight: 700,
-                  fontSize: 11,
-                  letterSpacing: "0.02em",
-                }}
-              >
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <span className="inline-flex items-center bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 rounded-md font-bold text-[11px] tracking-tight px-2 py-0.5">
                 HCC {item.hcc_code}
               </span>
               <span
-                style={{
-                  color: T.slate700,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  maxWidth: 260,
-                }}
+                className="text-slate-700 dark:text-slate-200 whitespace-nowrap overflow-hidden text-ellipsis max-w-[260px]"
                 title={item.hcc_label}
               >
                 {item.hcc_label}
               </span>
               {item.icd10 ? (
-                <span
-                  style={{
-                    color: T.slate500,
-                    fontFamily: "monospace",
-                    fontSize: 11,
-                  }}
-                >
+                <span className="text-slate-500 dark:text-slate-400 font-mono text-[11px]">
                   {item.icd10}
                 </span>
               ) : null}
               <Pill
-                fg={T.emerald600}
-                bg={T.emerald50}
+                className="bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400"
                 label={`${(item.confidence * 100).toFixed(0)}% conf`}
               />
               <Pill
-                fg={T.slate700}
-                bg={T.slate100}
+                className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
                 label={fmt$(item.expected_dollars)}
               />
-              <span style={{ color: T.slate400, fontSize: 11 }}>
+              <span className="text-slate-500 dark:text-slate-400 text-[11px]">
                 {item.days_open} day{item.days_open === 1 ? "" : "s"} open
               </span>
             </div>
@@ -455,19 +279,10 @@ function SuspectCard({ item }: { item: SuspectHotlistItem }) {
   );
 }
 
-function Pill({ fg, bg, label }: { fg: string; bg: string; label: string }) {
+function Pill({ className, label }: { className: string; label: string }) {
   return (
     <span
-      style={{
-        display: "inline-block",
-        padding: "2px 8px",
-        background: bg,
-        color: fg,
-        fontSize: 11,
-        fontWeight: 700,
-        borderRadius: 999,
-        whiteSpace: "nowrap",
-      }}
+      className={`inline-block rounded-full text-[11px] font-bold whitespace-nowrap px-2 py-0.5 ${className}`}
     >
       {label}
     </span>
@@ -476,14 +291,7 @@ function Pill({ fg, bg, label }: { fg: string; bg: string; label: string }) {
 
 function EmptyState({ minConfidence }: { minConfidence: number }) {
   return (
-    <div
-      style={{
-        padding: 24,
-        textAlign: "center",
-        color: T.slate500,
-        fontSize: 13,
-      }}
-    >
+    <div className="p-6 text-center text-slate-500 dark:text-slate-400 text-[13px]">
       {minConfidence > 0 ? (
         <>No open suspects at confidence ≥ {Math.round(minConfidence * 100)}%.</>
       ) : (
@@ -495,16 +303,7 @@ function EmptyState({ minConfidence }: { minConfidence: number }) {
 
 function Footer({ year }: { year: number | undefined }) {
   return (
-    <div
-      style={{
-        padding: "8px 16px",
-        borderTop: `1px solid ${T.slate100}`,
-        fontSize: 10,
-        color: T.slate400,
-        background: T.slate50,
-        lineHeight: 1.5,
-      }}
-    >
+    <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 leading-relaxed">
       Urgency = 0.5·confidence + 0.3·($/max panel $) + 0.2·(days open / 90) ·
       auto-refresh 60s{year ? ` · year ${year}` : ""}
     </div>

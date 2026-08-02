@@ -12,9 +12,6 @@
  * If the cohort has fewer than 3 peers, the API returns
  * `insufficient_peers: true` and we render nothing — peer comparison is
  * meaningless at that scale.
- *
- * Renders inline-styled tokens so it stays Tailwind-free, matching the rest
- * of the providers page palette.
  */
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -25,34 +22,12 @@ import {
 } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
-// Tokens
-// ---------------------------------------------------------------------------
-const T = {
-  emerald: "#10B981",
-  emerald50: "#ECFDF5",
-  blue: "#2563EB",
-  blue50: "#EFF6FF",
-  amber: "#F59E0B",
-  amber50: "#FFFBEB",
-  red: "#EF4444",
-  red50: "#FEF2F2",
-  slate100: "#F1F5F9",
-  slate200: "#E2E8F0",
-  slate300: "#CBD5E1",
-  slate400: "#64748B",
-  slate500: "#64748B",
-  slate700: "#334155",
-  slate900: "#0F172A",
-  white: "#FFFFFF",
-};
-
-// ---------------------------------------------------------------------------
 // KPI metadata — display order, label, cohort-context noun
 // ---------------------------------------------------------------------------
 type KpiMeta = {
   key: PeerKpiKey;
-  short: string;     // 3-char token under bar
-  label: string;     // tooltip phrase ("MEAT compliance")
+  short: string;
+  label: string;
 };
 
 const KPI_ORDER: KpiMeta[] = [
@@ -64,14 +39,14 @@ const KPI_ORDER: KpiMeta[] = [
   { key: "documentation_quality_score", short: "DOC", label: "Doc quality" },
 ];
 
-function colorFor(percentile: number | null): { fg: string; bg: string } {
+function colorFor(percentile: number | null): { bgClass: string; fgClass: string } {
   if (percentile === null || percentile === undefined) {
-    return { fg: T.slate400, bg: T.slate100 };
+    return { fgClass: "bg-slate-500 dark:bg-slate-400", bgClass: "bg-slate-100 dark:bg-slate-800" };
   }
-  if (percentile >= 75) return { fg: T.emerald, bg: T.emerald50 };
-  if (percentile >= 50) return { fg: T.blue, bg: T.blue50 };
-  if (percentile >= 25) return { fg: T.amber, bg: T.amber50 };
-  return { fg: T.red, bg: T.red50 };
+  if (percentile >= 75) return { fgClass: "bg-emerald-500 dark:bg-emerald-400", bgClass: "bg-emerald-50 dark:bg-emerald-950" };
+  if (percentile >= 50) return { fgClass: "bg-blue-600 dark:bg-blue-400", bgClass: "bg-blue-50 dark:bg-blue-950" };
+  if (percentile >= 25) return { fgClass: "bg-amber-500 dark:bg-amber-400", bgClass: "bg-amber-50 dark:bg-amber-950" };
+  return { fgClass: "bg-red-500 dark:bg-red-400", bgClass: "bg-red-50 dark:bg-red-950" };
 }
 
 function ordinal(p: number): string {
@@ -91,11 +66,8 @@ function ordinal(p: number): string {
 // ---------------------------------------------------------------------------
 export interface PeerPercentileRibbonProps {
   providerId: number | string;
-  /** Defaults to current year on the backend if omitted. */
   year?: number;
-  /** Optional cohort noun shown in tooltip ("PCPs", "specialists"). Falls back to "peers". */
   cohortNoun?: string;
-  /** Compact mode — slightly shorter bars (default true on table rows). */
   compact?: boolean;
 }
 
@@ -113,7 +85,6 @@ export default function PeerPercentileRibbon({
     retry: 1,
   });
 
-  // Skeleton — render an empty strip so layout doesn't reflow.
   if (q.isLoading) {
     return <Skeleton compact={compact} />;
   }
@@ -122,7 +93,6 @@ export default function PeerPercentileRibbon({
     return null;
   }
 
-  // Graceful fallback: small / unknown cohort → render nothing per spec.
   if (q.data.insufficient_peers || q.data.cohort_size < 3) {
     return null;
   }
@@ -138,20 +108,12 @@ export default function PeerPercentileRibbon({
     <div
       role="group"
       aria-label="Peer percentile ribbon"
-      style={{
-        display: "inline-flex",
-        alignItems: "flex-end",
-        gap,
-        padding: "4px 8px",
-        background: T.white,
-        border: `1px solid ${T.slate200}`,
-        borderRadius: 8,
-        boxShadow: "0 1px 1px rgba(15, 23, 42, 0.03)",
-      }}
+      className="inline-flex items-end bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-[0_1px_1px_rgba(15,23,42,0.03)]"
+      style={{ gap, padding: "4px 8px" }}
     >
       {KPI_ORDER.map((kpi) => {
         const pct = data.percentiles[kpi.key] ?? null;
-        const { fg, bg } = colorFor(pct);
+        const { fgClass, bgClass } = colorFor(pct);
         const fillH = pct === null ? 4 : Math.max(4, Math.round((pct / 100) * barH));
         const tooltip =
           pct === null
@@ -163,45 +125,19 @@ export default function PeerPercentileRibbon({
             key={kpi.key}
             title={tooltip}
             aria-label={tooltip}
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 3,
-            }}
+            className="flex flex-col items-center"
+            style={{ gap: 3 }}
           >
             <div
-              style={{
-                width: barW,
-                height: barH,
-                background: bg,
-                borderRadius: 4,
-                position: "relative",
-                overflow: "hidden",
-              }}
+              className={`${bgClass} rounded overflow-hidden relative`}
+              style={{ width: barW, height: barH }}
             >
               <div
-                style={{
-                  position: "absolute",
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  height: fillH,
-                  background: fg,
-                  borderRadius: 4,
-                  transition: "height 0.25s ease",
-                }}
+                className={`${fgClass} rounded absolute bottom-0 left-0 right-0 transition-[height] duration-[250ms] ease-out`}
+                style={{ height: fillH }}
               />
             </div>
-            <div
-              style={{
-                fontSize: 8,
-                fontWeight: 700,
-                color: T.slate500,
-                letterSpacing: "0.04em",
-                lineHeight: 1,
-              }}
-            >
+            <div className="text-[8px] font-bold text-slate-500 dark:text-slate-400 tracking-wide leading-none">
               {kpi.short}
             </div>
           </div>
@@ -221,26 +157,14 @@ function Skeleton({ compact }: { compact: boolean }) {
   return (
     <div
       aria-hidden
-      style={{
-        display: "inline-flex",
-        alignItems: "flex-end",
-        gap,
-        padding: "4px 8px",
-        background: T.white,
-        border: `1px solid ${T.slate200}`,
-        borderRadius: 8,
-        opacity: 0.6,
-      }}
+      className="inline-flex items-end bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg opacity-60"
+      style={{ gap, padding: "4px 8px" }}
     >
       {KPI_ORDER.map((k) => (
         <div
           key={k.key}
-          style={{
-            width: barW,
-            height: barH,
-            background: T.slate100,
-            borderRadius: 4,
-          }}
+          className="bg-slate-100 dark:bg-slate-800 rounded"
+          style={{ width: barW, height: barH }}
         />
       ))}
     </div>

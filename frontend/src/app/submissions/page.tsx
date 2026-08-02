@@ -4,7 +4,6 @@ import React, { useState, useCallback, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
-import { tokens } from "@/styles/tokens";
 import { DataQualityBanner } from "@/components/DataQualityBanner";
 import {
   Send,
@@ -53,56 +52,13 @@ const LazyBatchDetailPanel = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 48, gap: 10, color: "#64748B" }}>
-        <div style={{ width: 20, height: 20, border: "3px solid #E2E8F0", borderTopColor: "#2563EB", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-        <span style={{ fontSize: 14 }}>Loading detail…</span>
+      <div className="flex items-center justify-center p-12 gap-2.5 text-slate-500 dark:text-slate-400">
+        <div className="w-5 h-5 border-[3px] border-slate-200 dark:border-slate-700 border-t-blue-600 rounded-full animate-spin" />
+        <span className="text-sm">Loading detail…</span>
       </div>
     ),
   }
 );
-
-// ─────────────────────────────────────────────
-// Design Tokens (sourced from tokens.ts — no hardcoded hex)
-// ─────────────────────────────────────────────
-
-const T = {
-  white:      tokens.white,
-  slate50:    tokens.slate50,
-  slate100:   tokens.slate100,
-  slate200:   tokens.slate200,
-  slate300:   tokens.slate300,
-  slate400:   tokens.slate400,
-  slate500:   tokens.slate500,
-  slate600:   tokens.slate600,
-  slate700:   tokens.slate700,
-  slate800:   tokens.slate800,
-  slate900:   tokens.slate900,
-  blue50:     tokens.primarySoft,
-  blue100:    "rgba(37,99,235,0.12)",
-  blue500:    tokens.infoBlue,
-  blue600:    tokens.primary,
-  blue700:    tokens.primaryDark,
-  emerald50:  tokens.successSoft,
-  emerald100: tokens.emerald100,
-  emerald500: tokens.success,
-  emerald600: tokens.riskLow,
-  amber50:    tokens.warningSoft,
-  amber100:   tokens.warningSoft,
-  amber500:   tokens.warningStrong,
-  amber600:   tokens.riskMedium,
-  red50:      tokens.riskHighSoft,
-  red100:     tokens.dangerSoft,
-  red500:     tokens.riskHigh,
-  red600:     tokens.danger,
-  violet50:   "rgba(139,92,246,0.08)",
-  violet500:  tokens.accentPurple,
-  violet600:  "rgba(124,58,237,1)",
-  gray100:    tokens.slate100,
-  gray200:    tokens.slate200,
-  gray400:    tokens.slate400,
-  gray500:    tokens.slate500,
-};
-
 
 // ─────────────────────────────────────────────
 // Types
@@ -227,7 +183,6 @@ async function fetchBatches(): Promise<SubmissionBatch[]> {
 async function fetchDeadlines(): Promise<Deadline[]> {
   const { data } = await api.get(`/api/submissions/schedule`);
   const raw = Array.isArray(data) ? data : (data?.schedule ?? []);
-  // Map API field names to frontend interface
   return raw.map((d: any) => ({
     name: d.description ?? d.name ?? '',
     type: d.submission_type ?? d.type ?? 'RAPS',
@@ -248,43 +203,20 @@ async function fetchBatchDetail(batchId: string): Promise<BatchDetail> {
 // ─────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: BatchStatus }) {
-  const map: Record<BatchStatus, { label: string; bg: string; color: string; dot: string; icon: React.ReactNode }> = {
-    draft: { label: "Draft", bg: T.slate100, color: T.slate600, dot: T.slate400, icon: <Clock size={11} /> },
-    validating: { label: "Validating", bg: T.blue100, color: T.blue700, dot: T.blue500, icon: <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} /> },
-    validated: { label: "Validated", bg: T.emerald50, color: T.emerald600, dot: T.emerald500, icon: <CheckCircle size={11} /> },
-    submitted: { label: "Submitted", bg: `${T.emerald500}18`, color: T.emerald600, dot: T.emerald500, icon: <Send size={11} /> },
-    accepted: { label: "Accepted", bg: T.emerald100, color: T.emerald600, dot: T.emerald500, icon: <CheckCircle size={11} /> },
-    rejected: { label: "Rejected", bg: T.red100, color: T.red600, dot: T.red500, icon: <XCircle size={11} /> },
-    partial: { label: "Partial Accept", bg: T.amber100, color: T.amber600, dot: T.amber500, icon: <AlertCircle size={11} /> },
-    error: { label: "Error", bg: T.red50, color: T.red500, dot: T.red500, icon: <XCircle size={11} /> },
+  const map: Record<BatchStatus, { label: string; cls: string; dotCls: string; icon: React.ReactNode }> = {
+    draft:      { label: "Draft",          cls: "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300",           dotCls: "bg-slate-400",          icon: <Clock size={11} /> },
+    validating: { label: "Validating",     cls: "bg-blue-600/10 text-blue-700 dark:text-blue-300",                             dotCls: "bg-blue-500",           icon: <Loader2 size={11} className="animate-spin" /> },
+    validated:  { label: "Validated",      cls: "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400",    dotCls: "bg-emerald-500",        icon: <CheckCircle size={11} /> },
+    submitted:  { label: "Submitted",      cls: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",                    dotCls: "bg-emerald-500",        icon: <Send size={11} /> },
+    accepted:   { label: "Accepted",       cls: "bg-emerald-100 dark:bg-emerald-900 text-emerald-600 dark:text-emerald-400",   dotCls: "bg-emerald-500",        icon: <CheckCircle size={11} /> },
+    rejected:   { label: "Rejected",       cls: "bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400",                   dotCls: "bg-red-500",            icon: <XCircle size={11} /> },
+    partial:    { label: "Partial Accept", cls: "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400",            dotCls: "bg-amber-500",          icon: <AlertCircle size={11} /> },
+    error:      { label: "Error",          cls: "bg-red-50 dark:bg-red-950 text-red-500 dark:text-red-400",                    dotCls: "bg-red-500",            icon: <XCircle size={11} /> },
   };
-  const cfg = map[status] ?? { label: status, bg: T.gray100, color: T.gray500, dot: T.gray400, icon: null };
+  const cfg = map[status] ?? { label: status, cls: "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400", dotCls: "bg-slate-400", icon: null };
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "4px 10px",
-        borderRadius: 999,
-        fontSize: 11,
-        fontWeight: 600,
-        backgroundColor: cfg.bg,
-        color: cfg.color,
-        whiteSpace: "nowrap",
-        border: `1px solid ${cfg.color}20`,
-      }}
-    >
-      <span
-        style={{
-          width: 7,
-          height: 7,
-          borderRadius: "50%",
-          backgroundColor: cfg.dot,
-          boxShadow: `0 0 6px ${cfg.dot}60`,
-          flexShrink: 0,
-        }}
-      />
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap border border-current/10 ${cfg.cls}`}>
+      <span className={`w-[7px] h-[7px] rounded-full shrink-0 ${cfg.dotCls}`} />
       {cfg.icon}
       {cfg.label}
     </span>
@@ -294,20 +226,11 @@ function StatusBadge({ status }: { status: BatchStatus }) {
 function TypeBadge({ type }: { type: SubmissionType }) {
   const isRAPS = type === "RAPS";
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        padding: "3px 9px",
-        borderRadius: 6,
-        fontSize: 11,
-        fontWeight: 700,
-        backgroundColor: isRAPS ? T.violet50 : T.blue50,
-        color: isRAPS ? T.violet600 : T.blue700,
-        border: `1px solid ${isRAPS ? T.violet500 + "33" : T.blue500 + "33"}`,
-        letterSpacing: "0.04em",
-      }}
-    >
+    <span className={`inline-flex items-center px-2 py-[3px] rounded-md text-[11px] font-bold tracking-wide border ${
+      isRAPS
+        ? "bg-violet-50 dark:bg-violet-950 text-violet-600 dark:text-violet-400 border-violet-500/20"
+        : "bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-500/20"
+    }`}>
       {type}
     </span>
   );
@@ -315,46 +238,28 @@ function TypeBadge({ type }: { type: SubmissionType }) {
 
 function ValidationBadge({ status }: { status: "pass" | "warning" | "error" }) {
   const map = {
-    pass: { label: "Pass", bg: T.emerald50, color: T.emerald600 },
-    warning: { label: "Warning", bg: T.amber50, color: T.amber600 },
-    error: { label: "Error", bg: T.red50, color: T.red500 },
+    pass:    { label: "Pass",    cls: "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400" },
+    warning: { label: "Warning", cls: "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400" },
+    error:   { label: "Error",   cls: "bg-red-50 dark:bg-red-950 text-red-500 dark:text-red-400" },
   };
   const cfg = map[status];
   return (
-    <span
-      style={{
-        padding: "2px 7px",
-        borderRadius: 4,
-        fontSize: 11,
-        fontWeight: 600,
-        backgroundColor: cfg.bg,
-        color: cfg.color,
-      }}
-    >
+    <span className={`px-[7px] py-[2px] rounded text-[11px] font-semibold ${cfg.cls}`}>
       {cfg.label}
     </span>
   );
 }
 
 function CmsStatusBadge({ status }: { status: "accepted" | "rejected" | "pending" | null }) {
-  if (!status) return <span style={{ color: T.slate400, fontSize: 12 }}>—</span>;
+  if (!status) return <span className="text-slate-400 dark:text-slate-500 text-xs">—</span>;
   const map = {
-    accepted: { label: "Accepted", color: T.emerald600, bg: T.emerald50 },
-    rejected: { label: "Rejected", color: T.red600, bg: T.red50 },
-    pending: { label: "Pending", color: T.amber600, bg: T.amber50 },
+    accepted: { label: "Accepted", cls: "bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400" },
+    rejected: { label: "Rejected", cls: "bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400" },
+    pending:  { label: "Pending",  cls: "bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400" },
   };
   const cfg = map[status];
   return (
-    <span
-      style={{
-        padding: "2px 7px",
-        borderRadius: 4,
-        fontSize: 11,
-        fontWeight: 600,
-        backgroundColor: cfg.bg,
-        color: cfg.color,
-      }}
-    >
+    <span className={`px-[7px] py-[2px] rounded text-[11px] font-semibold ${cfg.cls}`}>
       {cfg.label}
     </span>
   );
@@ -367,68 +272,40 @@ function CmsStatusBadge({ status }: { status: "accepted" | "rejected" | "pending
 function DeadlinesBanner({ deadlines }: { deadlines: Deadline[] }) {
   const sorted = [...deadlines].sort((a, b) => a.days_remaining - b.days_remaining);
 
-  type DeadlineTheme = {
-    bg: string;
-    border: string;
-    text: string;
-    badge: string;
-    badgeText: string;
-    rowOpacity: number;
-    pillLabel: string;
-    pillBg: string;
-    pillColor: string;
-  };
-
-  function deadlineTheme(days: number): DeadlineTheme {
+  function deadlineClasses(days: number): { cardCls: string; textCls: string; pillCls: string; pillLabel: string; opacity: string } {
     if (days < 0) {
       return {
-        bg: T.red50,
-        border: T.red500 + "40",
-        text: T.red600,
-        badge: T.red100,
-        badgeText: T.red600,
-        rowOpacity: 0.72,
+        cardCls: "bg-red-50 dark:bg-red-950 border-red-500/40",
+        textCls: "text-red-600 dark:text-red-400",
+        pillCls: "bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400 border-red-600/20",
         pillLabel: "Overdue",
-        pillBg: T.red100,
-        pillColor: T.red600,
+        opacity: "opacity-70",
       };
     }
     if (days <= 7) {
       return {
-        bg: T.amber50,
-        border: T.amber500 + "40",
-        text: T.amber600,
-        badge: T.amber100,
-        badgeText: T.amber600,
-        rowOpacity: 1,
+        cardCls: "bg-amber-50 dark:bg-amber-950 border-amber-500/40",
+        textCls: "text-amber-600 dark:text-amber-400",
+        pillCls: "bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-400 border-amber-600/20",
         pillLabel: "Closing soon",
-        pillBg: T.amber100,
-        pillColor: T.amber600,
+        opacity: "",
       };
     }
     if (days <= 30) {
       return {
-        bg: T.amber50,
-        border: T.amber500 + "30",
-        text: T.amber600,
-        badge: T.amber100,
-        badgeText: T.amber600,
-        rowOpacity: 1,
+        cardCls: "bg-amber-50 dark:bg-amber-950 border-amber-500/30",
+        textCls: "text-amber-600 dark:text-amber-400",
+        pillCls: "",
         pillLabel: "",
-        pillBg: "",
-        pillColor: "",
+        opacity: "",
       };
     }
     return {
-      bg: T.emerald50,
-      border: T.emerald500 + "40",
-      text: T.emerald600,
-      badge: T.emerald100,
-      badgeText: T.emerald600,
-      rowOpacity: 1,
+      cardCls: "bg-emerald-50 dark:bg-emerald-950 border-emerald-500/40",
+      textCls: "text-emerald-600 dark:text-emerald-400",
+      pillCls: "",
       pillLabel: "",
-      pillBg: "",
-      pillColor: "",
+      opacity: "",
     };
   }
 
@@ -439,94 +316,41 @@ function DeadlinesBanner({ deadlines }: { deadlines: Deadline[] }) {
   }
 
   return (
-    <div
-      className="sub-fade-up-2"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-        marginBottom: 24,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+    <div className="sub-fade-up-2 flex flex-col gap-2 mb-6">
+      <div className="flex items-center gap-1.5 mb-1">
         <Calendar size={14} className="text-muted-foreground" />
-        <span style={{ fontSize: 12, fontWeight: 600, color: T.slate500, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
           Submission Deadlines
         </span>
       </div>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      <div className="flex gap-2.5 flex-wrap">
         {sorted.map((d, i) => {
-          const c = deadlineTheme(d.days_remaining);
+          const c = deadlineClasses(d.days_remaining);
           const isOverdue = d.days_remaining < 0;
           return (
             <div
               key={`${d.name}-${i}`}
-              className="hover-lift"
-              style={{
-                flex: "1 1 260px",
-                backgroundColor: c.bg,
-                border: `1px solid ${c.border}`,
-                borderRadius: 10,
-                padding: "14px 18px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                animation: `fadeInUp 0.4s ease-out ${0.08 * i}s both`,
-                opacity: c.rowOpacity,
-              }}
+              className={`hover-lift flex-[1_1_260px] border rounded-[10px] px-[18px] py-3.5 flex items-center justify-between gap-3 ${c.cardCls} ${c.opacity}`}
+              style={{ animation: `fadeInUp 0.4s ease-out ${0.08 * i}s both` }}
               aria-label={`${d.name}: ${deadlineCountLabel(d.days_remaining)}`}
             >
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: T.slate800,
-                      textDecoration: isOverdue ? "line-through" : "none",
-                      textDecorationColor: T.slate400,
-                    }}
-                  >
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-[13px] font-semibold text-slate-800 dark:text-slate-100 ${isOverdue ? "line-through decoration-slate-400" : ""}`}>
                     {d.name}
                   </span>
                   {c.pillLabel && (
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        padding: "2px 8px",
-                        borderRadius: 999,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        backgroundColor: c.pillBg,
-                        color: c.pillColor,
-                        border: `1px solid ${c.pillColor}33`,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.04em",
-                        whiteSpace: "nowrap",
-                      }}
-                      role="status"
-                    >
+                    <span className={`inline-flex items-center px-2 py-[2px] rounded-full text-[10px] font-bold uppercase tracking-wide whitespace-nowrap border ${c.pillCls}`} role="status">
                       {c.pillLabel}
                     </span>
                   )}
                 </div>
-                <span style={{ fontSize: 11, color: T.slate500 }}>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400">
                   PY{d.payment_year} · {d.sweep_type} · Due {new Date(d.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                 </span>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, flexShrink: 0 }}>
-                <span
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 700,
-                    color: c.text,
-                    lineHeight: 1.3,
-                    textAlign: "right",
-                    whiteSpace: "nowrap",
-                  }}
-                >
+              <div className="flex flex-col items-end gap-0.5 shrink-0">
+                <span className={`text-[13px] font-bold leading-snug text-right whitespace-nowrap ${c.textCls}`}>
                   {deadlineCountLabel(d.days_remaining)}
                 </span>
               </div>
@@ -561,37 +385,9 @@ function BatchesTable({
   onUploadResponse,
   onViewErrors,
 }: BatchesTableProps) {
-  const colHeader: React.CSSProperties = {
-    padding: "10px 14px",
-    fontSize: 11,
-    fontWeight: 700,
-    color: T.slate500,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    textAlign: "left",
-    borderBottom: `2px solid ${T.slate200}`,
-    background: `linear-gradient(180deg, ${T.slate50} 0%, ${T.white} 100%)`,
-    whiteSpace: "nowrap",
-  };
-
-  const cell: React.CSSProperties = {
-    padding: "14px 14px",
-    fontSize: 13,
-    color: T.slate700,
-    borderBottom: `1px solid ${T.slate100}`,
-    verticalAlign: "middle",
-    transition: "background-color 0.15s ease",
-  };
-
   if (batches.length === 0) {
     return (
-      <div
-        className="premium-card"
-        style={{
-          padding: 48,
-          textAlign: "center",
-        }}
-      >
+      <div className="premium-card p-12 text-center">
         <div>
           <EmptyState
             icon={<Send size={28} />}
@@ -604,24 +400,19 @@ function BatchesTable({
   }
 
   return (
-    <div
-      style={{
-        overflow: "hidden",
-      }}
-    >
-      <div style={{ overflowX: "auto" }}>
-        <table aria-label="CMS submission batches" style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
+    <div className="overflow-hidden">
+      <div className="overflow-x-auto">
+        <table aria-label="CMS submission batches" className="w-full border-collapse" style={{ minWidth: 900 }}>
           <thead>
             <tr>
-              <th scope="col" style={{ ...colHeader, width: 40 }}><span className="sr-only">Expand</span></th>
-              <th scope="col" style={colHeader}>Batch ID</th>
-              <th scope="col" style={colHeader}>Type</th>
-              <th scope="col" style={colHeader}>PY</th>
-              <th scope="col" style={colHeader}>Sweep</th>
-              <th scope="col" style={{ ...colHeader, textAlign: "right" }}>Records</th>
-              <th scope="col" style={colHeader}>Status</th>
-              <th scope="col" style={colHeader}>Submitted</th>
-              <th scope="col" style={colHeader}>Actions</th>
+              <th scope="col" className="px-3.5 py-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-left border-b-2 border-slate-200 dark:border-slate-700 bg-gradient-to-b from-slate-50 dark:from-slate-800 to-white dark:to-slate-900 whitespace-nowrap w-10"><span className="sr-only">Expand</span></th>
+              {["Batch ID", "Type", "PY", "Sweep"].map(h => (
+                <th key={h} scope="col" className="px-3.5 py-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-left border-b-2 border-slate-200 dark:border-slate-700 bg-gradient-to-b from-slate-50 dark:from-slate-800 to-white dark:to-slate-900 whitespace-nowrap">{h}</th>
+              ))}
+              <th scope="col" className="px-3.5 py-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right border-b-2 border-slate-200 dark:border-slate-700 bg-gradient-to-b from-slate-50 dark:from-slate-800 to-white dark:to-slate-900 whitespace-nowrap">Records</th>
+              {["Status", "Submitted", "Actions"].map(h => (
+                <th key={h} scope="col" className="px-3.5 py-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-left border-b-2 border-slate-200 dark:border-slate-700 bg-gradient-to-b from-slate-50 dark:from-slate-800 to-white dark:to-slate-900 whitespace-nowrap">{h}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -631,24 +422,11 @@ function BatchesTable({
 
               return (
                 <React.Fragment key={b.id}>
-                  <tr className="sub-table-row" style={{ backgroundColor: isExpanded ? T.blue50 : "transparent", animationDelay: `${0.03 * batches.indexOf(b)}s` }}>
-                    {/* Expand toggle */}
-                    <td style={{ ...cell, padding: "12px 8px 12px 14px" }}>
+                  <tr className={`sub-table-row ${isExpanded ? "bg-blue-50 dark:bg-blue-950" : ""}`} style={{ animationDelay: `${0.03 * batches.indexOf(b)}s` }}>
+                    <td className="px-3.5 py-3.5 text-[13px] text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 align-middle transition-colors" style={{ padding: "12px 8px 12px 14px" }}>
                       <button
                         onClick={() => onExpand(isExpanded ? null : b.id)}
-                        style={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: 6,
-                          border: `1px solid ${T.slate200}`,
-                          background: T.white,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: T.slate500,
-                          flexShrink: 0,
-                        }}
+                        className="w-6 h-6 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 cursor-pointer flex items-center justify-center text-slate-500 dark:text-slate-400 shrink-0"
                         aria-label={isExpanded ? "Collapse row" : "Expand row"}
                         aria-expanded={isExpanded}
                       >
@@ -656,106 +434,67 @@ function BatchesTable({
                       </button>
                     </td>
 
-                    {/* Batch ID */}
-                    <td style={cell}>
-                      <span style={{ fontFamily: "monospace", fontWeight: 700, color: T.slate800, fontSize: 13 }}>
+                    <td className="px-3.5 py-3.5 text-[13px] text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 align-middle">
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-100 text-[13px]">
                         {b.batch_id}
                       </span>
                     </td>
 
-                    {/* Type */}
-                    <td style={cell}><TypeBadge type={b.submission_type} /></td>
+                    <td className="px-3.5 py-3.5 text-[13px] text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 align-middle"><TypeBadge type={b.submission_type} /></td>
 
-                    {/* PY */}
-                    <td style={{ ...cell, fontWeight: 600 }}>PY{b.payment_year}</td>
+                    <td className="px-3.5 py-3.5 text-[13px] text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 align-middle font-semibold">PY{b.payment_year}</td>
 
-                    {/* Sweep */}
-                    <td style={{ ...cell, fontSize: 12, color: T.slate600 }}>{b.sweep_type}</td>
+                    <td className="px-3.5 py-3.5 text-xs text-slate-600 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800 align-middle">{b.sweep_type}</td>
 
-                    {/* Records */}
-                    <td style={{ ...cell, textAlign: "right" }}>
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
-                        <span style={{ fontWeight: 700, color: T.slate800 }}>
+                    <td className="px-3.5 py-3.5 text-[13px] text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 align-middle text-right">
+                      <div className="flex flex-col items-end gap-[3px]">
+                        <span className="font-bold text-slate-800 dark:text-slate-100">
                           {b.total_records?.toLocaleString() ?? "0"}
                         </span>
-                        <div style={{ display: "flex", gap: 8, fontSize: 11 }}>
-                          <span style={{ color: T.emerald600 }}>
+                        <div className="flex gap-2 text-[11px]">
+                          <span className="text-emerald-600 dark:text-emerald-400">
                             {b.accepted_records?.toLocaleString() ?? "0"} acc
                           </span>
                           {b.rejected_records > 0 && (
-                            <span style={{ color: T.red500 }}>
+                            <span className="text-red-500 dark:text-red-400">
                               {b.rejected_records?.toLocaleString() ?? "0"} rej
                             </span>
                           )}
                         </div>
                         {b.total_records > 0 && (
-                          <div
-                            style={{
-                              height: 3,
-                              width: 72,
-                              borderRadius: 2,
-                              backgroundColor: T.slate200,
-                              overflow: "hidden",
-                            }}
-                          >
+                          <div className="h-[3px] w-[72px] rounded-sm bg-slate-200 dark:bg-slate-700 overflow-hidden">
                             <div
-                              style={{
-                                height: "100%",
-                                width: `${acceptPct}%`,
-                                borderRadius: 2,
-                                backgroundColor: acceptPct >= 90 ? T.emerald500 : acceptPct >= 70 ? T.amber500 : T.red500,
-                                transition: "width 0.4s ease",
-                              }}
+                              className={`h-full rounded-sm transition-[width] duration-400 ${acceptPct >= 90 ? "bg-emerald-500" : acceptPct >= 70 ? "bg-amber-500" : "bg-red-500"}`}
+                              style={{ width: `${acceptPct}%` }}
                             />
                           </div>
                         )}
                       </div>
                     </td>
 
-                    {/* Status */}
-                    <td style={cell}><StatusBadge status={b.status} /></td>
+                    <td className="px-3.5 py-3.5 text-[13px] text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 align-middle"><StatusBadge status={b.status} /></td>
 
-                    {/* Submitted Date */}
-                    <td style={{ ...cell, fontSize: 12, color: T.slate500 }}>
+                    <td className="px-3.5 py-3.5 text-xs text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 align-middle">
                       {b.submitted_at
                         ? new Date(b.submitted_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
                         : <span className="text-muted-foreground">—</span>}
                     </td>
 
-                    {/* Actions */}
-                    <td style={cell}>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <ActionButton
-                          icon={<ShieldCheck size={13} />}
-                          label="Validate"
-                          onClick={() => onValidate(b.id)}
-                        />
-                        <ActionButton
-                          icon={<Download size={13} />}
-                          label="Download"
-                          onClick={() => onDownload(b.id)}
-                        />
-                        <ActionButton
-                          icon={<Upload size={13} />}
-                          label="Upload Response"
-                          onClick={() => onUploadResponse(b.id, b.batch_id)}
-                        />
+                    <td className="px-3.5 py-3.5 text-[13px] text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 align-middle">
+                      <div className="flex gap-1">
+                        <ActionButton icon={<ShieldCheck size={13} />} label="Validate" onClick={() => onValidate(b.id)} />
+                        <ActionButton icon={<Download size={13} />} label="Download" onClick={() => onDownload(b.id)} />
+                        <ActionButton icon={<Upload size={13} />} label="Upload Response" onClick={() => onUploadResponse(b.id, b.batch_id)} />
                         {(b.validation_errors > 0 || b.rejected_records > 0) && (
-                          <ActionButton
-                            icon={<AlertCircle size={13} />}
-                            label="View Errors"
-                            onClick={() => onViewErrors(b.id)}
-                            color={T.red600}
-                          />
+                          <ActionButton icon={<AlertCircle size={13} />} label="View Errors" onClick={() => onViewErrors(b.id)} variant="danger" />
                         )}
                       </div>
                     </td>
                   </tr>
 
-                  {/* Expanded detail */}
                   {isExpanded && (
                     <tr>
-                      <td colSpan={9} style={{ padding: "0 16px 16px", backgroundColor: T.slate50 }}>
+                      <td colSpan={9} className="px-4 pb-4 bg-slate-50 dark:bg-slate-800">
                         <LazyBatchDetailPanel
                           batchId={b.id}
                           onClose={() => onExpand(null)}
@@ -778,38 +517,23 @@ function ActionButton({
   icon,
   label,
   onClick,
-  color = T.slate600,
+  variant,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
-  color?: string;
+  variant?: "danger";
 }) {
-  const [hovered, setHovered] = useState(false);
   return (
     <button
       onClick={onClick}
       title={label}
       aria-label={label}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 4,
-        padding: "5px 10px",
-        borderRadius: 6,
-        border: `1px solid ${hovered ? color + "66" : T.slate200}`,
-        backgroundColor: hovered ? color + "0F" : T.white,
-        color: hovered ? color : T.slate500,
-        cursor: "pointer",
-        fontSize: 11,
-        fontWeight: 600,
-        transition: "all 0.18s ease",
-        whiteSpace: "nowrap",
-        transform: hovered ? "translateY(-1px)" : "none",
-        boxShadow: hovered ? `0 2px 8px ${color}20` : "none",
-      }}
+      className={`flex items-center gap-1 px-2.5 py-[5px] rounded-md border text-[11px] font-semibold cursor-pointer whitespace-nowrap transition-all duration-150 hover:-translate-y-px ${
+        variant === "danger"
+          ? "border-red-300 dark:border-red-700 bg-white dark:bg-slate-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 hover:border-red-400"
+          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:text-slate-700 dark:hover:text-slate-200"
+      }`}
     >
       {icon}
       <span className="hidden xl:inline">{label}</span>
@@ -833,12 +557,8 @@ export default function SubmissionsPage() {
   const batchesQuery = useQuery({ queryKey: ["submissions-batches"], queryFn: fetchBatches });
   const deadlinesQuery = useQuery({ queryKey: ["submissions-deadlines"], queryFn: fetchDeadlines });
 
-  // batchesQuery error is surfaced at the top level since it's the primary data.
-  // Stats and deadlines have their own inline error states.
   const queryError = batchesQuery.isError;
 
-  // Normalize API response — upcoming_deadlines arrives as an array of objects,
-  // records_submitted is total_records, pending_validation is total_invalid.
   const rawStats = statsQuery.data as Record<string, unknown> | undefined;
   const stats = {
     total_batches: (rawStats?.total_batches as number) ?? 0,
@@ -875,36 +595,10 @@ export default function SubmissionsPage() {
 
   function handleViewErrors(id: string) {
     setExpandedBatch(id);
-    // Switch to validation tab is handled inside the panel
   }
 
-  const pageStyle: React.CSSProperties = {
-    minHeight: "100vh",
-    backgroundColor: T.slate50,
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-  };
-
-  const contentStyle: React.CSSProperties = {
-    padding: "28px 28px 48px",
-    maxWidth: 1440,
-    margin: "0 auto",
-  };
-
-  const filterBtnStyle = (active: boolean): React.CSSProperties => ({
-    padding: "5px 12px",
-    borderRadius: 6,
-    border: `1px solid ${active ? T.blue600 : T.slate200}`,
-    backgroundColor: active ? T.blue50 : T.white,
-    color: active ? T.blue700 : T.slate500,
-    fontWeight: 600,
-    fontSize: 12,
-    cursor: "pointer",
-    transition: "all 0.1s",
-  });
-
   return (
-    <div style={pageStyle}>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
@@ -914,35 +608,21 @@ export default function SubmissionsPage() {
         .sub-fade-up-2 { animation: fadeInUp 0.45s ease-out 0.12s both; }
         .sub-fade-up-3 { animation: fadeInUp 0.45s ease-out 0.2s both; }
         .sub-table-row { animation: fadeInUp 0.35s ease-out both; }
-        .sub-table-row:hover { background-color: ${T.slate50} !important; }
-        .sub-gradient-btn { background: linear-gradient(135deg, ${T.blue600} 0%, ${T.blue700} 100%); box-shadow: 0 2px 8px rgba(37,99,235,0.35); transition: all 0.2s ease; }
+        .sub-table-row:hover { background-color: rgba(248,250,252,0.5) !important; }
+        :is(.dark) .sub-table-row:hover { background-color: rgba(30,41,59,0.5) !important; }
+        .sub-gradient-btn { background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%); box-shadow: 0 2px 8px rgba(37,99,235,0.35); transition: all 0.2s ease; }
         .sub-gradient-btn:hover { box-shadow: 0 4px 16px rgba(37,99,235,0.45); transform: translateY(-1px); }
         .sub-outline-btn { transition: all 0.18s ease; }
-        .sub-outline-btn:hover { border-color: ${T.blue500}; color: ${T.blue600}; background-color: ${T.blue50}; }
+        .sub-outline-btn:hover { border-color: #3B82F6; color: #2563EB; }
+        :is(.dark) .sub-outline-btn:hover { border-color: #60A5FA; color: #60A5FA; background-color: rgba(37,99,235,0.1); }
         @media (max-width: 640px) { .rci-page-pad-desktop { padding: 20px 16px !important; } }
-        button:focus-visible { outline: 2px solid ${T.blue600}; outline-offset: 2px; border-radius: 4px; }
+        button:focus-visible { outline: 2px solid #2563EB; outline-offset: 2px; border-radius: 4px; }
       `}</style>
 
       {queryError && (
-        <div
-          style={{
-            margin: "16px 28px 0",
-            padding: "12px 16px",
-            borderRadius: 10,
-            border: `1px solid ${T.red500}40`,
-            backgroundColor: T.red50,
-            color: T.red600,
-            fontSize: 13,
-            fontWeight: 600,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 8,
-          }}
-          role="alert"
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <AlertCircle size={15} style={{ flexShrink: 0 }} />
+        <div className="mx-7 mt-4 px-4 py-3 rounded-[10px] border border-red-500/40 bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400 text-[13px] font-semibold flex items-center justify-between gap-2" role="alert">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={15} className="shrink-0" />
             <span>
               {(batchesQuery.error as any)?.response?.data?.detail ??
                 (batchesQuery.error as any)?.message ??
@@ -951,50 +631,25 @@ export default function SubmissionsPage() {
           </div>
           <button
             onClick={() => batchesQuery.refetch()}
-            style={{
-              padding: "4px 12px",
-              borderRadius: 6,
-              border: `1px solid ${T.red500}40`,
-              backgroundColor: T.white,
-              color: T.red600,
-              fontWeight: 600,
-              fontSize: 12,
-              cursor: "pointer",
-              flexShrink: 0,
-            }}
+            className="px-3 py-1 rounded-md border border-red-500/40 bg-white dark:bg-slate-800 text-red-600 dark:text-red-400 font-semibold text-xs cursor-pointer shrink-0"
           >
             Retry
           </button>
         </div>
       )}
 
-      <div style={contentStyle} className="rci-page-pad-desktop">
-        {/* Data quality banner — degraded data on a compliance page is a critical signal */}
+      <div className="rci-page-pad-desktop" style={{ padding: "28px 28px 48px", maxWidth: 1440, margin: "0 auto" }}>
         <DataQualityBanner />
 
-        {/* Page Header */}
         <PageHeader
           title="CMS Submissions"
           subtitle="Manage RAPS and EDPS submissions to the Centers for Medicare & Medicaid Services"
           icon={<Send size={22} />}
           actions={
-            <div style={{ display: "flex", gap: 8 }}>
+            <div className="flex gap-2">
               <button
                 onClick={handleRefresh}
-                className="sub-outline-btn"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "8px 14px",
-                  borderRadius: 8,
-                  border: `1px solid ${T.slate200}`,
-                  backgroundColor: T.white,
-                  color: T.slate600,
-                  fontWeight: 600,
-                  fontSize: 13,
-                  cursor: "pointer",
-                }}
+                className="sub-outline-btn flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold text-[13px] cursor-pointer"
                 aria-label="Refresh data"
               >
                 <RefreshCw size={14} />
@@ -1002,19 +657,7 @@ export default function SubmissionsPage() {
               </button>
               <button
                 onClick={() => setShowGenerate(true)}
-                className="sub-gradient-btn"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "8px 16px",
-                  borderRadius: 8,
-                  border: "none",
-                  color: T.white,
-                  fontWeight: 700,
-                  fontSize: 13,
-                  cursor: "pointer",
-                }}
+                className="sub-gradient-btn flex items-center gap-1.5 px-4 py-2 rounded-lg border-none text-white font-bold text-[13px] cursor-pointer"
               >
                 <Send size={14} />
                 Generate Submission
@@ -1024,127 +667,44 @@ export default function SubmissionsPage() {
         />
 
         {/* Stats Row */}
-        <div
-          className="sub-fade-up-1"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: 16,
-            marginBottom: 24,
-          }}
-        >
+        <div className="sub-fade-up-1 grid gap-4 mb-6" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
           {statsQuery.isLoading ? (
             Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                style={{
-                  backgroundColor: T.white,
-                  border: `1px solid ${T.slate200}`,
-                  borderRadius: 10,
-                  padding: "20px 20px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 10,
-                }}
-                aria-hidden="true"
-              >
-                <div style={{ height: 12, width: "60%", borderRadius: 6, backgroundColor: T.slate100 }} />
-                <div style={{ height: 28, width: "40%", borderRadius: 6, backgroundColor: T.slate100 }} />
-                <div style={{ height: 10, width: "80%", borderRadius: 6, backgroundColor: T.slate100 }} />
+              <div key={i} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[10px] p-5 flex flex-col gap-2.5" aria-hidden="true">
+                <div className="h-3 w-3/5 rounded-md bg-slate-100 dark:bg-slate-700" />
+                <div className="h-7 w-2/5 rounded-md bg-slate-100 dark:bg-slate-700" />
+                <div className="h-2.5 w-4/5 rounded-md bg-slate-100 dark:bg-slate-700" />
               </div>
             ))
           ) : statsQuery.isError ? (
-            <div
-              style={{
-                gridColumn: "1 / -1",
-                backgroundColor: T.red50,
-                border: `1px solid ${T.red500}40`,
-                borderRadius: 10,
-                padding: "12px 16px",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-              role="alert"
-            >
-              <AlertCircle size={15} style={{ color: T.red600 }} />
-              <span style={{ fontSize: 13, color: T.red600, fontWeight: 600 }}>
+            <div className="col-span-full bg-red-50 dark:bg-red-950 border border-red-500/40 rounded-[10px] px-4 py-3 flex items-center gap-2" role="alert">
+              <AlertCircle size={15} className="text-red-600 dark:text-red-400" />
+              <span className="text-[13px] text-red-600 dark:text-red-400 font-semibold">
                 Failed to load submission statistics.
               </span>
             </div>
           ) : (
             <>
-              <MetricCard
-                label="Total Batches"
-                value={stats.total_batches}
-                icon={<FileText size={18} />}
-                subtitle="All submission batches"
-              />
-              <MetricCard
-                label="Records Submitted"
-                value={stats.records_submitted?.toLocaleString() ?? "0"}
-                icon={<Send size={18} />}
-                intent="success"
-                subtitle="Across all batches"
-              />
-              <MetricCard
-                label="Acceptance Rate"
-                value={`${(stats.acceptance_rate ?? 0).toFixed(1)}%`}
-                icon={<CheckCircle size={18} />}
-                intent="success"
-                subtitle="CMS accepted records"
-                delta={1.2}
-              />
-              <MetricCard
-                label="Pending Validation"
-                value={stats.pending_validation}
-                icon={<Clock size={18} />}
-                intent="warning"
-                subtitle="Awaiting validation run"
-              />
-              <MetricCard
-                label="Upcoming Deadlines"
-                value={stats.upcoming_deadlines}
-                icon={<Calendar size={18} />}
-                intent={deadlines.some((d) => d.days_remaining < 7) ? "danger" : "warning"}
-                subtitle="Within 30 days"
-              />
+              <MetricCard label="Total Batches" value={stats.total_batches} icon={<FileText size={18} />} subtitle="All submission batches" />
+              <MetricCard label="Records Submitted" value={stats.records_submitted?.toLocaleString() ?? "0"} icon={<Send size={18} />} intent="success" subtitle="Across all batches" />
+              <MetricCard label="Acceptance Rate" value={`${(stats.acceptance_rate ?? 0).toFixed(1)}%`} icon={<CheckCircle size={18} />} intent="success" subtitle="CMS accepted records" delta={1.2} />
+              <MetricCard label="Pending Validation" value={stats.pending_validation} icon={<Clock size={18} />} intent="warning" subtitle="Awaiting validation run" />
+              <MetricCard label="Upcoming Deadlines" value={stats.upcoming_deadlines} icon={<Calendar size={18} />} intent={deadlines.some((d) => d.days_remaining < 7) ? "danger" : "warning"} subtitle="Within 30 days" />
             </>
           )}
         </div>
 
         {/* Deadlines Banner */}
         {deadlinesQuery.isLoading ? (
-          <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap" }}>
+          <div className="flex gap-2.5 mb-6 flex-wrap">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div
-                key={i}
-                style={{
-                  flex: "1 1 260px",
-                  height: 70,
-                  borderRadius: 10,
-                  backgroundColor: T.slate100,
-                }}
-                aria-hidden="true"
-              />
+              <div key={i} className="flex-[1_1_260px] h-[70px] rounded-[10px] bg-slate-100 dark:bg-slate-800" aria-hidden="true" />
             ))}
           </div>
         ) : deadlinesQuery.isError ? (
-          <div
-            style={{
-              marginBottom: 24,
-              padding: "12px 16px",
-              borderRadius: 10,
-              border: `1px solid ${T.amber500}40`,
-              backgroundColor: T.amber50,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-            role="alert"
-          >
-            <AlertTriangle size={15} style={{ color: T.amber600 }} />
-            <span style={{ fontSize: 13, color: T.amber600, fontWeight: 600 }}>
+          <div className="mb-6 px-4 py-3 rounded-[10px] border border-amber-500/40 bg-amber-50 dark:bg-amber-950 flex items-center gap-2" role="alert">
+            <AlertTriangle size={15} className="text-amber-600 dark:text-amber-400" />
+            <span className="text-[13px] text-amber-600 dark:text-amber-400 font-semibold">
               Could not load submission deadlines.
             </span>
           </div>
@@ -1153,69 +713,42 @@ export default function SubmissionsPage() {
         ) : null}
 
         {/* Batches section */}
-        <div
-          className="premium-card sub-fade-up-3"
-          style={{
-            overflow: "hidden",
-          }}
-        >
+        <div className="premium-card sub-fade-up-3 overflow-hidden">
           {/* Table header & filters */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "16px 20px",
-              borderBottom: `1px solid ${T.slate200}`,
-              gap: 12,
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <BarChart2 size={16} style={{ color: T.blue600 }} />
-              <span style={{ fontSize: 15, fontWeight: 700, color: T.slate900 }}>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700 gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <BarChart2 size={16} className="text-blue-600 dark:text-blue-400" />
+              <span className="text-[15px] font-bold text-slate-900 dark:text-slate-50">
                 Submission Batches
               </span>
-              <span
-                style={{
-                  padding: "2px 8px",
-                  borderRadius: 999,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  backgroundColor: `${T.blue600}1A`,
-                  color: T.blue600,
-                }}
-              >
+              <span className="px-2 py-[2px] rounded-full text-[11px] font-semibold bg-blue-600/10 text-blue-600 dark:text-blue-400">
                 {batches.length}
               </span>
             </div>
 
-            {/* Filters */}
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {/* Type filter */}
-              <div style={{ display: "flex", gap: 4 }}>
+            <div className="flex gap-1.5 flex-wrap">
+              <div className="flex gap-1">
                 {(["ALL", "RAPS", "EDPS"] as const).map((t) => (
-                  <button key={t} style={filterBtnStyle(filterType === t)} onClick={() => setFilterType(t)}>
+                  <button
+                    key={t}
+                    onClick={() => setFilterType(t)}
+                    className={`px-3 py-[5px] rounded-md border text-xs font-semibold cursor-pointer transition-all ${
+                      filterType === t
+                        ? "border-blue-600 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300"
+                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                    }`}
+                  >
                     {t}
                   </button>
                 ))}
               </div>
 
-              <div style={{ width: 1, backgroundColor: T.slate200 }} />
+              <div className="w-px bg-slate-200 dark:bg-slate-700" />
 
-              {/* Status filter */}
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value as BatchStatus | "ALL")}
-                style={{
-                  padding: "5px 10px",
-                  borderRadius: 6,
-                  border: `1px solid ${T.slate200}`,
-                  fontSize: 12,
-                  color: T.slate600,
-                  backgroundColor: T.white,
-                  cursor: "pointer",
-                }}
+                className="px-2.5 py-[5px] rounded-md border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 cursor-pointer"
               >
                 <option value="ALL">All Statuses</option>
                 <option value="draft">Draft</option>
@@ -1232,46 +765,23 @@ export default function SubmissionsPage() {
 
           {/* Loading / error / data state */}
           {batchesQuery.isLoading ? (
-            <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="p-4 flex flex-col gap-2">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div
-                  key={i}
-                  style={{
-                    height: 52,
-                    borderRadius: 8,
-                    backgroundColor: T.slate100,
-                  }}
-                  aria-hidden="true"
-                />
+                <div key={i} className="h-[52px] rounded-lg bg-slate-100 dark:bg-slate-800" aria-hidden="true" />
               ))}
             </div>
           ) : batchesQuery.isError ? (
-            <div
-              style={{
-                padding: 48,
-                textAlign: "center",
-                color: T.slate400,
-              }}
-            >
-              <AlertCircle size={32} style={{ color: T.red500, marginBottom: 12, opacity: 0.6 }} />
-              <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 600, color: T.slate600 }}>
+            <div className="p-12 text-center text-slate-400 dark:text-slate-500">
+              <AlertCircle size={32} className="text-red-500 dark:text-red-400 mb-3 opacity-60 mx-auto" />
+              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">
                 Could not load submission batches
               </p>
-              <p style={{ margin: "0 0 16px", fontSize: 13, color: T.slate400 }}>
+              <p className="text-[13px] text-slate-400 dark:text-slate-500 mb-4">
                 Check your connection and try again.
               </p>
               <button
                 onClick={() => batchesQuery.refetch()}
-                style={{
-                  padding: "8px 20px",
-                  borderRadius: 8,
-                  border: `1px solid ${T.slate200}`,
-                  backgroundColor: T.white,
-                  color: T.slate600,
-                  fontWeight: 600,
-                  fontSize: 13,
-                  cursor: "pointer",
-                }}
+                className="px-5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold text-[13px] cursor-pointer"
               >
                 Retry
               </button>
@@ -1290,7 +800,6 @@ export default function SubmissionsPage() {
         </div>
       </div>
 
-      {/* Generate Submission Dialog */}
       {showGenerate && (
         <LazyGenerateDialog
           onClose={() => setShowGenerate(false)}
@@ -1301,7 +810,6 @@ export default function SubmissionsPage() {
         />
       )}
 
-      {/* Upload Response Dialog */}
       {uploadTarget && (
         <LazyUploadResponseDialog
           batchId={uploadTarget.id}

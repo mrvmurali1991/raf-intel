@@ -33,24 +33,6 @@ import {
 
 import { getCfoSummary, getCfoYoy, type CfoExecutiveSummary } from "@/lib/api";
 
-const T = {
-  white: "#FFFFFF",
-  slate900: "#0F172A",
-  slate700: "#334155",
-  slate500: "#64748B",
-  slate400: "#64748B",
-  slate200: "#E2E8F0",
-  slate100: "#F1F5F9",
-  slate50: "#F8FAFC",
-  blue600: "#2563EB",
-  emerald500: "#10B981",
-  emerald600: "#059669",
-  amber500: "#F59E0B",
-  red500: "#EF4444",
-  red600: "#DC2626",
-  violet500: "#8B5CF6",
-};
-
 function formatUSD(n: number | null | undefined): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "$0";
   const abs = Math.abs(n);
@@ -59,6 +41,18 @@ function formatUSD(n: number | null | undefined): string {
   if (abs >= 1_000) return `${n < 0 ? "-" : ""}$${(Math.abs(n) / 1_000).toFixed(1)}k`;
   return `${n < 0 ? "-" : ""}$${Math.round(Math.abs(n)).toLocaleString()}`;
 }
+
+const EMPHASIS_CLASSES: Record<string, string> = {
+  bad: "text-red-600 dark:text-red-400",
+  good: "text-emerald-600 dark:text-emerald-400",
+};
+
+const COLOR_CLASSES: Record<string, string> = {
+  "#DC2626": "text-red-600 dark:text-red-400",
+  "#059669": "text-emerald-600 dark:text-emerald-400",
+  "#2563EB": "text-blue-600 dark:text-blue-400",
+  "#8B5CF6": "text-violet-500 dark:text-violet-400",
+};
 
 interface KpiProps {
   label: string;
@@ -70,32 +64,26 @@ interface KpiProps {
 }
 
 function KpiCard({ label, value, subtle, color, icon, emphasis }: KpiProps) {
-  const accent =
-    emphasis === "bad" ? T.red600 : emphasis === "good" ? T.emerald600 : color || T.slate900;
+  const valueClass =
+    emphasis && EMPHASIS_CLASSES[emphasis]
+      ? EMPHASIS_CLASSES[emphasis]
+      : color && COLOR_CLASSES[color]
+        ? COLOR_CLASSES[color]
+        : "text-slate-900 dark:text-slate-50";
+
   return (
-    <div
-      style={{
-        background: T.white,
-        border: `1px solid ${T.slate200}`,
-        borderRadius: 10,
-        padding: 16,
-        display: "flex",
-        flexDirection: "column",
-        gap: 6,
-        minHeight: 100,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, color: T.slate500 }}>
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[10px] p-4 flex flex-col gap-1.5 min-h-[100px]">
+      <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
         {icon}
-        <span style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+        <span className="text-[11px] font-semibold uppercase tracking-wide">
           {label}
         </span>
       </div>
-      <div style={{ fontSize: 24, fontWeight: 700, color: accent, fontVariantNumeric: "tabular-nums" }}>
+      <div className={`text-2xl font-bold tabular-nums ${valueClass}`}>
         {value}
       </div>
       {subtle && (
-        <div style={{ fontSize: 12, color: T.slate500 }}>{subtle}</div>
+        <div className="text-xs text-slate-500 dark:text-slate-400">{subtle}</div>
       )}
     </div>
   );
@@ -120,23 +108,11 @@ export default function CfoExecutiveSummary({ year }: Props) {
 
   if (isLoading) {
     return (
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(6, 1fr)",
-          gap: 12,
-          marginBottom: 16,
-        }}
-      >
+      <div className="grid grid-cols-6 gap-3 mb-4">
         {[1, 2, 3, 4, 5, 6].map((i) => (
           <div
             key={i}
-            style={{
-              height: 100,
-              borderRadius: 10,
-              background: T.slate100,
-              border: `1px solid ${T.slate200}`,
-            }}
+            className="h-[100px] rounded-[10px] bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
           />
         ))}
       </div>
@@ -145,19 +121,7 @@ export default function CfoExecutiveSummary({ year }: Props) {
 
   if (isError || !data) {
     return (
-      <div
-        style={{
-          padding: "12px 16px",
-          border: `1px solid #FECACA`,
-          background: "#FEF2F2",
-          color: "#B91C1C",
-          borderRadius: 10,
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          fontSize: 13,
-        }}
-      >
+      <div className="px-4 py-3 border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-400 rounded-[10px] flex items-center gap-2 text-[13px]">
         <AlertTriangle size={16} />
         Unable to load CFO summary.
       </div>
@@ -179,20 +143,14 @@ export default function CfoExecutiveSummary({ year }: Props) {
   }));
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="flex flex-col gap-4">
       {/* KPI strip */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
-          gap: 12,
-        }}
-      >
+      <div className="grid grid-cols-6 gap-3">
         <KpiCard
           label="$ at risk"
           value={formatUSD(data.total_dollars_at_risk)}
           subtle={`${data.total_gaps_open.toLocaleString()} open gaps`}
-          color={T.red600}
+          color="#DC2626"
           icon={<AlertTriangle size={14} />}
           emphasis="bad"
         />
@@ -200,7 +158,7 @@ export default function CfoExecutiveSummary({ year }: Props) {
           label="$ recaptured YTD"
           value={formatUSD(data.ytd_dollars_recaptured)}
           subtle={`${data.ytd_closures} closures`}
-          color={T.emerald600}
+          color="#059669"
           icon={<DollarSign size={14} />}
           emphasis="good"
         />
@@ -208,7 +166,7 @@ export default function CfoExecutiveSummary({ year }: Props) {
           label="Forecast YE"
           value={formatUSD(data.forecast_ye_dollars)}
           subtle={`Budget ${formatUSD(data.budget_dollars)}`}
-          color={T.blue600}
+          color="#2563EB"
           icon={<TrendingUp size={14} />}
         />
         <KpiCard
@@ -223,7 +181,7 @@ export default function CfoExecutiveSummary({ year }: Props) {
           value={`${formatUSD(data.ytd_velocity_per_day)}/day`}
           subtle={`${data.days_elapsed}/${data.days_in_year} days`}
           icon={<Activity size={14} />}
-          color={T.violet500}
+          color="#8B5CF6"
         />
         <KpiCard
           label="Audit risk"
@@ -235,86 +193,48 @@ export default function CfoExecutiveSummary({ year }: Props) {
       </div>
 
       {/* Quarterly + YoY charts */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "2fr 1fr",
-          gap: 12,
-        }}
-      >
-        <div
-          style={{
-            background: T.white,
-            border: `1px solid ${T.slate200}`,
-            borderRadius: 10,
-            padding: 16,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 12,
-              fontSize: 13,
-              fontWeight: 600,
-              color: T.slate700,
-            }}
-          >
+      <div className="grid grid-cols-[2fr_1fr] gap-3">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[10px] p-4">
+          <div className="flex items-center gap-2 mb-3 text-[13px] font-semibold text-slate-700 dark:text-slate-200">
             <Calendar size={14} /> Quarterly $ — recaptured vs remaining
           </div>
           <div style={{ width: "100%", height: 220 }}>
             <ResponsiveContainer>
               <BarChart data={quarterData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke={T.slate100} vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: T.slate500 }} />
-                <YAxis tick={{ fontSize: 11, fill: T.slate500 }} tickFormatter={(v) => formatUSD(v)} />
+                {/* Recharts: hex colors required for SVG rendering */}
+                <CartesianGrid stroke="#F1F5F9" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748B" }} />
+                <YAxis tick={{ fontSize: 11, fill: "#64748B" }} tickFormatter={(v) => formatUSD(v)} />
                 <Tooltip
                   formatter={(v) => formatUSD(Number(v))}
                   contentStyle={{ fontSize: 12, borderRadius: 8 }}
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="Recaptured" stackId="a" fill={T.emerald500} radius={[0, 0, 0, 0]} />
-                <Bar dataKey="Remaining" stackId="a" fill={T.amber500} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Recaptured" stackId="a" fill="#10B981" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="Remaining" stackId="a" fill="#F59E0B" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div
-          style={{
-            background: T.white,
-            border: `1px solid ${T.slate200}`,
-            borderRadius: 10,
-            padding: 16,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 12,
-              fontSize: 13,
-              fontWeight: 600,
-              color: T.slate700,
-            }}
-          >
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[10px] p-4">
+          <div className="flex items-center gap-2 mb-3 text-[13px] font-semibold text-slate-700 dark:text-slate-200">
             <TrendingUp size={14} /> Year-over-year
           </div>
           <div style={{ width: "100%", height: 220 }}>
             <ResponsiveContainer>
               <LineChart data={yoyData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke={T.slate100} vertical={false} />
-                <XAxis dataKey="year" tick={{ fontSize: 11, fill: T.slate500 }} />
-                <YAxis tick={{ fontSize: 11, fill: T.slate500 }} tickFormatter={(v) => formatUSD(v)} />
+                {/* Recharts: hex colors required for SVG rendering */}
+                <CartesianGrid stroke="#F1F5F9" vertical={false} />
+                <XAxis dataKey="year" tick={{ fontSize: 11, fill: "#64748B" }} />
+                <YAxis tick={{ fontSize: 11, fill: "#64748B" }} tickFormatter={(v) => formatUSD(v)} />
                 <Tooltip
                   formatter={(v) => formatUSD(Number(v))}
                   contentStyle={{ fontSize: 12, borderRadius: 8 }}
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line type="monotone" dataKey="Recaptured" stroke={T.emerald600} strokeWidth={2} dot />
-                <Line type="monotone" dataKey="AtRisk" stroke={T.red500} strokeWidth={2} dot />
+                <Line type="monotone" dataKey="Recaptured" stroke="#059669" strokeWidth={2} dot />
+                <Line type="monotone" dataKey="AtRisk" stroke="#EF4444" strokeWidth={2} dot />
               </LineChart>
             </ResponsiveContainer>
           </div>

@@ -27,33 +27,19 @@ import {
   type RevenueBreakdownBucket,
 } from "@/lib/api";
 
-// ---------------------------------------------------------------------------
-// Design tokens (mirror RAFForecastCard for visual consistency)
-// ---------------------------------------------------------------------------
-const T = {
-  white: "#FFFFFF",
-  slate900: "#0F172A",
-  slate700: "#334155",
-  slate500: "#64748B",
-  slate400: "#64748B",
-  slate300: "#CBD5E1",
+// Chart-only hex constants (Recharts doesn't support className)
+const CHART = {
   slate200: "#E2E8F0",
-  slate100: "#F1F5F9",
-  emerald600: "#059669",
-  emerald500: "#10B981",
-  amber600: "#D97706",
+  slate300: "#CBD5E1",
   amber500: "#F59E0B",
-  red500: "#EF4444",
-  blue600: "#2563EB",
-  blue500: "#3B82F6",
   violet500: "#8B5CF6",
+  emerald500: "#10B981",
 };
 
-// One color per bucket — order MUST match buckets returned by the backend
 const BUCKET_COLORS: Record<string, string> = {
-  Recapture: T.amber500,
-  "MEAT improvement": T.violet500,
-  "New suspects": T.emerald500,
+  Recapture: CHART.amber500,
+  "MEAT improvement": CHART.violet500,
+  "New suspects": CHART.emerald500,
 };
 
 function formatUSD(n: number | null | undefined): string {
@@ -74,9 +60,6 @@ interface Props {
   year?: number;
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 export default function ProviderRevenueBreakdownCard({ providerId, year }: Props) {
   const q = useQuery<ProviderRevenueBreakdown>({
     queryKey: ["provider-revenue-breakdown", providerId, year],
@@ -88,9 +71,9 @@ export default function ProviderRevenueBreakdownCard({ providerId, year }: Props
   if (q.isLoading) {
     return (
       <Card>
-        <div style={{ color: T.slate500, fontSize: 13 }}>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Loading revenue breakdown…
-        </div>
+        </p>
       </Card>
     );
   }
@@ -98,9 +81,9 @@ export default function ProviderRevenueBreakdownCard({ providerId, year }: Props
   if (q.isError || !q.data) {
     return (
       <Card>
-        <div style={{ color: T.red500, fontSize: 13 }}>
+        <p className="text-sm text-red-500 dark:text-red-400">
           Revenue breakdown unavailable. {(q.error as Error)?.message ?? ""}
-        </div>
+        </p>
       </Card>
     );
   }
@@ -109,8 +92,6 @@ export default function ProviderRevenueBreakdownCard({ providerId, year }: Props
   const buckets = data.buckets;
   const total = data.total;
 
-  // Build chart data, dropping zero-value slices so the donut doesn't render
-  // a flat ring of 0% wedges.
   const chartData = buckets
     .filter((b) => b.amount > 0)
     .map((b) => ({
@@ -125,45 +106,22 @@ export default function ProviderRevenueBreakdownCard({ providerId, year }: Props
 
   return (
     <Card>
-      {/* Header --------------------------------------------------------- */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: 12,
-        }}
-      >
+      {/* Header */}
+      <div className="flex items-start justify-between mb-3">
         <div>
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              color: T.slate400,
-              marginBottom: 4,
-            }}
-          >
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
             Revenue Opportunity Breakdown
           </div>
-          <div style={{ fontSize: 13, color: T.slate500 }}>
+          <div className="text-sm text-slate-500 dark:text-slate-400">
             Year {data.year} · panel {data.panel_size}
           </div>
         </div>
       </div>
 
-      {/* Donut chart + legend ------------------------------------------ */}
+      {/* Donut chart + legend */}
       {total > 0 ? (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "200px 1fr",
-            gap: 16,
-            alignItems: "center",
-          }}
-        >
-          <div style={{ position: "relative", width: 200, height: 200 }}>
+        <div className="grid gap-4 items-center" style={{ gridTemplateColumns: "200px 1fr" }}>
+          <div className="relative" style={{ width: 200, height: 200 }}>
             <ResponsiveContainer>
               <PieChart>
                 <Pie
@@ -180,7 +138,7 @@ export default function ProviderRevenueBreakdownCard({ providerId, year }: Props
                   {chartData.map((d) => (
                     <Cell
                       key={d.name}
-                      fill={BUCKET_COLORS[d.name] ?? T.slate300}
+                      fill={BUCKET_COLORS[d.name] ?? CHART.slate300}
                     />
                   ))}
                 </Pie>
@@ -193,7 +151,7 @@ export default function ProviderRevenueBreakdownCard({ providerId, year }: Props
                     ];
                   }}
                   contentStyle={{
-                    border: `1px solid ${T.slate200}`,
+                    border: `1px solid ${CHART.slate200}`,
                     borderRadius: 6,
                     fontSize: 12,
                   }}
@@ -201,110 +159,54 @@ export default function ProviderRevenueBreakdownCard({ providerId, year }: Props
               </PieChart>
             </ResponsiveContainer>
             {/* Center total label */}
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                pointerEvents: "none",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                  color: T.slate400,
-                }}
-              >
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 Total
               </div>
-              <div
-                style={{
-                  fontSize: 20,
-                  fontWeight: 700,
-                  color: T.slate900,
-                  lineHeight: 1.1,
-                }}
-              >
+              <div className="text-xl font-bold text-slate-900 dark:text-slate-50 leading-tight">
                 {formatUSD(total)}
               </div>
             </div>
           </div>
 
-          {/* Legend ----------------------------------------------------- */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {/* Legend */}
+          <div className="flex flex-col gap-2">
             {buckets.map((b) => (
               <LegendRow
                 key={b.name}
                 bucket={b}
-                color={BUCKET_COLORS[b.name] ?? T.slate300}
+                color={BUCKET_COLORS[b.name] ?? CHART.slate300}
               />
             ))}
           </div>
         </div>
       ) : (
-        <div
-          style={{
-            padding: "20px 0",
-            fontSize: 13,
-            color: T.slate500,
-            fontStyle: "italic",
-          }}
-        >
+        <p className="py-5 text-sm text-slate-500 dark:text-slate-400 italic">
           No revenue opportunity detected. Panel either has no open suspects,
           fully recaptured prior-year HCCs, or complete MEAT documentation.
-        </div>
+        </p>
       )}
 
-      {/* Top contributors list ----------------------------------------- */}
+      {/* Top contributors list */}
       {total > 0 && (
-        <div
-          style={{
-            marginTop: 18,
-            paddingTop: 14,
-            borderTop: `1px solid ${T.slate100}`,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-              color: T.slate500,
-              marginBottom: 8,
-            }}
-          >
+        <div className="mt-[18px] pt-3.5 border-t border-slate-100 dark:border-slate-800">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">
             Top contributor per bucket
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div className="flex flex-col gap-1.5">
             {buckets.map((b) => (
               <TopContributorRow
                 key={b.name}
                 bucket={b}
-                color={BUCKET_COLORS[b.name] ?? T.slate300}
+                color={BUCKET_COLORS[b.name] ?? CHART.slate300}
               />
             ))}
           </div>
         </div>
       )}
 
-      {/* Assumptions footnote ------------------------------------------ */}
-      <div
-        style={{
-          marginTop: 12,
-          paddingTop: 10,
-          borderTop: `1px solid ${T.slate100}`,
-          fontSize: 10,
-          color: T.slate400,
-          lineHeight: 1.5,
-        }}
-      >
+      {/* Assumptions footnote */}
+      <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
         Assumes ${baseRate.toLocaleString()} PMPY × {persistencePct}% chronic
         persistence · MEAT threshold{" "}
         {Math.round((data.assumptions?.meat_threshold ?? 0.75) * 100)}%
@@ -318,15 +220,7 @@ export default function ProviderRevenueBreakdownCard({ providerId, year }: Props
 // ---------------------------------------------------------------------------
 function Card({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      style={{
-        background: T.white,
-        border: `1px solid ${T.slate200}`,
-        borderRadius: 10,
-        padding: 16,
-        boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
-      }}
-    >
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[10px] p-4 shadow-sm">
       {children}
     </div>
   );
@@ -340,50 +234,24 @@ function LegendRow({
   color: string;
 }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 10,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <div className="flex items-center justify-between gap-2.5">
+      <div className="flex items-center gap-2">
         <span
-          style={{
-            display: "inline-block",
-            width: 10,
-            height: 10,
-            borderRadius: 2,
-            background: color,
-            flexShrink: 0,
-          }}
+          className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
+          style={{ background: color }}
         />
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            color: T.slate700,
-          }}
-        >
+        <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
           {bucket.name}
         </span>
-        <span style={{ fontSize: 11, color: T.slate400 }}>
+        <span className="text-[11px] text-slate-500 dark:text-slate-400">
           ({bucket.count} HCC{bucket.count === 1 ? "" : "s"})
         </span>
       </div>
-      <div style={{ textAlign: "right" }}>
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: 700,
-            color: T.slate900,
-            lineHeight: 1.1,
-          }}
-        >
+      <div className="text-right">
+        <div className="text-[13px] font-bold text-slate-900 dark:text-slate-50 leading-tight">
           {formatUSD(bucket.amount)}
         </div>
-        <div style={{ fontSize: 10, color: T.slate500, marginTop: 1 }}>
+        <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-px">
           {bucket.pct_of_total.toFixed(1)}%
         </div>
       </div>
@@ -400,68 +268,29 @@ function TopContributorRow({
 }) {
   const top = bucket.top_3_hccs?.[0];
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 10,
-        padding: "6px 10px",
-        background: T.slate100,
-        borderRadius: 6,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+    <div className="flex items-center justify-between gap-2.5 px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-md">
+      <div className="flex items-center gap-2 min-w-0">
         <span
-          style={{
-            display: "inline-block",
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background: color,
-            flexShrink: 0,
-          }}
+          className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+          style={{ background: color }}
         />
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: T.slate500,
-            textTransform: "uppercase",
-            letterSpacing: "0.04em",
-          }}
-        >
+        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
           {bucket.name}
         </span>
       </div>
-      <div
-        style={{
-          fontSize: 12,
-          color: T.slate700,
-          textAlign: "right",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
+      <div className="text-xs text-slate-700 dark:text-slate-200 text-right overflow-hidden text-ellipsis whitespace-nowrap">
         {top ? (
           <>
-            <span style={{ fontWeight: 700 }}>HCC {top.hcc_code}</span>
+            <span className="font-bold">HCC {top.hcc_code}</span>
             {top.hcc_label ? (
-              <span style={{ color: T.slate500 }}> · {top.hcc_label}</span>
+              <span className="text-slate-500 dark:text-slate-400"> · {top.hcc_label}</span>
             ) : null}
-            <span
-              style={{
-                marginLeft: 8,
-                fontWeight: 700,
-                color: T.slate900,
-              }}
-            >
+            <span className="ml-2 font-bold text-slate-900 dark:text-slate-50">
               {formatUSD(top.dollars)}
             </span>
           </>
         ) : (
-          <span style={{ color: T.slate400, fontStyle: "italic" }}>—</span>
+          <span className="text-slate-500 dark:text-slate-400 italic">—</span>
         )}
       </div>
     </div>
