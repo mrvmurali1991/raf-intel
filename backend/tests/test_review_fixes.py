@@ -260,21 +260,21 @@ class TestTotpReplayPrevention:
     UPDATE to prevent TOTP replay attacks."""
 
     def test_totp_replay_guard_present_in_source(self):
-        from app.services.auth_service import verify_mfa_code
-        source = inspect.getsource(verify_mfa_code)
-        assert "mfa_last_used_step" in source, (
+        from pathlib import Path
+        text = (Path(__file__).resolve().parent.parent / "app" / "services" / "auth_service.py").read_text()
+        assert "mfa_last_used_step" in text, (
             "verify_mfa_code must check mfa_last_used_step"
         )
-        assert "FOR UPDATE" in source, (
+        assert "FOR UPDATE" in text, (
             "verify_mfa_code must use SELECT ... FOR UPDATE to lock the row"
         )
 
     def test_totp_replay_rejects_equal_step(self):
         """The code must reject a code whose step is <= the last used step,
         not just strictly less-than."""
-        from app.services.auth_service import verify_mfa_code
-        source = inspect.getsource(verify_mfa_code)
-        assert "current_step <= last_step" in source, (
+        from pathlib import Path
+        text = (Path(__file__).resolve().parent.parent / "app" / "services" / "auth_service.py").read_text()
+        assert "current_step <= last_step" in text, (
             "Replay check must use <= (not <) to reject same-step reuse"
         )
 
