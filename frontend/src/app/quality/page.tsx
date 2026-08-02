@@ -38,11 +38,13 @@ import {
   getQualitySummary,
   getStarsEstimate,
   getCareGaps,
+  getPeerPercentile,
 } from "@/lib/api";
 import type {
   QualityMeasure,
   QualitySummary,
 } from "@/lib/api";
+import { useAuth } from "@/contexts/auth-context";
 import { C, starsLabel, StarsGauge, Spinner, ErrorBox, renderStars } from "./tabs/_shared";
 
 // ── Lazy-loaded tab panels (only parsed when the tab is first activated) ───────
@@ -65,8 +67,13 @@ const CareGapsTabDynamic = dynamic(
   { ssr: false, loading: TabFallback },
 );
 
+const PeerComparisonTabDynamic = dynamic(
+  () => import("./tabs/PeerComparisonTab"),
+  { ssr: false, loading: TabFallback },
+);
+
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-const TABS = ["Summary", "HEDIS Measures", "STARS Estimate", "Care Gaps"] as const;
+const TABS = ["Summary", "HEDIS Measures", "STARS Estimate", "Care Gaps", "Peer Comparison"] as const;
 type TabKey = (typeof TABS)[number];
 
 // ── HEDIS measure card used in the Summary tab ────────────────────────────────
@@ -277,6 +284,7 @@ function SummaryTab({
 // PAGE COMPONENT
 // ══════════════════════════════════════════════════════════════════════════════
 export default function QualityPage() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabKey>("Summary");
   // ── 15-second load timeout guard ─────────────────────────────────────────
   const [loadTimedOut, setLoadTimedOut] = useState(false);
@@ -303,8 +311,14 @@ export default function QualityPage() {
     queryFn: () => getCareGaps({ limit: 500 }),
   });
 
-  // Derived: true while any of the four queries are in-flight
-  const anyFetching = summaryQ.isFetching || measuresQ.isFetching || starsQ.isFetching || gapsQ.isFetching;
+  const peerQ = useQuery({
+    queryKey: ["quality-peer-percentile", user?.provider_id],
+    queryFn: () => getPeerPercentile(user!.provider_id!),
+    enabled: !!user?.provider_id,
+  });
+
+  // Derived: true while any of the queries are in-flight
+  const anyFetching = summaryQ.isFetching || measuresQ.isFetching || starsQ.isFetching || gapsQ.isFetching || peerQ.isFetching;
 
   // Start/reset the 15-second timeout whenever fetching begins.
   // Clear it as soon as all loading finishes or an error is surfaced.
@@ -339,6 +353,7 @@ export default function QualityPage() {
     measuresQ.refetch();
     starsQ.refetch();
     gapsQ.refetch();
+    peerQ.refetch();
   }
 
   // ── Render the active tab content ─────────────────────────────────────────
@@ -456,6 +471,38 @@ export default function QualityPage() {
           total={gapsQ.data?.total ?? 0}
         />
       );
+    }
+
+    if (activeTab === "Peer Comparison") {
+      if (!user?.provider_id) {
+        return (
+          <div className="flex items-start gap-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-5 text-sm text-amber-800 dark:text-amber-300">
+            <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold mb-0.5">Provider account required</div>
+              <div className="text-xs text-amber-700 dark:text-amber-400">
+                Peer comparison is available for users linked to a clinical provider profile.
+                Contact your administrator to link your account.
+              </div>
+            </div>
+          </div>
+        );
+      }
+      if (peerQ.isLoading) {
+        if (loadTimedOut)
+          return <ErrorBox message="Peer comparison did not load in time. Please retry." onRetry={refetchAll} />;
+        return <Spinner label="Loading peer comparison..." />;
+      }
+      if (peerQ.isError)
+        return (
+          <ErrorBox
+            message={`Failed to load peer comparison: ${(peerQ.error as Error | null)?.message ?? "Unknown error"}`}
+            onRetry={refetchAll}
+          />
+        );
+      if (!peerQ.data)
+        return <ErrorBox message="No peer comparison data available." onRetry={refetchAll} />;
+      return <PeerComparisonTabDynamic data={peerQ.data} />;
     }
 
     return null;
