@@ -697,10 +697,7 @@ export default function LoginPage() {
       ) : (
         /* ---- Default marketing left panel ---- */
         <div
-          className="hidden lg:flex lg:w-[52%] flex-col justify-between p-12 relative overflow-hidden aurora-bg"
-          style={{
-            borderRight: "1px solid rgba(20, 184, 166, 0.12)",
-          }}
+          className="hidden lg:flex lg:w-[52%] flex-col justify-between p-12 relative overflow-hidden aurora-bg border-r border-teal-500/[0.12]"
         >
           {/* Glassmorphism gradient overlay for legibility */}
           <div className="absolute inset-0 pointer-events-none bg-white/50 dark:bg-slate-950/60 backdrop-blur-[1px]" />
@@ -976,7 +973,7 @@ export default function LoginPage() {
 
                 <Button
                   type="submit"
-                  className="w-full h-12 mt-2 rounded-xl font-semibold text-base bg-teal-700 hover:bg-teal-800 text-white shadow-md shadow-teal-700/20 hover:shadow-lg hover:shadow-teal-700/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-95 transition-all duration-200 disabled:opacity-70 disabled:hover:translate-y-0 disabled:hover:scale-100"
+                  className="w-full h-12 mt-2 rounded-xl font-semibold text-base bg-teal-700 hover:bg-teal-800 text-white shadow-md shadow-teal-700/20 hover:shadow-lg hover:shadow-teal-700/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-95 transition-all duration-300 ease-in-out disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:scale-100 disabled:hover:shadow-md"
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? (

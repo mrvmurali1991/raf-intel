@@ -60,6 +60,81 @@ def _get_age_band_from_age(age: int) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _store_patient_hccs_inner(
+    cur: Any,
+    patient_id: int,
+    year: int,
+    hcc_list: list,
+    icd_codes: list[str],
+    result: Any,
+    score_type: str,
+    tenant_id: str,
+    model_version: str,
+) -> None:
+    """Core logic for storing HCCs — operates on an already-open cursor."""
+    hcc_detail_map = {str(h.hcc): h for h in (result.hcc_details or [])}
+    cc_to_dx: dict = result.cc_to_dx or {}
+
+    if hcc_list:
+        new_hcc_ints = [
+            int(str(h)) for h in hcc_list if str(h).isdigit()
+        ]
+        if new_hcc_ints:
+            placeholders = ",".join(["%s"] * len(new_hcc_ints))
+            cur.execute(
+                f"DELETE FROM raf_patient_hcc "
+                f"WHERE patient_id = %s AND measurement_year = %s AND tenant_id = %s "
+                f"AND hcc_code NOT IN ({placeholders})",
+                (patient_id, year, tenant_id, *new_hcc_ints),
+            )
+    for hcc in hcc_list:
+        hcc_str = str(hcc)
+        hcc_int = int(hcc_str) if hcc_str.isdigit() else 0
+
+        raw_icd = cc_to_dx.get(hcc_str, set())
+        related_icd: list[str] = (
+            sorted(raw_icd) if isinstance(raw_icd, set) else list(raw_icd)
+        )
+
+        coefficient = (
+            hcc_detail_map[hcc_str].coefficient
+            if hcc_str in hcc_detail_map
+            else 0.0
+        )
+
+        is_chronic = (
+            1
+            if is_chronic_default.get((hcc_str, "CMS-HCC Model V28"), True)
+            else 0
+        )
+
+        cur.execute(
+            """
+            INSERT INTO raf_patient_hcc
+                (patient_id, measurement_year, hcc_code, icd10_codes,
+                 source_encounter_ids, raf_coefficient, meat_status, tenant_id,
+                 is_chronic, model_version)
+            VALUES (%s, %s, %s, %s, '[]', %s, 'missing', %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                icd10_codes     = VALUES(icd10_codes),
+                raf_coefficient = VALUES(raf_coefficient),
+                tenant_id       = VALUES(tenant_id),
+                is_chronic      = VALUES(is_chronic),
+                model_version   = VALUES(model_version)
+            """,
+            (
+                patient_id,
+                year,
+                hcc_int,
+                json.dumps(related_icd),
+                coefficient,
+                tenant_id,
+                is_chronic,
+                model_version,
+            ),
+        )
+
+
 def _store_patient_hccs(
     patient_id: int,
     year: int,
@@ -69,6 +144,7 @@ def _store_patient_hccs(
     score_type: str = "blended",
     tenant_id: str = "",  # Required — empty string will raise below
     model_version: str = "V28",
+    shared_cursor: Any = None,
 ) -> None:
     """Store active HCCs in raf_patient_hcc table.
 
@@ -85,74 +161,16 @@ def _store_patient_hccs(
             "refusing to persist HCC data without tenant scope (HIPAA multi-tenant isolation)"
         )
     try:
-        hcc_detail_map = {str(h.hcc): h for h in (result.hcc_details or [])}
-        cc_to_dx: dict = result.cc_to_dx or {}
-
-        with raf_cursor() as cur:
-            # Prune only HCCs that are no longer present in the new hcc_list.
-            # Preserving row IDs for still-valid HCCs is critical: raf_meat_evidence
-            # has FK patient_hcc_id → raf_patient_hcc(id) ON DELETE CASCADE, so a
-            # wholesale DELETE+INSERT would wipe all MEAT evidence on every recompute.
-            # The UNIQUE KEY uq_patient_hcc_year (patient_id, hcc_code, measurement_year)
-            # combined with ON DUPLICATE KEY UPDATE below handles the upsert for
-            # still-valid HCCs without touching their row IDs.
-            if hcc_list:
-                new_hcc_ints = [
-                    int(str(h)) for h in hcc_list if str(h).isdigit()
-                ]
-                if new_hcc_ints:
-                    placeholders = ",".join(["%s"] * len(new_hcc_ints))
-                    cur.execute(
-                        f"DELETE FROM raf_patient_hcc "
-                        f"WHERE patient_id = %s AND measurement_year = %s AND tenant_id = %s "
-                        f"AND hcc_code NOT IN ({placeholders})",
-                        (patient_id, year, tenant_id, *new_hcc_ints),
-                    )
-            for hcc in hcc_list:
-                hcc_str = str(hcc)
-                hcc_int = int(hcc_str) if hcc_str.isdigit() else 0
-
-                raw_icd = cc_to_dx.get(hcc_str, set())
-                related_icd: list[str] = (
-                    sorted(raw_icd) if isinstance(raw_icd, set) else list(raw_icd)
-                )
-
-                coefficient = (
-                    hcc_detail_map[hcc_str].coefficient
-                    if hcc_str in hcc_detail_map
-                    else 0.0
-                )
-
-                is_chronic = (
-                    1
-                    if is_chronic_default.get((hcc_str, "CMS-HCC Model V28"), True)
-                    else 0
-                )
-
-                cur.execute(
-                    """
-                    INSERT INTO raf_patient_hcc
-                        (patient_id, measurement_year, hcc_code, icd10_codes,
-                         source_encounter_ids, raf_coefficient, meat_status, tenant_id,
-                         is_chronic, model_version)
-                    VALUES (%s, %s, %s, %s, '[]', %s, 'missing', %s, %s, %s)
-                    ON DUPLICATE KEY UPDATE
-                        icd10_codes     = VALUES(icd10_codes),
-                        raf_coefficient = VALUES(raf_coefficient),
-                        tenant_id       = VALUES(tenant_id),
-                        is_chronic      = VALUES(is_chronic),
-                        model_version   = VALUES(model_version)
-                    """,
-                    (
-                        patient_id,
-                        year,
-                        hcc_int,
-                        json.dumps(related_icd),
-                        coefficient,
-                        tenant_id,
-                        is_chronic,
-                        model_version,
-                    ),
+        if shared_cursor is not None:
+            _store_patient_hccs_inner(
+                shared_cursor, patient_id, year, hcc_list, icd_codes,
+                result, score_type, tenant_id, model_version,
+            )
+        else:
+            with raf_cursor() as cur:
+                _store_patient_hccs_inner(
+                    cur, patient_id, year, hcc_list, icd_codes,
+                    result, score_type, tenant_id, model_version,
                 )
     except Exception as exc:
         logger.warning(
@@ -160,10 +178,137 @@ def _store_patient_hccs(
         )
 
 
+def _upsert_raf_score_inner(
+    cur: Any,
+    result: dict[str, Any],
+    score_type: str,
+    tenant_id: str,
+    v24_score: float | None,
+    v28_score: float | None,
+    blended_raw: float | None,
+    v24_w: float | None,
+    v28_w: float | None,
+    v24_hcc_count: int | None,
+    v28_hcc_count: int | None,
+    stamp: dict[str, str],
+) -> None:
+    """Core logic for upserting RAF score — operates on an already-open cursor."""
+    cur.execute(
+        """
+        INSERT INTO raf_scores (
+            patient_id, measurement_year, score_type, model_segment,
+            demographic_score, disease_score, interaction_score,
+            total_raw, normalization_factor, final_raf,
+            hcc_count, calculated_at, tenant_id,
+            v24_score, v28_score, blended_raw_score,
+            blend_v24_weight, blend_v28_weight,
+            v24_hcc_count, v28_hcc_count,
+            model_version, coefficient_source,
+            coefficient_manifest_hash, calculator_commit_sha
+        ) VALUES (
+            %s, %s, %s, %s,
+            %s, %s, %s,
+            %s, %s, %s,
+            %s, NOW(), %s,
+            %s, %s, %s,
+            %s, %s,
+            %s, %s,
+            %s, %s,
+            %s, %s
+        )
+        ON DUPLICATE KEY UPDATE
+            demographic_score        = VALUES(demographic_score),
+            disease_score            = VALUES(disease_score),
+            interaction_score        = VALUES(interaction_score),
+            total_raw                = VALUES(total_raw),
+            normalization_factor     = VALUES(normalization_factor),
+            final_raf                = VALUES(final_raf),
+            hcc_count                = VALUES(hcc_count),
+            tenant_id                = VALUES(tenant_id),
+            v24_score                = VALUES(v24_score),
+            v28_score                = VALUES(v28_score),
+            blended_raw_score        = VALUES(blended_raw_score),
+            blend_v24_weight         = VALUES(blend_v24_weight),
+            blend_v28_weight         = VALUES(blend_v28_weight),
+            v24_hcc_count            = VALUES(v24_hcc_count),
+            v28_hcc_count            = VALUES(v28_hcc_count),
+            model_version            = VALUES(model_version),
+            coefficient_source       = VALUES(coefficient_source),
+            coefficient_manifest_hash = VALUES(coefficient_manifest_hash),
+            calculator_commit_sha    = VALUES(calculator_commit_sha),
+            calculated_at            = NOW()
+        """,
+        (
+            result["patient_id"],
+            result["measurement_year"],
+            score_type,
+            result["model_segment"],
+            result["demographic_score"],
+            result["disease_score"],
+            result["interaction_score"],
+            result["subtotal"],
+            result["normalization_factor"],
+            result["payment_raf"],
+            len(result["final_hcc_list"]),
+            tenant_id,
+            v24_score,
+            v28_score,
+            blended_raw,
+            v24_w,
+            v28_w,
+            v24_hcc_count,
+            v28_hcc_count,
+            stamp["model_version"],
+            stamp["coefficient_source"],
+            stamp["coefficient_manifest_hash"],
+            stamp["calculator_commit_sha"],
+        ),
+    )
+
+    patient_id: int = result["patient_id"]
+    final_raf: float = result["payment_raf"]
+    demographic_score: float = result["demographic_score"]
+    try:
+        cur.execute(
+            """
+            UPDATE patients SET
+                raf_score        = %s,
+                hcc_count        = (
+                    SELECT COUNT(*)
+                    FROM raf_patient_hcc
+                    WHERE patient_id = %s
+                      AND measurement_year = %s
+                      AND tenant_id = %s
+                      AND is_trumped = 0
+                ),
+                demographic_score = %s,
+                updated_at        = NOW()
+            WHERE id = %s AND tenant_id = %s
+            """,
+            (
+                final_raf,
+                patient_id,
+                result["measurement_year"],
+                tenant_id,
+                demographic_score,
+                patient_id,
+                tenant_id,
+            ),
+        )
+    except Exception as denorm_exc:
+        logger.warning(
+            "Skipped patients-table denormalization for pid=%s "
+            "(read-only VIEW or missing column): %s",
+            patient_id,
+            denorm_exc,
+        )
+
+
 def _upsert_raf_score(
     result: dict[str, Any],
     score_type: str = "blended",
     tenant_id: str = "",  # Required — empty string will raise below
+    shared_cursor: Any = None,
 ) -> None:
     """Persist RAF score to raf_scores table.
 
@@ -213,123 +358,18 @@ def _upsert_raf_score(
     stamp = provenance_stamp(model_version_label)
 
     try:
-        with raf_cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO raf_scores (
-                    patient_id, measurement_year, score_type, model_segment,
-                    demographic_score, disease_score, interaction_score,
-                    total_raw, normalization_factor, final_raf,
-                    hcc_count, calculated_at, tenant_id,
-                    v24_score, v28_score, blended_raw_score,
-                    blend_v24_weight, blend_v28_weight,
-                    v24_hcc_count, v28_hcc_count,
-                    model_version, coefficient_source,
-                    coefficient_manifest_hash, calculator_commit_sha
-                ) VALUES (
-                    %s, %s, %s, %s,
-                    %s, %s, %s,
-                    %s, %s, %s,
-                    %s, NOW(), %s,
-                    %s, %s, %s,
-                    %s, %s,
-                    %s, %s,
-                    %s, %s,
-                    %s, %s
-                )
-                ON DUPLICATE KEY UPDATE
-                    demographic_score        = VALUES(demographic_score),
-                    disease_score            = VALUES(disease_score),
-                    interaction_score        = VALUES(interaction_score),
-                    total_raw                = VALUES(total_raw),
-                    normalization_factor     = VALUES(normalization_factor),
-                    final_raf                = VALUES(final_raf),
-                    hcc_count                = VALUES(hcc_count),
-                    tenant_id                = VALUES(tenant_id),
-                    v24_score                = VALUES(v24_score),
-                    v28_score                = VALUES(v28_score),
-                    blended_raw_score        = VALUES(blended_raw_score),
-                    blend_v24_weight         = VALUES(blend_v24_weight),
-                    blend_v28_weight         = VALUES(blend_v28_weight),
-                    v24_hcc_count            = VALUES(v24_hcc_count),
-                    v28_hcc_count            = VALUES(v28_hcc_count),
-                    model_version            = VALUES(model_version),
-                    coefficient_source       = VALUES(coefficient_source),
-                    coefficient_manifest_hash = VALUES(coefficient_manifest_hash),
-                    calculator_commit_sha    = VALUES(calculator_commit_sha),
-                    calculated_at            = NOW()
-                """,
-                (
-                    result["patient_id"],
-                    result["measurement_year"],
-                    score_type,
-                    result["model_segment"],
-                    result["demographic_score"],
-                    result["disease_score"],
-                    result["interaction_score"],
-                    result["subtotal"],
-                    result["normalization_factor"],
-                    result["payment_raf"],
-                    len(result["final_hcc_list"]),
-                    tenant_id,
-                    v24_score,
-                    v28_score,
-                    blended_raw,
-                    v24_w,
-                    v28_w,
-                    v24_hcc_count,
-                    v28_hcc_count,
-                    stamp["model_version"],
-                    stamp["coefficient_source"],
-                    stamp["coefficient_manifest_hash"],
-                    stamp["calculator_commit_sha"],
-                ),
+        if shared_cursor is not None:
+            _upsert_raf_score_inner(
+                shared_cursor, result, score_type, tenant_id,
+                v24_score, v28_score, blended_raw,
+                v24_w, v28_w, v24_hcc_count, v28_hcc_count, stamp,
             )
-
-            # Sync the authoritative RAF columns back to the patients table so
-            # that list/search queries always reflect the latest calculated score
-            # without requiring a JOIN to raf_scores.
-            #
-            # NOTE: when `patients` is a VIEW (OpenEMR-bridged deployments) this
-            # UPDATE will fail because the VIEW doesn't expose those columns.
-            # Wrap it independently so a failure here doesn't roll back the
-            # raf_scores INSERT above.
-            patient_id: int = result["patient_id"]
-            final_raf: float = result["payment_raf"]
-            demographic_score: float = result["demographic_score"]
-            try:
-                cur.execute(
-                    """
-                    UPDATE patients SET
-                        raf_score        = %s,
-                        hcc_count        = (
-                            SELECT COUNT(*)
-                            FROM raf_patient_hcc
-                            WHERE patient_id = %s
-                              AND measurement_year = %s
-                              AND tenant_id = %s
-                              AND is_trumped = 0
-                        ),
-                        demographic_score = %s,
-                        updated_at        = NOW()
-                    WHERE id = %s AND tenant_id = %s
-                    """,
-                    (
-                        final_raf,
-                        patient_id,
-                        result["measurement_year"],
-                        tenant_id,
-                        demographic_score,
-                        patient_id,
-                        tenant_id,
-                    ),
-                )
-            except Exception as denorm_exc:
-                logger.warning(
-                    "Skipped patients-table denormalization for pid=%s "
-                    "(read-only VIEW or missing column): %s",
-                    patient_id,
-                    denorm_exc,
+        else:
+            with raf_cursor() as cur:
+                _upsert_raf_score_inner(
+                    cur, result, score_type, tenant_id,
+                    v24_score, v28_score, blended_raw,
+                    v24_w, v28_w, v24_hcc_count, v28_hcc_count, stamp,
                 )
     except Exception as exc:
         logger.error(
@@ -338,6 +378,60 @@ def _upsert_raf_score(
             tenant_id,
             exc,
         )
+
+
+def _upsert_patient_demographics_inner(
+    cur: Any,
+    patient_id: int,
+    measurement_year: int,
+    age_band: str,
+    sex: str,
+    dual_type: str,
+    orec: str,
+    institutional: bool,
+    enrollment_source: str,
+    model_segment: str,
+    tenant_id: str,
+) -> None:
+    """Core logic for upserting demographics — operates on an already-open cursor."""
+    cur.execute(
+        """
+        INSERT INTO raf_patient_demographics
+            (patient_id, measurement_year, age_band, sex,
+             dual_status, dual_type, disabled, orec,
+             institutional, enrollment_source, model_segment, tenant_id)
+        VALUES
+            (%s, %s, %s, %s,
+             %s, %s, %s, %s,
+             %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            age_band          = VALUES(age_band),
+            sex               = VALUES(sex),
+            dual_status       = VALUES(dual_status),
+            dual_type         = VALUES(dual_type),
+            disabled          = VALUES(disabled),
+            orec              = VALUES(orec),
+            institutional     = VALUES(institutional),
+            enrollment_source = VALUES(enrollment_source),
+            model_segment     = VALUES(model_segment),
+            tenant_id         = VALUES(tenant_id),
+            updated_at        = NOW()
+        """,
+        (
+            patient_id,
+            measurement_year,
+            age_band,
+            sex,
+            1 if dual_type != "non_dual" else 0,
+            dual_type,
+            1 if orec == "1" else 0,
+            orec,
+            1 if institutional else 0,
+            enrollment_source,
+            model_segment,
+            tenant_id,
+        ),
+    )
 
 
 def _upsert_patient_demographics(
@@ -351,6 +445,7 @@ def _upsert_patient_demographics(
     institutional: bool,
     enrollment_source: str,
     tenant_id: str = "",  # Required — empty string will raise below
+    shared_cursor: Any = None,
 ) -> None:
     """Persist (or refresh) enrollment and demographic info in raf_patient_demographics."""
     if not tenant_id:
@@ -361,45 +456,19 @@ def _upsert_patient_demographics(
     age_band = _get_age_band_from_age(age)
 
     try:
-        with raf_cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO raf_patient_demographics
-                    (patient_id, measurement_year, age_band, sex,
-                     dual_status, dual_type, disabled, orec,
-                     institutional, enrollment_source, model_segment, tenant_id)
-                VALUES
-                    (%s, %s, %s, %s,
-                     %s, %s, %s, %s,
-                     %s, %s, %s, %s)
-                ON DUPLICATE KEY UPDATE
-                    age_band          = VALUES(age_band),
-                    sex               = VALUES(sex),
-                    dual_status       = VALUES(dual_status),
-                    dual_type         = VALUES(dual_type),
-                    disabled          = VALUES(disabled),
-                    orec              = VALUES(orec),
-                    institutional     = VALUES(institutional),
-                    enrollment_source = VALUES(enrollment_source),
-                    model_segment     = VALUES(model_segment),
-                    tenant_id         = VALUES(tenant_id),
-                    updated_at        = NOW()
-                """,
-                (
-                    patient_id,
-                    measurement_year,
-                    age_band,
-                    sex,
-                    1 if dual_type != "non_dual" else 0,
-                    dual_type,
-                    1 if orec == "1" else 0,
-                    orec,
-                    1 if institutional else 0,
-                    enrollment_source,
-                    model_segment,
-                    tenant_id,
-                ),
+        if shared_cursor is not None:
+            _upsert_patient_demographics_inner(
+                shared_cursor, patient_id, measurement_year, age_band,
+                sex, dual_type, orec, institutional,
+                enrollment_source, model_segment, tenant_id,
             )
+        else:
+            with raf_cursor() as cur:
+                _upsert_patient_demographics_inner(
+                    cur, patient_id, measurement_year, age_band,
+                    sex, dual_type, orec, institutional,
+                    enrollment_source, model_segment, tenant_id,
+                )
     except Exception as exc:
         logger.warning(
             "_upsert_patient_demographics pid=%s year=%s tenant=%s: %s",

@@ -1711,30 +1711,8 @@ def calculate_raf_score(
     persist_result_obj = (v28_calc or v24_calc)["_result_obj"]  # type: ignore[index]
     persist_hcc_list = (v28_calc or v24_calc)["hcc_list"]  # type: ignore[index]
 
-    _store_patient_hccs(
-        patient_id,
-        measurement_year,
-        persist_hcc_list,
-        icd_codes,
-        persist_result_obj,
-        score_type=model_version_used,
-        tenant_id=tenant_id,
-        model_version="V28" if v28_calc else "V24",
-    )
-
-    # 9. Persist demographics
-    _upsert_patient_demographics(
-        patient_id=patient_id,
-        measurement_year=measurement_year,
-        age=age,
-        sex=sex,
-        model_segment=model_segment,
-        dual_type=_dual_type,
-        orec=_orec,
-        institutional=_institutional,
-        enrollment_source=enrollment_source,
-        tenant_id=tenant_id,
-    )
+    # HCC + demographics persistence moved below to share a single cursor
+    # with _upsert_raf_score (step 12).
 
     # 10. Apply frailty adjustment (PACE / FIDE-SNP only)
     frailty_info: dict[str, Any] | None = None
@@ -1829,8 +1807,33 @@ def calculate_raf_score(
         ),
     }
 
-    # 12. Persist to raf_scores
-    _upsert_raf_score(result_dict, score_type=model_version_used, tenant_id=tenant_id)
+    # 12. Persist HCCs, demographics, and RAF score atomically
+    with raf_cursor() as shared_cur:
+        _store_patient_hccs(
+            patient_id,
+            measurement_year,
+            persist_hcc_list,
+            icd_codes,
+            persist_result_obj,
+            score_type=model_version_used,
+            tenant_id=tenant_id,
+            model_version="V28" if v28_calc else "V24",
+            shared_cursor=shared_cur,
+        )
+        _upsert_patient_demographics(
+            patient_id=patient_id,
+            measurement_year=measurement_year,
+            age=age,
+            sex=sex,
+            model_segment=model_segment,
+            dual_type=_dual_type,
+            orec=_orec,
+            institutional=_institutional,
+            enrollment_source=enrollment_source,
+            tenant_id=tenant_id,
+            shared_cursor=shared_cur,
+        )
+        _upsert_raf_score(result_dict, score_type=model_version_used, tenant_id=tenant_id, shared_cursor=shared_cur)
 
     # Invalidate any cached RAF breakdown for this patient so the next call
     # reflects the freshly calculated score.

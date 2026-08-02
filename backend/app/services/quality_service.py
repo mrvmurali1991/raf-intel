@@ -15,6 +15,7 @@ No PHI is logged — patient identifiers are kept inside caller scope only.
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from datetime import date, datetime
 from typing import Any
 
@@ -280,6 +281,46 @@ def _get_active_diagnoses(pid: int, year: int) -> list[str]:
                 codes.add(row["code"].strip().upper())
 
     return list(codes)
+
+
+def _batch_fetch_diagnoses(patient_ids: list[int], year: int) -> dict[int, list[str]]:
+    """Batch-fetch active diagnoses for a list of patients to avoid N+1 queries."""
+    dx_by_patient: dict[int, set[str]] = defaultdict(set)
+    if not patient_ids:
+        return {}
+    _batch_size = 500
+    for i in range(0, len(patient_ids), _batch_size):
+        batch = patient_ids[i:i + _batch_size]
+        placeholders = ",".join(["%s"] * len(batch))
+        try:
+            with openemr_cursor() as cur:
+                cur.execute(
+                    f"SELECT pid, diagnosis FROM lists "
+                    f"WHERE pid IN ({placeholders}) "
+                    f"AND type = 'medical_problem' AND activity = 1 "
+                    f"AND diagnosis IS NOT NULL AND diagnosis != ''",
+                    batch,
+                )
+                for row in cur.fetchall():
+                    if row["diagnosis"]:
+                        dx_by_patient[int(row["pid"])].add(row["diagnosis"].strip().upper())
+        except Exception as exc:
+            logger.debug("Batch lists query failed: %s", exc)
+        try:
+            with openemr_cursor() as cur:
+                cur.execute(
+                    f"SELECT pid, code FROM billing "
+                    f"WHERE pid IN ({placeholders}) "
+                    f"AND code_type = 'ICD10' AND activity = 1 "
+                    f"AND code IS NOT NULL",
+                    batch,
+                )
+                for row in cur.fetchall():
+                    if row["code"]:
+                        dx_by_patient[int(row["pid"])].add(row["code"].strip().upper())
+        except Exception as exc:
+            logger.debug("Batch billing query failed: %s", exc)
+    return {pid: list(codes) for pid, codes in dx_by_patient.items()}
 
 
 def _get_labs(pid: int, year: int) -> list[dict[str, Any]]:
@@ -730,7 +771,7 @@ def get_quality_summary(year: int, tenant_id: int) -> dict[str, Any]:
                 "FROM emr_patient_matches epm "
                 "JOIN emr_connections ec ON ec.id = epm.connection_id "
                 "WHERE ec.is_active = 1 AND ec.tenant_id = %s "
-                "ORDER BY epm.id",
+                "ORDER BY epm.id LIMIT 500",
                 (tid,),
             )
             patients = cur.fetchall()
@@ -739,10 +780,13 @@ def get_quality_summary(year: int, tenant_id: int) -> dict[str, Any]:
         with raf_cursor() as cur:
             cur.execute(
                 f"SELECT id AS pid, first_name AS fname, last_name AS lname, dob AS DOB, sex "
-                f"FROM patients WHERE is_active = 1 AND {_sf} AND tenant_id = %s ORDER BY id",
+                f"FROM patients WHERE is_active = 1 AND {_sf} AND tenant_id = %s ORDER BY id LIMIT 500",
                 (*_sp, tid),
             )
             patients = cur.fetchall()
+
+    patient_ids = [int(p["pid"]) for p in patients]
+    dx_by_patient = _batch_fetch_diagnoses(patient_ids, year)
 
     measure_stats: dict[str, dict[str, int]] = {
         code: {"eligible_count": 0, "met_count": 0, "gap_count": 0}
@@ -758,9 +802,7 @@ def get_quality_summary(year: int, tenant_id: int) -> dict[str, Any]:
         age = _calculate_age(dob, year)
 
         for code in HEDIS_MEASURES:
-            # Fast denominator check before running full evaluation to reduce
-            # the number of DB queries on large populations.
-            codes = _get_active_diagnoses(pid, year)
+            codes = dx_by_patient.get(pid, [])
             in_denom = _is_in_denominator_fast(pid, code, age, sex, year, codes)
             if not in_denom:
                 continue
@@ -872,6 +914,9 @@ def get_care_gaps(year: int, measure_code: str | None = None, limit: int = 500, 
             )
             patients = cur.fetchall()
 
+    patient_ids = [int(p["pid"]) for p in patients]
+    dx_by_patient = _batch_fetch_diagnoses(patient_ids, year)
+
     gaps: list[dict[str, Any]] = []
 
     for patient in patients:
@@ -880,7 +925,7 @@ def get_care_gaps(year: int, measure_code: str | None = None, limit: int = 500, 
         sex = (patient.get("sex") or "").strip().lower()
         age = _calculate_age(dob, year)
         name = f"{patient.get('fname', '')} {patient.get('lname', '')}".strip()
-        codes = _get_active_diagnoses(pid, year)
+        codes = dx_by_patient.get(pid, [])
 
         for mc in measure_codes:
             in_denom = _is_in_denominator_fast(pid, mc, age, sex, year, codes)

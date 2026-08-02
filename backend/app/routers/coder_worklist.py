@@ -416,8 +416,9 @@ def start_item(
     *in_progress* and stamps ``started_at``.
     """
     coder_id: int = int(current_user["id"])
+    tenant_id: str = current_user.get("tenant_id", "")
     try:
-        updated = start_review(item_id, coder_user_id=coder_id)
+        updated = start_review(item_id, coder_user_id=coder_id, tenant_id=tenant_id)
     except ValueError as exc:
         logger.warning("start_item id=%s validation error: %s", item_id, exc)
         raise HTTPException(status_code=422, detail=str(exc))
@@ -454,6 +455,7 @@ def complete_item(
         }
     """
     coder_id: int = int(current_user["id"])
+    tenant_id: str = current_user.get("tenant_id", "")
     decisions_raw = [d.model_dump() for d in body.coding_decisions]
 
     try:
@@ -462,6 +464,7 @@ def complete_item(
             coder_user_id=coder_id,
             coding_decisions=decisions_raw,
             notes=body.notes,
+            tenant_id=tenant_id,
         )
     except ValueError as exc:
         logger.warning("complete_item id=%s validation error: %s", item_id, exc)
@@ -497,8 +500,9 @@ def escalate(
         {"reason": "Patient has conflicting diagnoses across two facilities"}
     """
     coder_id: int = int(current_user["id"])
+    tenant_id: str = current_user.get("tenant_id", "")
     try:
-        updated = escalate_item(item_id, coder_user_id=coder_id, reason=body.reason)
+        updated = escalate_item(item_id, coder_user_id=coder_id, reason=body.reason, tenant_id=tenant_id)
     except ValueError as exc:
         logger.warning("escalate id=%s validation error: %s", item_id, exc)
         raise HTTPException(status_code=422, detail=str(exc))
@@ -529,8 +533,9 @@ def return_for_info(
         {"reason": "No encounter notes available for DOS 2026-03-15"}
     """
     coder_id: int = int(current_user["id"])
+    tenant_id: str = current_user.get("tenant_id", "")
     try:
-        updated = return_item(item_id, coder_user_id=coder_id, reason=body.reason)
+        updated = return_item(item_id, coder_user_id=coder_id, reason=body.reason, tenant_id=tenant_id)
     except ValueError as exc:
         logger.warning("return_for_info id=%s validation error: %s", item_id, exc)
         raise HTTPException(status_code=422, detail=str(exc))

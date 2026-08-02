@@ -233,6 +233,7 @@ def claim_next(
 def start_review(
     worklist_id: int,
     coder_user_id: int,
+    tenant_id: str = "",
 ) -> dict[str, Any]:
     """
     Transition a queued item to in_progress and stamp started_at.
@@ -278,6 +279,7 @@ def complete_review(
     coder_user_id: int,
     coding_decisions: list[dict[str, Any]],
     notes: str | None = None,
+    tenant_id: str = "",
 ) -> dict[str, Any]:
     """
     Mark a worklist item as completed and persist the coder's coding decisions.
@@ -343,6 +345,7 @@ def escalate_item(
     worklist_id: int,
     coder_user_id: int,
     reason: str,
+    tenant_id: str = "",
 ) -> dict[str, Any]:
     """
     Escalate a worklist item to a supervisor.
@@ -398,6 +401,7 @@ def return_item(
     worklist_id: int,
     coder_user_id: int,
     reason: str,
+    tenant_id: str = "",
 ) -> dict[str, Any]:
     """
     Return a worklist item because additional clinical information is needed
