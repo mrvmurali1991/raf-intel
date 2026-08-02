@@ -141,7 +141,7 @@ def active_patients_subquery(
     )
     return frag, (tid,)
 
-_CREDENTIAL_FIELDS = ("db_password", "client_secret", "api_key", "access_token", "refresh_token_emr")
+_CREDENTIAL_FIELDS = ("db_password_encrypted", "client_secret", "api_key", "access_token", "refresh_token_emr")
 
 _REQUIRED_FIELDS: dict[str, list[str]] = {
     "direct_db": [
@@ -149,8 +149,8 @@ _REQUIRED_FIELDS: dict[str, list[str]] = {
         "db_host",
         "db_port",
         "db_name",
-        "db_user",
-        "db_password",
+        "db_username",
+        "db_password_encrypted",
         "db_type",
     ],
     "fhir_r4": ["display_name", "base_url"],
@@ -379,10 +379,10 @@ def list_connections(tenant_id: str) -> list[dict]:
         cur.execute(
             """
             SELECT id, tenant_id, display_name, vendor, connection_type,
-                   db_type, db_host, db_port, db_name, db_user, db_password,
+                   db_type, db_host, db_port, db_name, db_username, db_password_encrypted,
                    base_url, token_url, client_id, client_secret, scope,
                    api_base_url, api_key, api_auth_type,
-                   is_active, field_mappings, extra_config,
+                   status, field_mappings, config_overrides,
                    last_test_at, last_test_success,
                    sync_enabled, sync_interval_minutes, sync_cron, last_sync_at,
                    created_at, updated_at
@@ -408,10 +408,10 @@ def get_connection(connection_id: int, tenant_id: str | None = None) -> dict | N
             cur.execute(
                 """
                 SELECT id, tenant_id, display_name, vendor, connection_type,
-                       db_type, db_host, db_port, db_name, db_user, db_password,
+                       db_type, db_host, db_port, db_name, db_username, db_password_encrypted,
                        base_url, token_url, client_id, client_secret, scope,
                        api_base_url, api_key, api_auth_type,
-                       is_active, field_mappings, extra_config,
+                       status, field_mappings, config_overrides,
                        last_test_at, last_test_success,
                        sync_enabled, sync_interval_minutes, sync_cron, last_sync_at,
                        access_token, refresh_token_emr, token_expires_at,
@@ -425,10 +425,10 @@ def get_connection(connection_id: int, tenant_id: str | None = None) -> dict | N
             cur.execute(
                 """
                 SELECT id, tenant_id, display_name, vendor, connection_type,
-                       db_type, db_host, db_port, db_name, db_user, db_password,
+                       db_type, db_host, db_port, db_name, db_username, db_password_encrypted,
                        base_url, token_url, client_id, client_secret, scope,
                        api_base_url, api_key, api_auth_type,
-                       is_active, field_mappings, extra_config,
+                       status, field_mappings, config_overrides,
                        last_test_at, last_test_success,
                        sync_enabled, sync_interval_minutes, sync_cron, last_sync_at,
                        access_token, refresh_token_emr, token_expires_at,
@@ -459,10 +459,10 @@ def get_connection_with_credentials(
             cur.execute(
                 """
                 SELECT id, tenant_id, display_name, vendor, connection_type,
-                       db_type, db_host, db_port, db_name, db_user, db_password,
+                       db_type, db_host, db_port, db_name, db_username, db_password_encrypted,
                        base_url, token_url, client_id, client_secret, scope,
                        api_base_url, api_key, api_auth_type,
-                       is_active, field_mappings, extra_config,
+                       status, field_mappings, config_overrides,
                        last_test_at, last_test_success,
                        sync_enabled, sync_interval_minutes, sync_cron, last_sync_at,
                        access_token, refresh_token_emr, token_expires_at,
@@ -476,10 +476,10 @@ def get_connection_with_credentials(
             cur.execute(
                 """
                 SELECT id, tenant_id, display_name, vendor, connection_type,
-                       db_type, db_host, db_port, db_name, db_user, db_password,
+                       db_type, db_host, db_port, db_name, db_username, db_password_encrypted,
                        base_url, token_url, client_id, client_secret, scope,
                        api_base_url, api_key, api_auth_type,
-                       is_active, field_mappings, extra_config,
+                       status, field_mappings, config_overrides,
                        last_test_at, last_test_success,
                        sync_enabled, sync_interval_minutes, sync_cron, last_sync_at,
                        access_token, refresh_token_emr, token_expires_at,
@@ -499,7 +499,7 @@ def get_active_direct_db_credentials(tenant_id: str) -> dict | None:
     """Return decrypted credentials for the first active direct_db connection.
 
     Returns a dict with keys ``db_host``, ``db_port``, ``db_name``,
-    ``db_user``, ``db_password``, ``db_type`` — or ``None`` if no active
+    ``db_username``, ``db_password_encrypted``, ``db_type`` — or ``None`` if no active
     direct_db connection exists for *tenant_id*.
 
     Results are cached for 30 seconds to avoid hitting the database on
@@ -514,11 +514,11 @@ def get_active_direct_db_credentials(tenant_id: str) -> dict | None:
     with raf_cursor() as cur:
         cur.execute(
             """
-            SELECT id, db_type, db_host, db_port, db_name, db_user, db_password
+            SELECT id, db_type, db_host, db_port, db_name, db_username, db_password_encrypted
             FROM emr_connections
             WHERE tenant_id = %s
               AND connection_type = 'direct_db'
-              AND is_active = 1
+              AND status = 'active'
             ORDER BY created_at
             LIMIT 1
             """,
@@ -579,10 +579,10 @@ def create_connection(data: dict) -> dict:
             """
             INSERT INTO emr_connections
                 (tenant_id, name, display_name, vendor, connection_type,
-                 db_type, db_host, db_port, db_name, db_user, db_password,
+                 db_type, db_host, db_port, db_name, db_username, db_password_encrypted,
                  base_url, token_url, client_id, client_secret, scope,
                  api_base_url, api_key, api_auth_type,
-                 is_active, field_mappings, extra_config)
+                 status, field_mappings, config_overrides)
             VALUES
                 (%s, %s, %s, %s, %s,
                  %s, %s, %s, %s, %s, %s,
@@ -601,8 +601,8 @@ def create_connection(data: dict) -> dict:
                 encrypted.get("db_host"),
                 encrypted.get("db_port"),
                 encrypted.get("db_name"),
-                encrypted.get("db_user"),
-                encrypted.get("db_password"),
+                encrypted.get("db_username"),
+                encrypted.get("db_password_encrypted"),
                 # fhir_r4
                 encrypted.get("base_url"),
                 encrypted.get("token_url"),
@@ -614,13 +614,13 @@ def create_connection(data: dict) -> dict:
                 encrypted.get("api_key"),
                 encrypted.get("api_auth_type") or encrypted.get("auth_type") or "none",
                 # shared
-                int(encrypted.get("is_active", 1)),
+                encrypted.get("status", "active"),
                 json.dumps(encrypted.get("field_mappings"))
                 if isinstance(encrypted.get("field_mappings"), dict)
                 else encrypted.get("field_mappings"),
-                json.dumps(encrypted.get("extra_config"))
-                if isinstance(encrypted.get("extra_config"), dict)
-                else encrypted.get("extra_config"),
+                json.dumps(encrypted.get("config_overrides"))
+                if isinstance(encrypted.get("config_overrides"), dict)
+                else encrypted.get("config_overrides"),
             ),
         )
         new_id = cur.lastrowid
@@ -663,8 +663,8 @@ def update_connection(
         "db_host",
         "db_port",
         "db_name",
-        "db_user",
-        "db_password",
+        "db_username",
+        "db_password_encrypted",
         "base_url",
         "token_url",
         "client_id",
@@ -673,9 +673,9 @@ def update_connection(
         "api_base_url",
         "api_key",
         "api_auth_type",
-        "is_active",
+        "status",
         "field_mappings",
-        "extra_config",
+        "config_overrides",
         "tenant_id",
         "sync_enabled",
         "sync_interval_minutes",
@@ -691,7 +691,7 @@ def update_connection(
             continue
         if key in _CREDENTIAL_FIELDS and value and value != _MASKED:
             value = encrypt(value)
-        if key in ("field_mappings", "extra_config") and isinstance(value, dict):
+        if key in ("field_mappings", "config_overrides") and isinstance(value, dict):
             value = json.dumps(value)
         fields.append(f"{key} = %s")
         params.append(value)
@@ -845,14 +845,14 @@ def test_connection(connection_id: int, tenant_id: str | None = None) -> dict:
 def _test_hl7v2(connection: dict) -> dict:
     """Verify HL7v2 connectivity by attempting a TCP connection to the MLLP port.
 
-    The host and port are read from ``extra_config.host`` / ``extra_config.port``
+    The host and port are read from ``config_overrides.host`` / ``config_overrides.port``
     (or ``db_host`` / ``db_port`` as a fallback for legacy rows).  If neither is
     configured the test fails with a clear message rather than an exception.
     """
     import socket as _socket
 
     extra: dict = {}
-    raw_extra = connection.get("extra_config")
+    raw_extra = connection.get("config_overrides")
     if isinstance(raw_extra, dict):
         extra = raw_extra
     elif isinstance(raw_extra, str):
@@ -878,7 +878,7 @@ def _test_hl7v2(connection: dict) -> dict:
             "success": False,
             "message": (
                 "HL7v2 connection has no host configured. "
-                "Set extra_config.host (and optionally extra_config.port)."
+                "Set config_overrides.host (and optionally config_overrides.port)."
             ),
             "latency_ms": 0,
         }
@@ -947,8 +947,8 @@ def _test_direct_db(connection: dict) -> dict:
     host = connection.get("db_host", "")
     port = int(connection.get("db_port") or 3306)
     db_name = connection.get("db_name", "")
-    user = connection.get("db_user", "")
-    password = connection.get("db_password", "")
+    user = connection.get("db_username", "")
+    password = connection.get("db_password_encrypted", "")
 
     start = time.monotonic()
     try:
@@ -1831,8 +1831,8 @@ def auto_register_openemr() -> dict | None:
 
     db_port = int(os.getenv("OPENEMR_DB_PORT", "3306"))
     db_name = os.getenv("OPENEMR_DB_NAME", "openemr")
-    db_user = os.getenv("OPENEMR_DB_USER", "")
-    db_password = os.getenv("OPENEMR_DB_PASSWORD", "")
+    db_username = os.getenv("OPENEMR_DB_USER", "")
+    db_password_encrypted = os.getenv("OPENEMR_DB_PASSWORD", "")
 
     if existing:
         existing_id = existing["id"] if isinstance(existing, dict) else existing[0]
@@ -1881,11 +1881,11 @@ def auto_register_openemr() -> dict | None:
         "db_host": db_host,
         "db_port": db_port,
         "db_name": db_name,
-        "db_user": db_user,
-        "db_password": db_password,
+        "db_username": db_username,
+        "db_password_encrypted": db_password_encrypted,
         "base_url": openemr_url,
         "field_mappings": get_default_mappings("openemr"),
-        "is_active": 1,
+        "status": "active",
     }
 
     try:
@@ -1989,11 +1989,11 @@ def deactivate_other_connections(connection_id: int, tenant_id: str) -> None:
         )
         cur.fetchall()  # consume result set to avoid "Unread result found"
         cur.execute(
-            "UPDATE emr_connections SET is_active = 0 WHERE id != %s AND tenant_id = %s",
+            "UPDATE emr_connections SET status = 'inactive' WHERE id != %s AND tenant_id = %s",
             (connection_id, tenant_id),
         )
         cur.execute(
-            "UPDATE emr_connections SET is_active = 1 WHERE id = %s AND tenant_id = %s",
+            "UPDATE emr_connections SET status = 'active' WHERE id = %s AND tenant_id = %s",
             (connection_id, tenant_id),
         )
     logger.info(

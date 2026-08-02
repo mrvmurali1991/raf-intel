@@ -76,7 +76,7 @@ def _get_emr_connection_creds(connection_id: int) -> dict:
         "host": row["db_host"],
         "port": int(row["db_port"] or 3306),
         "database": row["db_name"],
-        "user": row["db_user"],
+        "user": row.get("db_username") or row.get("db_user") or "root",
         "password": plain_pw,
         "db_type": row.get("db_type") or "mysql",
     }

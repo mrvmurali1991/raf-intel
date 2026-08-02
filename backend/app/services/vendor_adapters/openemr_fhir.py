@@ -87,7 +87,7 @@ class OpenEMRFhirAdapter:
         self.emr_username: str = (
             extra.get("emr_username")
             or connection.get("api_username")
-            or connection.get("db_user")
+            or connection.get("db_username") or connection.get("db_user")
             or ""
         )
         self.emr_password: str = (

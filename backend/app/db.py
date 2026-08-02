@@ -580,7 +580,11 @@ def openemr_cursor(dictionary: bool = True, tenant_id: str | None = None) -> Gen
     # Lazy import to avoid circular dependency at module load
     from app.services.emr_manager import get_active_direct_db_credentials
 
-    creds = get_active_direct_db_credentials(tenant_id)
+    try:
+        creds = get_active_direct_db_credentials(tenant_id)
+    except Exception as _cred_exc:
+        logger.warning("openemr_cursor: emr_manager lookup failed (%s) — falling back to env vars", _cred_exc)
+        creds = None
     if creds is None or not creds.get("db_host") or not creds.get("db_name"):
         # Fallback to the direct OpenEMR pool configured via env vars.
         # This keeps the app functional before the user configures an
@@ -597,8 +601,8 @@ def openemr_cursor(dictionary: bool = True, tenant_id: str | None = None) -> Gen
         host=creds["db_host"],
         port=int(creds.get("db_port") or 3306),
         database=creds["db_name"],
-        user=creds["db_user"],
-        password=creds.get("db_password") or "",
+        user=creds.get("db_username") or creds.get("db_user") or "root",
+        password=creds.get("db_password_encrypted") or creds.get("db_password") or "",
         db_type=creds.get("db_type") or "mysql",
         dictionary=dictionary,
     ) as cursor:
