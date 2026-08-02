@@ -99,7 +99,7 @@ function SortLabel({
       className={[
         "inline-flex items-center gap-1 bg-transparent border-none p-0 m-0 cursor-pointer",
         "font-sans text-[11.5px] font-bold uppercase tracking-[0.08em] whitespace-nowrap transition-colors duration-150",
-        active ? "text-slate-900" : "text-slate-500",
+        active ? "text-slate-900 dark:text-slate-100" : "text-slate-500 dark:text-slate-400",
         align === "right" ? "justify-self-end" : "justify-self-start",
       ].join(" ")}
     >
@@ -107,8 +107,8 @@ function SortLabel({
       {active && (
         <span className="inline-flex ml-0.5">
           {sort.dir === "asc"
-            ? <ChevronUp size={11} className="text-slate-900" />
-            : <ChevronDown size={11} className="text-slate-900" />
+            ? <ChevronUp size={11} className="text-slate-900 dark:text-slate-100" />
+            : <ChevronDown size={11} className="text-slate-900 dark:text-slate-100" />
           }
         </span>
       )}
@@ -154,7 +154,7 @@ function WorklistRowHoverActivity({
       role="tooltip"
       aria-label="Recent activity for this patient"
       onClick={(e) => e.stopPropagation()}
-      className="absolute top-[calc(100%-4px)] right-4 z-40 min-w-[260px] max-w-[320px] py-2.5 px-3 rounded-lg bg-white border border-slate-200 shadow-[0_8px_24px_rgba(15,23,42,0.14),0_2px_6px_rgba(15,23,42,0.08)] text-xs text-slate-900 pointer-events-auto"
+      className="absolute top-[calc(100%-4px)] right-4 z-40 min-w-[260px] max-w-[320px] py-2.5 px-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-[0_8px_24px_rgba(15,23,42,0.14),0_2px_6px_rgba(15,23,42,0.08)] text-xs text-slate-900 dark:text-slate-100 pointer-events-auto"
     >
       <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-slate-600 mb-1.5">
         Recent activity
@@ -197,10 +197,10 @@ function WorklistRowHoverActivity({
 const colFilterInputCls = (active: boolean) =>
   [
     "w-full h-8 text-[11px] rounded-[4px] px-1 text-center tabular-nums",
-    "border outline-none transition-colors",
+    "border outline-none transition-colors dark:text-slate-200",
     active
-      ? "border-teal-600 bg-teal-50"
-      : "border-slate-200 bg-white",
+      ? "border-teal-600 bg-teal-50 dark:bg-teal-900/30"
+      : "border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800",
   ].join(" ");
 
 const colFilterSelectCls = (active: boolean) =>
@@ -208,8 +208,8 @@ const colFilterSelectCls = (active: boolean) =>
     "h-8 text-[11px] rounded-[6px] px-1 cursor-pointer",
     "border outline-none transition-colors",
     active
-      ? "border-teal-600 bg-teal-50 text-teal-700"
-      : "border-slate-200 bg-white text-slate-500",
+      ? "border-teal-600 bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300"
+      : "border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400",
   ].join(" ");
 
 // ---------------------------------------------------------------------------
@@ -1177,7 +1177,7 @@ export default function PatientsPage() {
         {/* ============================================================ */}
         {/* Page shell                                                   */}
         {/* ============================================================ */}
-        <div className="flex flex-col gap-0 bg-slate-50 min-h-screen p-4 md:p-6 overflow-x-hidden font-sans text-slate-900">
+        <div className="flex flex-col gap-0 bg-slate-50 dark:bg-slate-900 min-h-screen p-4 md:p-6 overflow-x-hidden font-sans text-slate-900 dark:text-slate-100">
 
           {/* ============================================================ */}
           {/* Page header                                                  */}
@@ -1243,7 +1243,7 @@ export default function PatientsPage() {
                     placeholder="Search patients…"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="h-10 w-[min(320px,calc(100vw-180px))] rounded-[10px] border border-slate-200 bg-white pl-9 pr-3.5 text-[13px] text-slate-900 outline-none transition-all focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+                    className="h-10 w-[min(320px,calc(100vw-180px))] rounded-[10px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 pl-9 pr-3.5 text-[13px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 outline-none transition-all focus:border-teal-600 focus:ring-2 focus:ring-teal-100 dark:focus:ring-teal-800"
                   />
                 </div>
 
@@ -1353,7 +1353,7 @@ export default function PatientsPage() {
             aria-label="Patient worklist"
             aria-busy={isLoading}
             aria-live="polite"
-            className="bg-white rounded-2xl overflow-x-auto border border-slate-100 shadow-[0_1px_3px_rgba(15,23,42,0.04),0_4px_16px_rgba(15,23,42,0.04)]"
+            className="bg-white dark:bg-slate-800 rounded-2xl overflow-x-auto border border-slate-100 dark:border-slate-700 shadow-[0_1px_3px_rgba(15,23,42,0.04),0_4px_16px_rgba(15,23,42,0.04)]"
           >
             {/* Bulk actions bar */}
             <BulkActionsBar
@@ -1394,21 +1394,21 @@ export default function PatientsPage() {
 
             {/* ---- Column header row ---- */}
             <div
-              className="worklist-grid worklist-header-row grid items-center px-6 py-3 bg-slate-50 border-b border-slate-100"
+              className="worklist-grid worklist-header-row grid items-center px-6 py-3 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-700"
               style={{ gridTemplateColumns: WORKLIST_COLS }}
             >
               <SortLabel col="name" label="Patient" sort={sort} onSort={handleSort} />
-              <span className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-slate-500">
+              <span className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
                 Risk Level
               </span>
               <span title="Risk Adjustment Factor (RAF): CMS-HCC V28 score. 1.0 = average cost. Higher = more complex patient.">
                 <SortLabel col="raf_score" label="RAF Score" sort={sort} onSort={handleSort} />
               </span>
-              <span className="risk-factors-cell text-[11.5px] font-bold uppercase tracking-[0.08em] text-slate-500">
+              <span className="risk-factors-cell text-[11.5px] font-bold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
                 Risk Factors
               </span>
               <SortLabel col="hcc_count" label="HCCs" sort={sort} onSort={handleSort} align="right" />
-              <span className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-slate-500 pl-2">
+              <span className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400 pl-2">
                 HCC Status
               </span>
               <span aria-hidden="true" />
@@ -1417,7 +1417,7 @@ export default function PatientsPage() {
             {/* ---- Column filter row ---- */}
             {showColumnFilters && (
               <div
-                className="worklist-grid worklist-filter-row grid items-center px-6 py-2.5 bg-slate-50 border-b border-slate-100"
+                className="worklist-grid worklist-filter-row grid items-center px-6 py-2.5 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-700"
                 style={{ gridTemplateColumns: WORKLIST_COLS }}
               >
                 {/* Patient col: sex + age range */}
@@ -1581,13 +1581,13 @@ export default function PatientsPage() {
 
             {/* ---- Pagination ---- */}
             {!isLoading && totalPages > 1 && (
-              <div className="flex items-center justify-between gap-2 py-3.5 px-5 border-t border-slate-200 bg-slate-50/80">
-                <span className="text-xs text-slate-600 tabular-nums">
+              <div className="flex items-center justify-between gap-2 py-3.5 px-5 border-t border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/80">
+                <span className="text-xs text-slate-600 dark:text-slate-400 tabular-nums">
                   Showing{" "}
-                  <strong className="text-slate-900 font-semibold">
+                  <strong className="text-slate-900 dark:text-slate-100 font-semibold">
                     {Math.min(page * PAGE_SIZE + 1, total)}&ndash;{Math.min((page + 1) * PAGE_SIZE, total)}
                   </strong>{" "}
-                  of <strong className="text-slate-900 font-semibold">{total.toLocaleString()}</strong>
+                  of <strong className="text-slate-900 dark:text-slate-100 font-semibold">{total.toLocaleString()}</strong>
                 </span>
 
                 <div className="flex items-center gap-1.5">
@@ -1595,7 +1595,7 @@ export default function PatientsPage() {
                     disabled={page === 0}
                     onClick={() => setPage((p) => p - 1)}
                     aria-label="Previous page"
-                    className="inline-flex items-center gap-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-500 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed transition-colors hover:enabled:bg-slate-50"
+                    className="inline-flex items-center gap-1 h-8 px-3 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs font-medium text-slate-500 dark:text-slate-300 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed transition-colors hover:enabled:bg-slate-50 dark:hover:enabled:bg-slate-600"
                   >
                     <ChevronLeft size={13} /> Prev
                   </button>
@@ -1620,7 +1620,7 @@ export default function PatientsPage() {
                           "w-8 h-8 rounded-lg inline-flex items-center justify-center text-xs tabular-nums transition-colors cursor-pointer border-none",
                           isActive
                             ? "bg-teal-700 text-white font-semibold shadow-[0_2px_6px_rgba(15,118,110,0.25)]"
-                            : "bg-transparent text-slate-500 font-medium hover:bg-slate-100",
+                            : "bg-transparent text-slate-500 dark:text-slate-400 font-medium hover:bg-slate-100 dark:hover:bg-slate-700",
                         ].join(" ")}
                         aria-current={isActive ? "page" : undefined}
                         aria-label={`Page ${pageNum + 1}`}
@@ -1634,7 +1634,7 @@ export default function PatientsPage() {
                     disabled={page >= totalPages - 1}
                     onClick={() => setPage((p) => p + 1)}
                     aria-label="Next page"
-                    className="inline-flex items-center gap-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-500 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed transition-colors hover:enabled:bg-slate-50"
+                    className="inline-flex items-center gap-1 h-8 px-3 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs font-medium text-slate-500 dark:text-slate-300 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed transition-colors hover:enabled:bg-slate-50 dark:hover:enabled:bg-slate-600"
                   >
                     Next <ChevronRight size={13} />
                   </button>

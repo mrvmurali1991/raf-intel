@@ -64,16 +64,9 @@ function starsStr(n: number): string {
   return "★".repeat(Math.min(5, Math.max(1, Math.round(n))));
 }
 
-// ── Table style constants (inline only where Tailwind can't express it) ───────
-const th: React.CSSProperties = {
-  textAlign: "left",
-  padding: "8px 12px",
-  fontWeight: 600,
-  fontSize: 12,
-  color: "#475569",
-  borderBottom: "1px solid #cbd5e1",
-};
-const td: React.CSSProperties = { padding: "8px 12px", verticalAlign: "top" };
+// ── Table style constants ────────────────────────────────────────────────────
+const thCls = "text-left px-3 py-2 font-semibold text-xs text-muted-foreground border-b border-border";
+const tdCls = "px-3 py-2 align-top";
 
 // --------------------------------------------------------------------------
 // Segmented bar chart — pure inline SVG, no chart-lib dependency
@@ -211,25 +204,25 @@ function GapList({ measureId }: { measureId: string }) {
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-[13px]">
           <thead>
-            <tr className="bg-slate-50">
-              <th style={th}>Patient</th>
-              <th style={th}>DOB</th>
-              <th style={th}>Sex</th>
-              <th style={th}>HEI Segment</th>
-              <th style={th}>Last Evidence</th>
-              <th style={th}>Actions</th>
+            <tr className="bg-muted/50">
+              <th className={thCls}>Patient</th>
+              <th className={thCls}>DOB</th>
+              <th className={thCls}>Sex</th>
+              <th className={thCls}>HEI Segment</th>
+              <th className={thCls}>Last Evidence</th>
+              <th className={thCls}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {data.patients.map((p) => (
-              <tr key={p.patient_id} className="border-t border-slate-200 hover:bg-slate-50 transition-colors">
-                <td style={td}>
+              <tr key={p.patient_id} className="border-t border-border hover:bg-muted/50 transition-colors">
+                <td className={tdCls}>
                   {p.last_name ?? ""}, {p.first_name ?? ""}{" "}
                   <span className="text-muted-foreground">#{p.patient_id}</span>
                 </td>
-                <td style={td}>{p.dob ?? "—"}</td>
-                <td style={td}>{p.sex ?? "—"}</td>
-                <td style={td}>
+                <td className={tdCls}>{p.dob ?? "—"}</td>
+                <td className={tdCls}>{p.sex ?? "—"}</td>
+                <td className={tdCls}>
                   <span
                     className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
                     style={{
@@ -240,10 +233,10 @@ function GapList({ measureId }: { measureId: string }) {
                     {SEGMENT_LABEL[p.hei_segment]}
                   </span>
                 </td>
-                <td className="text-[11px] text-muted-foreground" style={td}>
+                <td className={`${tdCls} text-[11px] text-muted-foreground`}>
                   {p.evidence?.[0] ?? "—"}
                 </td>
-                <td style={td}>
+                <td className={tdCls}>
                   <Link
                     href={`/patients/${p.patient_id}`}
                     className="inline-flex items-center gap-1 text-blue-600 hover:underline mr-3 text-[12px]"
@@ -251,7 +244,8 @@ function GapList({ measureId }: { measureId: string }) {
                     <ExternalLink size={12} /> Open chart
                   </Link>
                   <button
-                    className="inline-flex items-center gap-1 bg-transparent border border-slate-300 text-slate-700 px-2 py-0.5 rounded text-[11px] cursor-pointer hover:bg-slate-50 transition-colors"
+                    aria-label={`Send patient ${p.patient_id} to outreach for ${measureId}`}
+                    className="inline-flex items-center gap-1 bg-transparent border border-border text-muted-foreground px-2 py-0.5 rounded text-[11px] cursor-pointer hover:bg-muted transition-colors"
                     onClick={() => {
                       // Stub: production wires this to /api/care-gaps or
                       // /api/recapture-outreach campaign create endpoint.
@@ -298,7 +292,7 @@ export default function HedisPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 overflow-x-hidden max-w-[1400px] mx-auto">
+    <div className="min-h-screen bg-background p-4 sm:p-6 overflow-x-hidden max-w-[1400px] mx-auto">
       <PageHeader
         title="HEDIS + Stars — Health Equity"
         subtitle={`Measurement year ${YEAR} — quality measures with Health Equity Index (HEI) segmentation`}
@@ -307,6 +301,7 @@ export default function HedisPage() {
           <button
             onClick={refetchAll}
             disabled={scoresQ.isFetching || segQ.isFetching}
+            aria-label="Refresh HEDIS scores and segment data"
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border bg-card text-muted-foreground text-[13px] font-medium cursor-pointer disabled:opacity-60 hover:text-foreground transition-colors"
           >
             <RefreshCw size={14} />
@@ -348,7 +343,7 @@ export default function HedisPage() {
         </div>
       )}
 
-      <div className="grid gap-4 mb-8" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
         {(scoresQ.data?.measures ?? []).map((m: HedisMeasureScore) => (
           <MetricCard
             key={m.measure_id}
@@ -366,7 +361,7 @@ export default function HedisPage() {
         title="Disparity — HEDIS rates by CMS Health Equity Index segment"
         icon={<Users size={16} />}
       />
-      <div className="bg-white border border-slate-200 rounded-lg p-4 mb-8">
+      <div className="bg-card border border-border rounded-lg p-4 mb-8">
         {segQ.isLoading && (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
             <RefreshCw size={14} className="animate-spin" />
@@ -404,11 +399,12 @@ export default function HedisPage() {
           <button
             key={m.measure_id}
             onClick={() => setActiveMeasure(m.measure_id)}
+            aria-label={`View gap list for ${m.measure_id} with ${m.denominator - m.numerator} gaps`}
             className={[
               "px-4 py-2 rounded-md text-[13px] font-semibold cursor-pointer transition-colors",
               activeMeasure === m.measure_id
-                ? "border-2 border-blue-600 bg-blue-50 text-blue-900"
-                : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
+                ? "border-2 border-primary bg-primary/10 text-foreground"
+                : "border border-border bg-card text-muted-foreground hover:bg-muted",
             ].join(" ")}
           >
             {m.measure_id}{" "}
@@ -419,7 +415,7 @@ export default function HedisPage() {
         ))}
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-lg p-4 min-h-[200px]">
+      <div className="bg-card border border-border rounded-lg p-4 min-h-[200px]">
         {activeMeasure ? (
           <GapList measureId={activeMeasure} />
         ) : (

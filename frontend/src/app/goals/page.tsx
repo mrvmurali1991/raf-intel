@@ -86,7 +86,7 @@ function GoalProgressBar({ pct, pace }: { pct: number; pace: number }) {
   const color = paceColor(pct, pace);
   const clampedWidth = Math.min(Math.max(pct, 0), 100);
   return (
-    <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+    <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
       <div
         className={`h-2.5 rounded-full transition-all duration-500 ${FILL_CLASS[color]}`}
         style={{ width: `${clampedWidth}%` }}
@@ -428,7 +428,7 @@ export default function GoalsPage() {
 
         {/* Error state */}
         {isError && (
-          <div className="rounded-xl bg-red-50 border border-red-200 p-5 text-sm text-red-700 flex items-center gap-2">
+          <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-5 text-sm text-red-700 dark:text-red-400 flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             Failed to load goals. Please refresh.
           </div>

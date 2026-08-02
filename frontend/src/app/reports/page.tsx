@@ -253,7 +253,7 @@ function ErrorBox({ message, onRetry }: { message?: string; onRetry?: () => void
       {onRetry && (
         <button
           onClick={onRetry}
-          className="mt-3 px-5 py-2 rounded-lg text-[13px] font-semibold cursor-pointer bg-white border border-red-400 text-red-600"
+          className="mt-3 px-5 py-2 rounded-lg text-[13px] font-semibold cursor-pointer bg-card border border-red-400 text-red-600"
         >
           Retry
         </button>
@@ -269,10 +269,10 @@ function SortArrow({ active, dir }: { active: boolean; dir: SortDir }) {
 }
 
 // ── Select control shared style ───────────────────────────────────────────────
-const selectCls = "px-3.5 pr-8 py-2 text-[14px] font-semibold border border-border rounded-lg bg-white text-foreground cursor-pointer appearance-none";
+const selectCls = "px-3.5 pr-8 py-2 text-[14px] font-semibold border border-border rounded-lg bg-card text-foreground cursor-pointer appearance-none";
 
 // ── Shared table class helpers ────────────────────────────────────────────────
-const thCls = "px-4 py-3 text-[11px] font-bold uppercase tracking-[0.06em] text-muted-foreground border-b border-border bg-slate-50 whitespace-nowrap cursor-pointer select-none";
+const thCls = "px-4 py-3 text-[11px] font-bold uppercase tracking-[0.06em] text-muted-foreground border-b border-border bg-muted/50 whitespace-nowrap cursor-pointer select-none";
 const tdCls = "px-4 py-3 text-[13px] border-b border-border/60 whitespace-nowrap";
 
 // ── Row helper for alternating stripes + hover ──────────────────────────────
@@ -333,7 +333,7 @@ export default function ReportsPage() {
 
   return (
     <div
-      className="rci-page-pad-desktop min-h-screen bg-slate-50 p-6 pb-14 font-sans text-foreground"
+      className="rci-page-pad-desktop min-h-screen bg-background p-4 sm:p-6 pb-14 font-sans text-foreground"
       {...(isHistoricalPY ? { "data-read-only": "true" } : {})}
     >
       {/* ── Print-only header ─────────────────────────────────────────────── */}
@@ -362,6 +362,7 @@ export default function ReportsPage() {
             <select
               value={year}
               onChange={(e) => setYear(Number(e.target.value))}
+              aria-label="Select reporting year"
               className={selectCls}
               style={{
                 backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
@@ -402,7 +403,7 @@ export default function ReportsPage() {
 
             <button
               onClick={handlePrint}
-              className="no-print inline-flex items-center gap-1.5 px-4 py-2 text-[13px] font-semibold border border-border rounded-lg bg-white text-muted-foreground cursor-pointer hover:bg-slate-50 transition-colors"
+              className="no-print inline-flex items-center gap-1.5 px-4 py-2 text-[13px] font-semibold border border-border rounded-lg bg-card text-muted-foreground cursor-pointer hover:bg-muted/50 transition-colors"
               aria-label="Print report"
             >
               <Printer size={15} /> Print Report
@@ -429,7 +430,7 @@ export default function ReportsPage() {
       <div
         role="group"
         aria-label="Report group"
-        className="inline-flex gap-1 mb-4 p-1 bg-slate-100 rounded-[10px]"
+        className="inline-flex gap-1 mb-4 p-1 bg-muted rounded-[10px]"
       >
         {(["Clinical", "Analytics"] as ReportGroup[]).map((g) => {
           const isActive = activeGroup === g;
@@ -576,7 +577,7 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
           </button>
           <button
             onClick={() => router.push("/demo")}
-            className="px-[22px] py-2.5 rounded-[10px] text-[14px] font-semibold cursor-pointer border border-border bg-white text-foreground"
+            className="px-[22px] py-2.5 rounded-[10px] text-[14px] font-semibold cursor-pointer border border-border bg-card text-foreground"
           >
             Try Demo Data
           </button>
@@ -588,9 +589,9 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
   return (
     <div>
       {/* KPI Cards */}
-      <div className="grid gap-5 mb-8" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
         {/* Revenue Card */}
-        <div className="border border-border rounded-xl p-6 bg-white border-l-4 border-l-emerald-500">
+        <div className="border border-border rounded-xl p-6 bg-card border-l-4 border-l-emerald-500">
           <div className="flex justify-between items-start">
             <div>
               <p
@@ -635,7 +636,7 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
         </div>
 
         {/* RAF Gap Card */}
-        <div className="border border-border rounded-xl p-6 bg-white border-l-4 border-l-amber-400">
+        <div className="border border-border rounded-xl p-6 bg-card border-l-4 border-l-amber-400">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground m-0">Total RAF Gap</p>
@@ -653,7 +654,7 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
         </div>
 
         {/* Patients with Gaps Card */}
-        <div className="border border-border rounded-xl p-6 bg-white border-l-4 border-l-blue-400">
+        <div className="border border-border rounded-xl p-6 bg-card border-l-4 border-l-blue-400">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground m-0">Patients with Gaps</p>
@@ -673,7 +674,7 @@ function RevenueTab({ revenue, scorecard, router, paymentYear, isHistoricalPY }:
       </div>
 
       {/* Revenue Table */}
-      <div ref={revenueTableRef} className="border border-border rounded-xl bg-white overflow-hidden">
+      <div ref={revenueTableRef} className="border border-border rounded-xl bg-card overflow-hidden">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between flex-wrap gap-2.5">
           <div>
             <h3 className="text-sm font-semibold text-foreground m-0">Top 25 Revenue Opportunities</h3>
@@ -837,7 +838,7 @@ function ScorecardTab({ scorecard, router, isHistoricalPY }: {
             placeholder="Search patients..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full py-[9px] px-3.5 pl-9 text-[13px] border border-border rounded-lg bg-white"
+            className="w-full py-[9px] px-3.5 pl-9 text-[13px] border border-border rounded-lg bg-card"
           />
         </div>
         <button
@@ -866,7 +867,7 @@ function ScorecardTab({ scorecard, router, isHistoricalPY }: {
         </button>
       </div>
 
-      <div className="border border-border rounded-xl bg-white overflow-hidden">
+      <div className="border border-border rounded-xl bg-card overflow-hidden">
         <div className="overflow-x-auto">
           <table aria-label="Patient scorecard" className="w-full border-collapse">
             <thead>
@@ -964,7 +965,7 @@ function HccTab({ hccDist, isHistoricalPY }: {
   }));
 
   return (
-    <div ref={chartRef} className="border border-border rounded-xl bg-white overflow-hidden">
+    <div ref={chartRef} className="border border-border rounded-xl bg-card overflow-hidden">
       <div className="px-5 py-4 border-b border-border flex items-center justify-between flex-wrap gap-2.5">
         <div>
           <h3 className="text-sm font-semibold text-foreground m-0">HCC Distribution — Top 20 by Patient Count</h3>
@@ -1002,7 +1003,7 @@ function HccTab({ hccDist, isHistoricalPY }: {
               >
                 {item.hcc_code}
               </span>
-              <div className="flex-1 relative h-7 rounded-md overflow-hidden bg-slate-100">
+              <div className="flex-1 relative h-7 rounded-md overflow-hidden bg-muted">
                 <div
                   className="h-full rounded-md opacity-80 transition-[width] duration-300 ease-in-out"
                   style={{ width: `${Math.max(pct, 2)}%`, background: barColor(rank) }}
@@ -1063,19 +1064,19 @@ function RecaptureTab({ recapture, router, isHistoricalPY }: {
   return (
     <div>
       {/* KPI Row */}
-      <div className="grid gap-5 mb-8" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-        <div className="border border-border rounded-xl p-6 bg-white border-l-4 border-l-red-400">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-8">
+        <div className="border border-border rounded-xl p-6 bg-card border-l-4 border-l-red-400">
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground m-0">Total Gaps</p>
           <p className="text-[32px] font-bold mt-2 mb-0 text-red-700">{totalGaps}</p>
         </div>
-        <div className="border border-border rounded-xl p-6 bg-white border-l-4 border-l-amber-400">
+        <div className="border border-border rounded-xl p-6 bg-card border-l-4 border-l-amber-400">
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground m-0">Patients Affected</p>
           <p className="text-[32px] font-bold mt-2 mb-0 text-amber-800">{uniquePatients}</p>
         </div>
       </div>
 
       {/* Top Conditions Table */}
-      <div className="border border-border rounded-xl bg-white overflow-hidden mb-6">
+      <div className="border border-border rounded-xl bg-card overflow-hidden mb-6">
         <SectionHeader title="Top Conditions for Recapture" />
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
@@ -1107,7 +1108,7 @@ function RecaptureTab({ recapture, router, isHistoricalPY }: {
       </div>
 
       {/* Full Gaps Table */}
-      <div className="border border-border rounded-xl bg-white overflow-hidden">
+      <div className="border border-border rounded-xl bg-card overflow-hidden">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between flex-wrap gap-2.5">
           <h3 className="text-sm font-semibold text-foreground m-0">All Recapture Gaps</h3>
           <button
@@ -1216,7 +1217,7 @@ function DataQualityTab({ dataQuality }: { dataQuality: QueryResult<DataQualityP
     <div>
       {/* Donut + Score */}
       <div className="flex justify-center mb-9">
-        <div className="border border-border rounded-xl p-8 bg-white flex flex-col items-center w-[280px]">
+        <div className="border border-border rounded-xl p-8 bg-card flex flex-col items-center w-[280px]">
           <svg width={donutSize} height={donutSize} viewBox={`0 0 ${donutSize} ${donutSize}`}>
             <circle cx={donutSize / 2} cy={donutSize / 2} r={radius} fill="none" stroke={C.gray200} strokeWidth={strokeWidth} />
             <circle
@@ -1242,11 +1243,11 @@ function DataQualityTab({ dataQuality }: { dataQuality: QueryResult<DataQualityP
       </div>
 
       {/* Data Type Cards Grid */}
-      <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {dataTypes.map((dt) => {
           const pct = dt.total > 0 ? Math.round((dt.count / dt.total) * 100) : 0;
           return (
-            <div key={dt.key} className="border border-border rounded-xl p-5 bg-white">
+            <div key={dt.key} className="border border-border rounded-xl p-5 bg-card">
               <div className="flex justify-between items-start mb-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">{dt.icon}</span>
@@ -1259,7 +1260,7 @@ function DataQualityTab({ dataQuality }: { dataQuality: QueryResult<DataQualityP
               <p className="text-[12px] text-muted-foreground mb-2">
                 {dt.count.toLocaleString()} / {dt.total.toLocaleString()} records
               </p>
-              <div className="h-1.5 rounded-sm overflow-hidden bg-slate-200">
+              <div className="h-1.5 rounded-sm overflow-hidden bg-muted">
                 <div
                   className="h-full rounded-sm transition-[width] duration-300 ease-in-out"
                   style={{ width: `${pct}%`, background: pctColor(pct) }}

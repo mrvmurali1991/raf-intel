@@ -384,6 +384,7 @@ export default function AttestationsPage() {
         <div className="relative flex-[1_1_200px] max-w-xs">
           <Search
             size={14}
+            aria-hidden="true"
             className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
           />
           <input
@@ -430,7 +431,7 @@ export default function AttestationsPage() {
           />
         )
       ) : (
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="bg-card border border-border rounded-xl overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted hover:bg-muted">

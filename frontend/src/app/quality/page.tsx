@@ -117,7 +117,7 @@ function MeasureProgressCard({ measure }: { measure: QualityMeasure }) {
 
       {/* Progress bar with target marker */}
       <div className="relative">
-        <div className="relative h-2.5 rounded-full bg-slate-100 overflow-visible">
+        <div className="relative h-2.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-visible">
           {/* Filled bar */}
           <div
             className="qs-progress-bar absolute inset-y-0 left-0 rounded-full"
@@ -259,11 +259,11 @@ function SummaryTab({
 
       {/* Empty state when no measures are loaded yet */}
       {total === 0 && (
-        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-5 text-sm text-amber-800 dark:text-amber-300">
           <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" />
           <div>
             <div className="font-semibold mb-0.5">No measure data to display</div>
-            <div className="text-xs text-amber-700">
+            <div className="text-xs text-amber-700 dark:text-amber-400">
               Compliance distribution will appear once HEDIS measures have been ingested for this plan year.
             </div>
           </div>
@@ -462,7 +462,7 @@ export default function QualityPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 overflow-x-hidden">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-6 overflow-x-hidden">
       <style>{`
         @keyframes qs-spin { to { transform: rotate(360deg) } }
         @keyframes qs-fadeInUp {
@@ -556,7 +556,7 @@ export default function QualityPage() {
       )}
 
       {/* ── Tab Bar ── */}
-      <div className="qs-fade-in qs-fade-in-2 overflow-x-auto mb-6 border-b-2 border-slate-100">
+      <div className="qs-fade-in qs-fade-in-2 overflow-x-auto mb-6 border-b-2 border-slate-100 dark:border-slate-700">
         <div className="flex min-w-max">
           {TABS.map((tab) => {
             const isActive = activeTab === tab;
@@ -571,7 +571,7 @@ export default function QualityPage() {
                   "after:content-[''] after:absolute after:bottom-[-2px] after:left-1/2 after:-translate-x-1/2 after:h-0.5 after:bg-primary after:transition-all after:duration-200",
                   isActive
                     ? "text-primary bg-primary/[0.03] after:w-full"
-                    : "text-slate-500 bg-transparent hover:text-primary after:w-0 hover:after:w-full",
+                    : "text-slate-500 dark:text-slate-400 bg-transparent hover:text-primary after:w-0 hover:after:w-full",
                 ].join(" ")}
               >
                 {tab}

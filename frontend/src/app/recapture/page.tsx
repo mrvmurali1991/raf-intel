@@ -432,6 +432,7 @@ export default function RecapturePage() {
           <div className="relative">
             <Search
               size={14}
+              aria-hidden="true"
               className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
             />
             <input
@@ -469,7 +470,7 @@ export default function RecapturePage() {
           />
         ) : (
           <>
-            <div className="rounded-lg border border-border overflow-hidden">
+            <div className="rounded-lg border border-border overflow-x-auto">
               <Table aria-label="Recapture gaps worklist">
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
