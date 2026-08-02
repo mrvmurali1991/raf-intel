@@ -122,11 +122,12 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
     <div className="animate-slide-up stagger-1" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
       {/* RAF Score + Payment */}
-      <div style={{
-        background: `linear-gradient(135deg, ${C.blue50} 0%, hsl(var(--card)) 100%)`,
-        borderRadius: 14, border: `1px solid ${C.blue100}`,
-        padding: "20px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16,
-      }}>
+      <div
+        className="bg-gradient-to-br from-teal-50 to-[hsl(var(--card))] dark:from-teal-950 dark:to-[hsl(var(--card))] border border-teal-100 dark:border-teal-800"
+        style={{
+          borderRadius: 14,
+          padding: "20px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16,
+        }}>
         <div>
           <div className="text-muted-foreground" style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Total RAF Score</div>
           <div className="text-primary font-mono" style={{ fontSize: 36, fontWeight: 800, lineHeight: 1 }}>{fmtScore(grandTotal)}</div>
@@ -178,12 +179,12 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
       {/* Breakdown Card */}
       <Card noPadding>
         {/* Demographic base */}
-        <div style={{ padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${C.slate100}` }}>
+        <div className="border-b border-slate-100 dark:border-slate-700" style={{ padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <WithTooltip tip="Demographic component of the V28 RAF score. Derived from the patient's age, sex, and enrollment segment (e.g. Community Non-Dual Aged). This baseline score exists even when no HCC conditions are documented.">
               <span
                 data-testid="raf-segment-demographic"
-                className="text-[13px] font-semibold text-slate-700"
+                className="text-[13px] font-semibold text-slate-700 dark:text-slate-200"
                 style={{ cursor: "help" }}
               >
                 Demographic Base
@@ -217,13 +218,13 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
           const coeff = Number(hcc.coefficient || 0);
           const meatColor = hcc.meat_status === "complete" ? C.emerald500 : hcc.meat_status === "partial" ? C.amber500 : C.slate300;
           return (
-            <div key={hcc.hcc_code || hcc.code || i} style={{
+            <div key={hcc.hcc_code || hcc.code || i}
+            className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-100/60 dark:hover:bg-slate-800/60"
+            style={{
               display: "flex", alignItems: "center", gap: 12, padding: "10px 20px",
-              borderBottom: `1px solid ${C.slate100}`, borderLeft: `3px solid ${meatColor}`,
+              borderLeft: `3px solid ${meatColor}`,
               marginLeft: 0, transition: "background 0.15s",
             }}
-            onMouseEnter={e => (e.currentTarget.style.background = C.slate100 + "60")}
-            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
             >
               <span className="text-primary bg-primary/10 border border-primary/20 font-mono" style={{ minWidth: 64, padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, textAlign: "center" }}>
                 {primaryIcd || `HCC${code}`}
@@ -253,9 +254,10 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
         </WithTooltip>
         {triggeredInteractions.length > 0 ? (
           triggeredInteractions.map(inter => (
-            <div key={inter.name} style={{
+            <div key={inter.name}
+            className="border-b border-slate-100 dark:border-slate-700"
+            style={{
               display: "flex", alignItems: "center", gap: 12, padding: "10px 20px",
-              borderBottom: `1px solid ${C.slate100}`,
             }}>
               <span className="text-amber-600 bg-amber-50 border border-amber-100 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800 font-mono" style={{ minWidth: 64, padding: "3px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, textAlign: "center" }}>
                 {inter.name.replace(/_/g, " ")}
@@ -266,7 +268,7 @@ function RAFScoreCalculatorTable({ breakdown, breakdownLoading, lastCalcResult, 
             </div>
           ))
         ) : (
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", borderBottom: `1px solid ${C.slate100}` }}>
+          <div className="border-b border-slate-100 dark:border-slate-700" style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px" }}>
             <span className="text-[13px] text-muted-foreground">No qualifying HCC combinations \u2014 interaction score is 0</span>
             <div style={{ flex: 1 }} />
             <span className="text-muted-foreground font-mono" style={{ fontSize: 15, fontWeight: 700 }}>0.000</span>
@@ -317,12 +319,13 @@ function LLMInputPanel({ llmInput }: { llmInput: LLMInput }) {
     <span style={{ padding: "3px 8px", borderRadius: 5, fontSize: 11, fontFamily: "monospace", fontWeight: 600, background: bg, color: fg, border: `1px solid ${border}` }}>{text}</span>
   );
   return (
-    <div style={{ borderRadius: 8, border: `1px solid ${C.purple100}`, overflow: "hidden", marginBottom: 12 }}>
+    <div className="border border-purple-100 dark:border-purple-800" style={{ borderRadius: 8, overflow: "hidden", marginBottom: 12 }}>
       <button
         onClick={() => setOpen(!open)}
         aria-expanded={open}
+        className="bg-gradient-to-br from-purple-50 to-teal-50 dark:from-purple-950 dark:to-teal-950"
         style={{
-          width: "100%", padding: "10px 14px", background: `linear-gradient(135deg, ${C.purple50}, ${C.blue50})`,
+          width: "100%", padding: "10px 14px",
           border: "none", cursor: "pointer", display: "flex",
           justifyContent: "space-between", alignItems: "center",
           fontSize: 12, fontWeight: 600, color: "var(--primary)",
@@ -336,11 +339,11 @@ function LLMInputPanel({ llmInput }: { llmInput: LLMInput }) {
           {/* Model & Config */}
           <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: "5px 12px", marginBottom: 12 }}>
             <span className="text-muted-foreground font-semibold">Patient Age</span>
-            <span className="text-slate-700">{llmInput.patient_age ?? "N/A"}</span>
+            <span className="text-slate-700 dark:text-slate-200">{llmInput.patient_age ?? "N/A"}</span>
             <span className="text-muted-foreground font-semibold">Patient Sex</span>
-            <span className="text-slate-700">{llmInput.patient_sex ?? "N/A"}</span>
+            <span className="text-slate-700 dark:text-slate-200">{llmInput.patient_sex ?? "N/A"}</span>
             <span className="text-muted-foreground font-semibold">Note Length</span>
-            <span className="text-slate-700">{llmInput.clinical_note_chars?.toLocaleString()} characters</span>
+            <span className="text-slate-700 dark:text-slate-200">{llmInput.clinical_note_chars?.toLocaleString()} characters</span>
             <span className="text-muted-foreground font-semibold">Temperature</span>
             <span className="text-foreground font-mono">{llmInput.temperature}</span>
           </div>
@@ -506,7 +509,7 @@ function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { 
   );
 
   return (
-    <div style={{ borderRadius: 10, border: `1px solid ${C.slate200}`, overflow: "hidden" }}>
+    <div className="border border-slate-200 dark:border-slate-700" style={{ borderRadius: 10, overflow: "hidden" }}>
       <button
         onClick={() => setOpen(!open)}
         aria-expanded={open}
@@ -537,17 +540,17 @@ function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { 
               <div className="bg-muted border border-border" style={{ marginLeft: 30, marginBottom: 20, padding: "14px 16px", borderRadius: 8 }}>
                 <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: "6px 12px", fontSize: 12 }}>
                   <span className="text-muted-foreground font-semibold">Age</span>
-                  <span className="text-slate-700 font-semibold">{String(engineInput.age ?? "")}</span>
+                  <span className="text-slate-700 dark:text-slate-200 font-semibold">{String(engineInput.age ?? "")}</span>
                   <span className="text-muted-foreground font-semibold">Sex</span>
-                  <span className="text-slate-700 font-semibold">{String(engineInput.sex ?? "")}</span>
+                  <span className="text-slate-700 dark:text-slate-200 font-semibold">{String(engineInput.sex ?? "")}</span>
                   <span className="text-muted-foreground font-semibold">Model Segment</span>
-                  <span className="text-slate-700 font-semibold">{String(engineInput.model_segment ?? "")} ({String(engineInput.prefix_override ?? "")})</span>
+                  <span className="text-slate-700 dark:text-slate-200 font-semibold">{String(engineInput.model_segment ?? "")} ({String(engineInput.prefix_override ?? "")})</span>
                   <span className="text-muted-foreground font-semibold">MACI Factor</span>
                   <span className="text-foreground font-mono">{String(engineInput.maci ?? "")}</span>
                   <span className="text-muted-foreground font-semibold">Norm Factor</span>
                   <span className="text-foreground font-mono">{String(engineInput.norm_factor ?? "")}</span>
                 </div>
-                <div style={{ marginTop: 10, borderTop: `1px solid ${C.slate200}`, paddingTop: 10 }}>
+                <div className="border-t border-slate-200 dark:border-slate-700" style={{ marginTop: 10, paddingTop: 10 }}>
                   {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   <div className="text-muted-foreground font-semibold" style={{ marginBottom: 6 }}>ICD-10 Codes Sent ({(engineInput.icd_codes as any[])?.length || 0})</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
@@ -570,13 +573,13 @@ function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { 
                   <span className="text-muted-foreground font-semibold">Demographics</span>
                   <span className="text-foreground font-mono">{String(engineOutput?.risk_score_demographics ?? "")}</span>
                 </div>
-                <div style={{ marginTop: 10, borderTop: `1px solid ${C.emerald100}`, paddingTop: 10 }}>
+                <div className="border-t border-emerald-100 dark:border-emerald-800" style={{ marginTop: 10, paddingTop: 10 }}>
                   <div className="text-muted-foreground font-semibold" style={{ marginBottom: 6 }}>HCCs Mapped ({engineOutput?.hcc_list?.length || 0})</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 8 }}>
                     {(engineOutput?.hcc_list || []).map((h: string, i: number) => <React.Fragment key={h || i}>{pill(`HCC ${h}`, C.emerald50, C.emerald600, C.emerald100)}</React.Fragment>)}
                   </div>
                   {(engineOutput?.hcc_details || []).map((h: { hcc?: string; label?: string; coefficient?: number }, i: number) => (
-                    <div key={h.hcc || `hcc-detail-${i}`} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", fontSize: 11, borderBottom: `1px solid ${C.emerald100}` }}>
+                    <div key={h.hcc || `hcc-detail-${i}`} className="border-b border-emerald-100 dark:border-emerald-800" style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", fontSize: 11 }}>
                       <span className="text-emerald-600 dark:text-emerald-400 font-mono font-bold" style={{ minWidth: 55 }}>HCC {h.hcc}</span>
                       <span className="text-muted-foreground" style={{ flex: 1 }}>{h.label}</span>
                       <span className="text-foreground font-mono font-semibold">{h.coefficient?.toFixed(3)}</span>
@@ -584,12 +587,12 @@ function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { 
                   ))}
                 </div>
                 {engineOutput?.all_coefficients && Object.keys(engineOutput.all_coefficients).length > 0 && (
-                  <div style={{ marginTop: 10, borderTop: `1px solid ${C.emerald100}`, paddingTop: 10 }}>
+                  <div className="border-t border-emerald-100 dark:border-emerald-800" style={{ marginTop: 10, paddingTop: 10 }}>
                     <div className="text-muted-foreground font-semibold" style={{ marginBottom: 6 }}>All Coefficients</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 80px", gap: "2px 8px", fontSize: 11, fontFamily: "monospace" }}>
                       {Object.entries(engineOutput?.all_coefficients ?? {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
                         <React.Fragment key={k}>
-                          <span className="text-slate-600">{k}</span>
+                          <span className="text-slate-600 dark:text-slate-300">{k}</span>
                           <span className="text-foreground font-semibold" style={{ textAlign: "right" }}>{v.toFixed(3)}</span>
                         </React.Fragment>
                       ))}
@@ -604,12 +607,12 @@ function CalcDetails({ breakdown, componentSum, grandTotal, lastCalcResult }: { 
           {!hasEngineData && (
             <>
               {stepHeader(1, `ICD-10 to HCC Mapping (${hccContribs.length} HCCs)`, C.emerald600)}
-              <div style={{ marginLeft: 30, marginBottom: 16, borderRadius: 8, border: `1px solid ${C.slate200}`, overflow: "hidden" }}>
+              <div className="border border-slate-200 dark:border-slate-700" style={{ marginLeft: 30, marginBottom: 16, borderRadius: 8, overflow: "hidden" }}>
                 {hccContribs.map((h: HCCDetail, i: number) => {
                   const hccCode = h.hcc_code || h.code;
                   const icds: string[] = (h.icd10_codes || []).map((c) => typeof c === "string" ? c : c.code || "");
                   return (
-                    <div key={h.hcc_code || h.code || i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 12px", borderBottom: i < hccContribs.length - 1 ? `1px solid ${C.slate100}` : "none", fontSize: 11 }}>
+                    <div key={h.hcc_code || h.code || i} className={i < hccContribs.length - 1 ? "border-b border-slate-100 dark:border-slate-700" : ""} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 12px", fontSize: 11 }}>
                       <span className="text-emerald-600 dark:text-emerald-400 font-mono font-bold" style={{ minWidth: 55 }}>HCC {hccCode}</span>
                       <span className="text-muted-foreground">{"\u2190"}</span>
                       <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
@@ -725,12 +728,12 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
 
       {/* RAF Impact Preview */}
       {hasExtras && extraCoeffSum > 0 && (
-        <div style={{
-          display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 16,
-          padding: "16px 24px", borderRadius: 10,
-          background: `linear-gradient(135deg, ${C.blue50} 0%, ${C.emerald50} 100%)`,
-          border: `1px solid ${C.blue100}`,
-        }}>
+        <div
+          className="bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950 dark:to-emerald-950 border border-teal-100 dark:border-teal-800"
+          style={{
+            display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 16,
+            padding: "16px 24px", borderRadius: 10,
+          }}>
           <div>
             <div className="text-muted-foreground" style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Current RAF</div>
             <div className="text-foreground font-mono" style={{ fontSize: 24, fontWeight: 800 }}>{currentRaf.toFixed(3)}</div>
@@ -755,10 +758,10 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
 
       {/* Main Crosswalk Card */}
       <Card noPadding>
-        <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.slate100}` }}>
+        <div className="border-b border-slate-100 dark:border-slate-700" style={{ padding: "16px 20px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
             <div>
-              <div className="text-[15px] font-bold text-slate-800">ICD-10 to HCC Crosswalk</div>
+              <div className="text-[15px] font-bold text-slate-800 dark:text-slate-100">ICD-10 to HCC Crosswalk</div>
               <div className="text-xs text-muted-foreground" style={{ marginTop: 2 }}>{patientCodes.length} active codes {hasExtras && `+ ${results.filter(r => isExtra(r.icd10_code)).length} what-if`}</div>
             </div>
           </div>
@@ -769,14 +772,13 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
               onChange={e => setExtraCodes(e.target.value)}
               aria-label="Add ICD-10 codes to test in crosswalk"
               placeholder="Add codes to test... e.g. N18.4, J44.1"
-              className="text-foreground border-border bg-card font-mono"
+              className="text-foreground border-border bg-card font-mono focus:border-teal-700 dark:focus:border-teal-400"
               style={{
                 flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid",
                 fontSize: 13,
                 transition: "border-color 0.15s",
+                outline: "none",
               }}
-              onFocus={e => (e.target.style.borderColor = C.blue600)}
-              onBlur={e => (e.target.style.borderColor = C.slate200)}
               onKeyDown={e => e.key === "Enter" && handleLookup()}
             />
             <button
@@ -798,9 +800,9 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
         {/* Results table */}
         {hasSearched && results.length > 0 && (
           <>
-            <div className="bg-teal-50" style={{
+            <div className="bg-teal-50 dark:bg-teal-950 border-b border-slate-200 dark:border-slate-700" style={{
               display: "grid", gridTemplateColumns: "36px minmax(70px,1fr) 70px 70px 70px 2.5fr",
-              padding: "8px 20px", gap: 4, borderBottom: `1px solid ${C.slate200}`,
+              padding: "8px 20px", gap: 4,
             }}>
               {["#", "ICD-10", "V24", "V28", "RxHCC", "Description"].map((h, i) => (
                 <span key={h} className="text-primary" style={{
@@ -813,16 +815,14 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
             {results.map((r: CrosswalkResult, i: number) => {
               const extra = isExtra(r.icd10_code);
               return (
-                <div key={r.icd10_code || i} style={{
+                <div key={r.icd10_code || i}
+                className={`border-b border-slate-100 dark:border-slate-700 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 ${extra ? "bg-amber-50/25 dark:bg-amber-950/25" : ""}`}
+                style={{
                   display: "grid", gridTemplateColumns: "36px minmax(70px,1fr) 70px 70px 70px 2.5fr",
                   padding: "9px 20px", gap: 4, alignItems: "center",
-                  borderBottom: `1px solid ${C.slate100}`,
                   borderLeft: extra ? `3px solid ${C.amber500}` : `3px solid transparent`,
-                  background: extra ? C.amber50 + "40" : "transparent",
                   transition: "background 0.15s",
                 }}
-                onMouseEnter={e => (e.currentTarget.style.background = C.slate100 + "60")}
-                onMouseLeave={e => (e.currentTarget.style.background = extra ? C.amber50 + "40" : "transparent")}
                 >
                   <span className="text-xs text-muted-foreground font-semibold" style={{ textAlign: "center" }}>{r.sno}</span>
                   <span style={{ fontSize: 13, fontFamily: "monospace", fontWeight: 700, color: extra ? C.amber600 : C.blue600 }}>{r.icd10_code}</span>
@@ -848,20 +848,20 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
       {/* Smart Suggestions */}
       {suspectSuggestions.length > 0 && (
         <Card noPadding>
-          <div style={{ padding: "14px 20px", borderBottom: `1px solid ${C.slate100}` }}>
-            <div className="text-sm font-bold text-slate-800">Codes to Consider</div>
+          <div className="border-b border-slate-100 dark:border-slate-700" style={{ padding: "14px 20px" }}>
+            <div className="text-sm font-bold text-slate-800 dark:text-slate-100">Codes to Consider</div>
             <div className="text-xs text-muted-foreground" style={{ marginTop: 1 }}>AI-detected conditions not yet coded \u2014 click to add to what-if analysis</div>
           </div>
           {suspectSuggestions.map((s, i: number) => {
             const alreadyAdded = extraCodes.toUpperCase().includes(s.code.replace(/\./g, "").toUpperCase()) ||
                                  extraCodes.includes(s.code);
             return (
-              <div key={s.code || i} style={{
+              <div key={s.code || i}
+              className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-100/60 dark:hover:bg-slate-800/60"
+              style={{
                 display: "flex", alignItems: "center", gap: 12, padding: "10px 20px",
-                borderBottom: `1px solid ${C.slate100}`, transition: "background 0.15s",
+                transition: "background 0.15s",
               }}
-              onMouseEnter={e => (e.currentTarget.style.background = C.slate100 + "60")}
-              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
               >
                 <span className="text-amber-600 bg-amber-50 border border-amber-100 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800 font-mono font-bold" style={{ minWidth: 64, padding: "3px 8px", borderRadius: 6, fontSize: 12, textAlign: "center" }}>
                   {s.code}
@@ -888,9 +888,12 @@ function PatientCrosswalk({ breakdown, rafScore, suspects }: { breakdown: Extend
                 <button
                   onClick={() => addSuggestion(s.code)}
                   disabled={alreadyAdded}
+                  className={alreadyAdded
+                    ? "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+                    : "bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-400 border border-teal-100 dark:border-teal-800"
+                  }
                   style={{
-                    padding: "4px 10px", borderRadius: 6, border: `1px solid ${alreadyAdded ? C.slate200 : C.blue100}`,
-                    background: alreadyAdded ? C.slate100 : C.blue50, color: alreadyAdded ? C.slate400 : C.blue600,
+                    padding: "4px 10px", borderRadius: 6,
                     fontSize: 11, fontWeight: 600, cursor: alreadyAdded ? "default" : "pointer",
                     whiteSpace: "nowrap",
                   }}
@@ -1080,20 +1083,13 @@ export function RAFTab({
                 >
                 <div
                   data-testid={`raf-recapture-row-${gapHcc}`}
+                  className={`border-b border-slate-100 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 ${i % 2 === 1 ? "bg-slate-100/60 dark:bg-slate-800/60" : ""}`}
                   style={{
                     display: "grid",
                     gridTemplateColumns: "1fr 100px 100px 100px",
                     padding: "10px 20px",
-                    borderBottom: `1px solid ${C.slate100}`,
-                    background: i % 2 === 1 ? C.slate100 + "60" : "transparent",
                     transition: "background 0.15s",
                   }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = C.slate100)
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = i % 2 === 1 ? C.slate100 + "60" : "transparent")
-                  }
                 >
                   <span className="text-sm font-medium text-foreground">
                     {gapLabel}

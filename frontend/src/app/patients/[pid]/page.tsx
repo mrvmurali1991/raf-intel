@@ -42,7 +42,6 @@ import type {
 
 // Component imports
 import {
-  C,
   formatDate,
 } from "./components/shared";
 import type {
@@ -703,7 +702,7 @@ export default function PatientDetailPage({
   // RENDER
   // =========================================================================
   return (
-    <div className="dot-grid mesh-pattern" style={{ minHeight: "100vh", background: C.bg }}>
+    <div className="dot-grid mesh-pattern bg-slate-50 dark:bg-slate-900" style={{ minHeight: "100vh" }}>
       {/* AI availability warning */}
       <div style={{ padding: "12px 16px 0" }}>
         <AIHealthBanner />
@@ -777,9 +776,8 @@ export default function PatientDetailPage({
 
       {/* YEAR SELECTOR ROW */}
       <div
+        className="bg-card border-b border-slate-100 dark:border-slate-700"
         style={{
-          background: "hsl(var(--card))",
-          borderBottom: `1px solid ${C.slate100}`,
           display: "flex",
           alignItems: "center",
           justifyContent: "flex-end",
@@ -789,17 +787,18 @@ export default function PatientDetailPage({
           flexWrap: "wrap",
         }}
       >
-        <span style={{ fontSize: 10, fontWeight: 600, color: C.slate400, textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>Year</span>
+        <span className="text-slate-500 dark:text-slate-400" style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>Year</span>
         {Array.from({ length: 3 }, (_, i) => new Date().getFullYear() - i).map((yr) => (
           <button
             key={yr}
             onClick={() => setSelectedYear(yr)}
+            className={selectedYear === yr
+              ? "text-white bg-teal-700 dark:bg-teal-600 border-transparent"
+              : "text-slate-500 dark:text-slate-400 bg-transparent border border-slate-200 dark:border-slate-600"
+            }
             style={{
               padding: "3px 10px", fontSize: 11,
               fontWeight: selectedYear === yr ? 700 : 500,
-              color: selectedYear === yr ? C.white : C.slate500,
-              background: selectedYear === yr ? C.blue600 : "transparent",
-              border: selectedYear === yr ? "none" : `1px solid ${C.slate200}`,
               borderRadius: 6, cursor: "pointer", transition: "all 0.15s",
               flexShrink: 0,
             }}
@@ -842,16 +841,17 @@ export default function PatientDetailPage({
           >
             <div style={{ padding: 24 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.slate800 }}>V24 \u2192 V28 Impact</h2>
+                <h2 className="text-slate-800 dark:text-slate-100" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>V24 \u2192 V28 Impact</h2>
                 <button
                   type="button"
                   autoFocus
                   onClick={() => setV28DrawerOpen(false)}
                   aria-label="Close V28 impact drawer"
+                  className="text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600"
                   style={{
-                    background: "transparent", border: `1px solid ${C.slate200}`,
+                    background: "transparent",
                     borderRadius: 6, width: 32, height: 32, cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center", color: C.slate600,
+                    display: "flex", alignItems: "center", justifyContent: "center",
                   }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -881,7 +881,7 @@ export default function PatientDetailPage({
       </div>
 
       {/* TAB NAVIGATION */}
-      <div style={{ background: "hsl(var(--card))", borderBottom: `1px solid ${C.slate200}`, padding: "0 24px" }}>
+      <div className="bg-card border-b border-slate-200 dark:border-slate-700" style={{ padding: "0 24px" }}>
         {/* overflow-x-auto + scrollbar-hide for mobile horizontal scroll */}
         <div
           className="raf-tabbar-scroll"
@@ -910,47 +910,32 @@ export default function PatientDetailPage({
                   aria-selected={isActive}
                   id={`tab-${tab.id}`}
                   onClick={() => handleTabChange(tab.id)}
-                  className={`raf-tab-btn${isActive ? " raf-tab-active" : ""}`}
+                  className={[
+                    "raf-tab-btn",
+                    isActive ? "raf-tab-active text-teal-700 dark:text-teal-400 border-b-2 border-teal-700 dark:border-teal-400" : "text-slate-500 dark:text-slate-400 border-b-2 border-transparent hover:border-slate-300 dark:hover:border-slate-600 hover:text-slate-700 dark:hover:text-slate-200",
+                    "focus-visible:outline-2 focus-visible:outline-teal-700 dark:focus-visible:outline-teal-400",
+                  ].join(" ")}
                   style={{
                     padding: "12px 0",
                     fontSize: 14,
                     fontWeight: 500,
-                    color: isActive ? C.blue600 : C.slate500,
                     background: "transparent",
                     border: "none",
-                    borderBottom: isActive
-                      ? `2px solid ${C.blue600}`
-                      : "2px solid transparent",
                     cursor: "pointer",
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 6,
                     transition: "color 0.15s, border-color 0.15s",
                     flexShrink: 0,
-                    outline: "none",
                     lineHeight: "1.25",
                   }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.borderBottomColor = C.slate300;
-                      e.currentTarget.style.color = C.slate700;
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.borderBottomColor = "transparent";
-                      e.currentTarget.style.color = C.slate500;
-                    }
-                  }}
-                  onFocus={(e) => (e.currentTarget.style.outline = `2px solid ${C.blue600}`)}
-                  onBlur={(e) => (e.currentTarget.style.outline = "none")}
                 >
                   {tab.label}
                   {tab.badge !== undefined && (
-                    <span style={{
+                    <span className="bg-amber-500 text-white" style={{
                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                       minWidth: 20, height: 20, padding: "0 6px", borderRadius: 999,
-                      fontSize: 10, fontWeight: 700, background: C.amber500, color: C.white,
+                      fontSize: 10, fontWeight: 700,
                     }}>
                       {tab.badge}
                     </span>
@@ -1008,31 +993,32 @@ export default function PatientDetailPage({
                 { id: "comparison" as const, label: "Comparison" },
                 { id: "v28-impact" as const, label: "V28 Impact" },
                 { id: "meat" as const, label: "MEAT Evidence" },
-              ] as Array<{ id: "central" | "details" | "comparison" | "v28-impact" | "meat"; label: string }>).map((pill) => (
+              ] as Array<{ id: "central" | "details" | "comparison" | "v28-impact" | "meat"; label: string }>).map((pill) => {
+                const isActive = pill.id === "meat" ? rafMeatView : (!rafMeatView && rafSubTab === pill.id);
+                return (
                 <button
                   key={pill.id}
                   onClick={() => {
                     if (pill.id === "meat") {
-                      // "meat" is rendered as a sibling section below the sub-pill bar;
-                      // store it as a special sub-tab value
-                      setRafSubTab("central"); // reset RAF sub-tab
-                      // use a local state flag — handled below via rafMeatView
+                      setRafSubTab("central");
                     }
                     if (pill.id !== "meat") setRafSubTab(pill.id);
                     setRafMeatView(pill.id === "meat");
                   }}
+                  className={isActive
+                    ? "text-white bg-teal-700 dark:bg-teal-600 border border-teal-700 dark:border-teal-600"
+                    : "text-slate-600 dark:text-slate-300 bg-card border border-slate-200 dark:border-slate-600"
+                  }
                   style={{
                     padding: "6px 16px", fontSize: 12,
-                    fontWeight: (pill.id === "meat" ? rafMeatView : (!rafMeatView && rafSubTab === pill.id)) ? 700 : 500,
-                    color: (pill.id === "meat" ? rafMeatView : (!rafMeatView && rafSubTab === pill.id)) ? C.white : C.slate600,
-                    background: (pill.id === "meat" ? rafMeatView : (!rafMeatView && rafSubTab === pill.id)) ? C.blue600 : "hsl(var(--card))",
-                    border: `1px solid ${(pill.id === "meat" ? rafMeatView : (!rafMeatView && rafSubTab === pill.id)) ? C.blue600 : C.slate200}`,
+                    fontWeight: isActive ? 700 : 500,
                     borderRadius: 14, cursor: "pointer", transition: "all 0.15s",
                   }}
                 >
                   {pill.label}
                 </button>
-              ))}
+                );
+              })}
             </div>
             {!rafMeatView && rafSubTab === "central" && (
               <React.Suspense fallback={<PageLoading variant="detail" />}>
@@ -1117,12 +1103,13 @@ export default function PatientDetailPage({
                 <button
                   key={pill.id}
                   onClick={() => setHistorySubTab(pill.id)}
+                  className={historySubTab === pill.id
+                    ? "text-white bg-teal-700 dark:bg-teal-600 border border-teal-700 dark:border-teal-600"
+                    : "text-slate-600 dark:text-slate-300 bg-card border border-slate-200 dark:border-slate-600"
+                  }
                   style={{
                     padding: "6px 16px", fontSize: 12,
                     fontWeight: historySubTab === pill.id ? 700 : 500,
-                    color: historySubTab === pill.id ? C.white : C.slate600,
-                    background: historySubTab === pill.id ? C.blue600 : "hsl(var(--card))",
-                    border: `1px solid ${historySubTab === pill.id ? C.blue600 : C.slate200}`,
                     borderRadius: 14, cursor: "pointer", transition: "all 0.15s",
                   }}
                 >

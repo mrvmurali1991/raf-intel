@@ -355,6 +355,7 @@ export function Spinner({ size = 16 }: { size?: number }) {
       height={size}
       viewBox="0 0 24 24"
       fill="none"
+      className="text-teal-700 dark:text-teal-400"
       style={{ animation: "spin 1s linear infinite" }}
     >
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -362,13 +363,14 @@ export function Spinner({ size = 16 }: { size?: number }) {
         cx="12"
         cy="12"
         r="10"
-        stroke={C.slate300}
+        className="stroke-slate-300 dark:stroke-slate-600"
+        stroke="currentColor"
         strokeWidth="3"
         fill="none"
       />
       <path
         d="M12 2a10 10 0 0 1 10 10"
-        stroke={C.blue600}
+        stroke="currentColor"
         strokeWidth="3"
         strokeLinecap="round"
         fill="none"
@@ -413,13 +415,12 @@ export function SkeletonBlock({
 }) {
   return (
     <div
-      className="shimmer"
+      className="shimmer bg-slate-200 dark:bg-slate-700"
       aria-hidden="true"
       style={{
         width,
         height,
         borderRadius: radius,
-        background: C.slate200,
         ...style,
       }}
     />
@@ -439,12 +440,12 @@ export function SkeletonRows({
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
+          className="border-b border-slate-100 dark:border-slate-700"
           style={{
             display: "grid",
             gridTemplateColumns: twoCol ? "1fr 80px" : "1fr",
             gap: 12,
             padding: "10px 20px",
-            borderBottom: `1px solid ${C.slate100}`,
             alignItems: "center",
           }}
         >
@@ -466,12 +467,12 @@ export function SkeletonDataRows({ count = 5 }: { count?: number }) {
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
+          className="border-b border-slate-100 dark:border-slate-700"
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
             padding: "8px 20px",
-            borderBottom: `1px solid ${C.slate100}`,
             gap: 16,
           }}
         >
@@ -555,7 +556,8 @@ export function PanelWithTimeout({
           height="20"
           viewBox="0 0 24 24"
           fill="none"
-          stroke={C.slate400}
+          stroke="currentColor"
+          className="text-slate-500 dark:text-slate-400"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -660,14 +662,17 @@ export function MeatDots({ evidence }: { evidence?: MeatEvidence | null }) {
             fontSize: 11,
             fontWeight: 800,
             backgroundColor: filled ? `${color}20` : "transparent",
-            color: filled ? color : C.gray400,
-            border: `2px solid ${filled ? color : C.gray200}`,
+            color: filled ? color : undefined,
+            border: filled ? `2px solid ${color}` : undefined,
             transition: "all 0.2s",
             boxShadow: filled ? `0 2px 6px ${color}25` : "none",
             cursor: "help",
             fontFamily: "inherit",
             background: filled ? `${color}20` : "transparent",
           };
+          const dotClassName = filled
+            ? ""
+            : "text-gray-400 dark:text-gray-500 border-2 border-gray-200 dark:border-gray-600";
           const tipContent = (
             <span>
               <strong>{full}</strong>{" — "}
@@ -685,6 +690,7 @@ export function MeatDots({ evidence }: { evidence?: MeatEvidence | null }) {
                 render={
                   <button
                     type="button"
+                    className={dotClassName}
                     style={dotStyle}
                     aria-label={`${full}: ${filled ? (phrase || "present") : "not documented"} — CMS MEAT evidence standard`}
                   >
@@ -736,15 +742,13 @@ export function SimpleTable({
   return (
     <div>
       <div
+        className="bg-muted border-t border-b-2 border-slate-200 dark:border-slate-700"
         style={{
           display: "grid",
           gridTemplateColumns: headers
             .map((_, i) => (i === 0 ? "1fr" : "auto"))
             .join(" "),
           padding: "10px 20px",
-          background: `linear-gradient(135deg, ${C.slate100}, ${C.slate200}40)`,
-          borderTop: `1px solid ${C.slate200}`,
-          borderBottom: `2px solid ${C.slate200}`,
           gap: 16,
         }}
       >
@@ -766,31 +770,23 @@ export function SimpleTable({
       {rows.map((row, i) => (
         <div
           key={`${row[0]}-${i}`}
+          className={`border-b border-slate-100 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ${i % 2 === 1 ? "bg-slate-50 dark:bg-slate-800/60" : ""}`}
           style={{
             display: "grid",
             gridTemplateColumns: headers
               .map((_, idx) => (idx === 0 ? "1fr" : "auto"))
               .join(" "),
             padding: "10px 20px",
-            borderBottom: `1px solid ${C.slate100}`,
-            background: i % 2 === 1 ? C.slate100 + "60" : "transparent",
             gap: 16,
-            transition: "background 0.15s",
           }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.background = C.slate100)
-          }
-          onMouseLeave={(e) =>
-            (e.currentTarget.style.background = i % 2 === 1 ? C.slate100 + "60" : "transparent")
-          }
         >
           {row.map((cell, j) => (
             <span
               key={j}
+              className={j === 0 ? "text-slate-800 dark:text-slate-100" : "text-slate-500 dark:text-slate-400"}
               style={{
                 fontSize: 13,
                 fontWeight: j === 0 ? 500 : 400,
-                color: j === 0 ? C.slate800 : C.slate500,
                 whiteSpace: "nowrap",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -823,19 +819,18 @@ export function FindingsList({
       {items.map((item, i) => (
         <div
           key={item.icd10 || item.hcc || `${item.name}-${i}`}
+          className={`border-b border-slate-100 dark:border-slate-700 ${i === 0 ? "border-t border-t-slate-200 dark:border-t-slate-700" : ""}`}
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             padding: "12px 20px",
-            borderTop: i === 0 ? `1px solid ${C.slate200}` : "none",
-            borderBottom: `1px solid ${C.slate100}`,
           }}
         >
           <div>
             <div
               className="text-foreground"
-            style={{
+              style={{
                 fontSize: 13,
                 fontWeight: 500,
               }}
@@ -845,7 +840,7 @@ export function FindingsList({
             {item.detail && (
               <div
                 className="text-muted-foreground"
-              style={{
+                style={{
                   fontSize: 12,
                   marginTop: 2,
                 }}
@@ -857,16 +852,13 @@ export function FindingsList({
           <div style={{ display: "flex", gap: 6 }}>
             {item.icd10 && (
               <span
+                className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-mono"
                 style={{
                   display: "inline-block",
                   padding: "2px 8px",
                   borderRadius: 4,
                   fontSize: 11,
                   fontWeight: 600,
-                  fontFamily: "monospace",
-                  background: C.slate100,
-                  color: C.slate700,
-                  border: `1px solid ${C.slate200}`,
                 }}
               >
                 {item.icd10}
@@ -874,16 +866,13 @@ export function FindingsList({
             )}
             {item.hcc && (
               <span
+                className="bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-400 border border-teal-100 dark:border-teal-800 font-mono"
                 style={{
                   display: "inline-block",
                   padding: "2px 8px",
                   borderRadius: 4,
                   fontSize: 11,
                   fontWeight: 600,
-                  fontFamily: "monospace",
-                  background: C.blue50,
-                  color: C.blue600,
-                  border: `1px solid ${C.blue100}`,
                 }}
               >
                 {item.hcc}

@@ -286,19 +286,19 @@ function DashboardSkeleton() {
 // ---------------------------------------------------------------------------
 // InfoMetricBox — small metric card with info tooltip
 // ---------------------------------------------------------------------------
-function InfoMetricBox({ bg, valueColor, labelColor, value, label, tooltip }: {
-  bg: string; valueColor: string; labelColor: string;
+function InfoMetricBox({ bgClass, valueClass, labelClass, value, label, tooltip }: {
+  bgClass: string; valueClass: string; labelClass: string;
   value: React.ReactNode; label: string; tooltip: string;
 }) {
   const [show, setShow] = useState(false);
   return (
-    <div style={{ background: bg, borderRadius: 10, padding: "14px 16px", textAlign: "center", position: "relative" }}>
-      <div style={{ fontSize: 24, fontWeight: 800, color: valueColor }}>{value}</div>
-      <div style={{ fontSize: 11, color: labelColor, fontWeight: 500, display: "inline-flex", alignItems: "center", gap: 4 }}>
+    <div className={`rounded-[10px] px-4 py-3.5 text-center relative ${bgClass}`}>
+      <div className={`text-2xl font-extrabold ${valueClass}`}>{value}</div>
+      <div className={`text-[11px] font-medium inline-flex items-center gap-1 ${labelClass}`}>
         {label}
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShow(!show); }}
-          style={{ border: "none", background: "none", cursor: "pointer", padding: 1, color: labelColor, opacity: 0.6, display: "flex", alignItems: "center" }}
+          className={`border-none bg-transparent cursor-pointer p-px opacity-60 flex items-center ${labelClass}`}
           aria-label={`Info about ${label}`}
         >
           <Info size={12} />
@@ -341,20 +341,7 @@ function CmsSweepWidget({ revenueOpp, loading }: { revenueOpp: number; loading?:
 
   return (
     <div
-      className="animate-fade-in cms-sweep-hero"
-      style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr 1fr",
-        alignItems: "center",
-        background: "#0F172A",
-        borderRadius: 12,
-        padding: "20px 28px",
-        marginBottom: 24,
-        gap: 0,
-        boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
-        position: "relative",
-        overflow: "hidden",
-      }}
+      className="animate-fade-in cms-sweep-hero grid grid-cols-3 items-center bg-slate-900 dark:bg-slate-800 dark:border dark:border-slate-700 rounded-xl px-7 py-5 mb-6 relative overflow-hidden shadow-sm"
     >
       {/* Subtle teal accent bar at top */}
       <div style={{
@@ -438,10 +425,10 @@ function CmsSweepWidget({ revenueOpp, loading }: { revenueOpp: number; loading?:
 
 type AttentionCardUrgency = "critical" | "high" | "medium";
 
-const URGENCY_STYLES: Record<AttentionCardUrgency, { border: string; iconBg: string; iconColor: string; actionColor: string }> = {
-  critical: { border: "#EF4444", iconBg: "#FEF2F2", iconColor: "#DC2626", actionColor: "#DC2626" },
-  high:     { border: "#F59E0B", iconBg: "#FFFBEB", iconColor: "#D97706", actionColor: "#D97706" },
-  medium:   { border: "#EAB308", iconBg: "#FEFCE8", iconColor: "#CA8A04", actionColor: "#CA8A04" },
+const URGENCY_STYLES: Record<AttentionCardUrgency, { border: string; iconBgClass: string; iconColor: string; actionColor: string }> = {
+  critical: { border: "#EF4444", iconBgClass: "bg-red-50 dark:bg-red-950/40", iconColor: "#DC2626", actionColor: "#DC2626" },
+  high:     { border: "#F59E0B", iconBgClass: "bg-amber-50 dark:bg-amber-950/40", iconColor: "#D97706", actionColor: "#D97706" },
+  medium:   { border: "#EAB308", iconBgClass: "bg-yellow-50 dark:bg-yellow-950/40", iconColor: "#CA8A04", actionColor: "#CA8A04" },
 };
 
 function AttentionCard({
@@ -483,16 +470,7 @@ function AttentionCard({
     >
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
         <div
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: 8,
-            background: s.iconBg,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-          }}
+          className={`w-[34px] h-[34px] rounded-lg flex items-center justify-center shrink-0 ${s.iconBgClass}`}
         >
           {/* Clone icon to apply color */}
           <span style={{ color: s.iconColor, display: "flex", alignItems: "center" }}>{icon}</span>
@@ -812,8 +790,8 @@ export function AdminDashboard() {
           padding: 40,
         }}
       >
-        <div style={{ background: "#FEF2F2", borderRadius: 14, padding: 24 }}>
-          <AlertCircle size={48} color="#EF4444" />
+        <div className="bg-red-50 dark:bg-red-950/40 rounded-[14px] p-6">
+          <AlertCircle size={48} className="text-red-500" />
         </div>
         <h2 className="text-foreground text-xl font-bold">
           Unable to Load Dashboard
@@ -823,19 +801,7 @@ export function AdminDashboard() {
         </p>
         <button
           onClick={handleRefresh}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "10px 20px",
-            border: "1px solid #E5E7EB",
-            borderRadius: 8,
-            background: "hsl(var(--card))",
-            color: "hsl(var(--foreground))",
-            fontSize: 14,
-            fontWeight: 500,
-            cursor: "pointer",
-          }}
+          className="inline-flex items-center gap-2 px-5 py-2.5 border border-border rounded-lg bg-card text-foreground text-sm font-medium cursor-pointer"
         >
           <RefreshCw size={16} />
           Retry
@@ -872,7 +838,7 @@ export function AdminDashboard() {
           50% { opacity: 0.5; }
         }
         .shimmer {
-          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--border)) 50%, hsl(var(--muted)) 75%);
           background-size: 400% 100%;
           animation: shimmer 1.4s ease-in-out infinite;
         }
@@ -945,8 +911,7 @@ export function AdminDashboard() {
 
       {/* ── EHR Sync Status Banner ── */}
       {emrConnected && (
-        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg mb-5 text-xs font-medium"
-          style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", color: "#166534" }}
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg mb-5 text-xs font-medium bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-300"
         >
           <span
             aria-hidden="true"
@@ -968,22 +933,11 @@ export function AdminDashboard() {
       {/* ── EMR Not Connected Banner ── */}
       {!emrStatusL && !emrConnected && (
         <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            background: "#FFF7ED",
-            border: "1px solid #FED7AA",
-            borderRadius: 12,
-            padding: "20px 28px",
-            marginBottom: 24,
-            gap: 16,
-            flexWrap: "wrap",
-          }}
+          className="flex items-center justify-between bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl px-7 py-5 mb-6 gap-4 flex-wrap"
         >
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ background: "hsl(var(--card))", borderRadius: 10, padding: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-              <AlertCircle size={24} color="#F59E0B" />
+            <div className="bg-card rounded-[10px] p-2.5 shadow-sm">
+              <AlertCircle size={24} className="text-amber-500" />
             </div>
             <div>
               <h3 className="text-[15px] font-bold text-amber-900 m-0">
@@ -998,40 +952,14 @@ export function AdminDashboard() {
             <button
               onClick={() => setShowDemoConfirm(true)}
               disabled={demoLoading}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "9px 18px",
-                border: "none",
-                borderRadius: 8,
-                background: "#F59E0B",
-                color: "#FFFFFF",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: demoLoading ? "wait" : "pointer",
-                opacity: demoLoading ? 0.7 : 1,
-              }}
+              className={`inline-flex items-center gap-1.5 px-[18px] py-[9px] border-none rounded-lg bg-amber-500 text-white text-[13px] font-semibold ${demoLoading ? "cursor-wait opacity-70" : "cursor-pointer"}`}
             >
               {demoLoading ? <RefreshCw size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Stethoscope size={14} />}
               {demoLoading ? "Connecting..." : "Try with Demo"}
             </button>
             <Link
               href="/emr-config"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "9px 18px",
-                border: "1px solid #E5E7EB",
-                borderRadius: 8,
-                background: "hsl(var(--card))",
-                color: "hsl(var(--foreground))",
-                fontSize: 13,
-                fontWeight: 600,
-                textDecoration: "none",
-                cursor: "pointer",
-              }}
+              className="inline-flex items-center gap-1.5 px-[18px] py-[9px] border border-border rounded-lg bg-card text-foreground text-[13px] font-semibold no-underline cursor-pointer"
             >
               <Heart size={14} />
               Connect Your EMR
@@ -1066,8 +994,8 @@ export function AdminDashboard() {
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
-              <div style={{ background: "#FFF7ED", borderRadius: 10, padding: 12 }}>
-                <Stethoscope size={28} color="#F59E0B" />
+              <div className="bg-amber-50 dark:bg-amber-950/40 rounded-[10px] p-3">
+                <Stethoscope size={28} className="text-amber-500" />
               </div>
               <div>
                 <h3 className="text-foreground text-lg font-bold m-0">
@@ -1078,16 +1006,8 @@ export function AdminDashboard() {
             <p className="text-muted-foreground text-sm leading-relaxed mb-2 mt-0">
               This will connect to the bundled <strong>OpenEMR</strong> demo instance with sample patient data. You can use this to explore all features of {branding.display_name}.
             </p>
-            <div style={{
-              background: "#F0FDF4",
-              border: "1px solid #BBF7D0",
-              borderRadius: 8,
-              padding: "12px 14px",
-              marginBottom: 24,
-              fontSize: 13,
-              color: "#166534",
-              lineHeight: 1.5,
-            }}>
+            <div className="bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded-lg px-3.5 py-3 mb-6 text-[13px] text-green-800 dark:text-green-300 leading-normal"
+            >
               <strong>What you will get:</strong>
               <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
                 <li>Sample patient records from OpenEMR</li>
@@ -1098,34 +1018,13 @@ export function AdminDashboard() {
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button
                 onClick={() => setShowDemoConfirm(false)}
-                style={{
-                  padding: "10px 20px",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: 8,
-                  background: "hsl(var(--card))",
-                  color: "#64748B",
-                  fontSize: 14,
-                  fontWeight: 500,
-                  cursor: "pointer",
-                }}
+                className="px-5 py-2.5 border border-border rounded-lg bg-card text-muted-foreground text-sm font-medium cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDemoConnect}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "10px 24px",
-                  border: "none",
-                  borderRadius: 8,
-                  background: "#F59E0B",
-                  color: "#FFFFFF",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
+                className="inline-flex items-center gap-1.5 px-6 py-2.5 border-none rounded-lg bg-amber-500 text-white text-sm font-semibold cursor-pointer"
               >
                 <Stethoscope size={16} />
                 Yes, Connect Demo
@@ -1145,8 +1044,8 @@ export function AdminDashboard() {
             marginBottom: 24,
           }}
         >
-          <div style={{ background: "#F0FDFA", borderRadius: 14, padding: 24, display: "inline-block", marginBottom: 20 }}>
-            <Stethoscope size={48} color="#0D9488" />
+          <div className="bg-teal-50 dark:bg-teal-950/40 rounded-[14px] p-6 inline-block mb-5">
+            <Stethoscope size={48} className="text-teal-600 dark:text-teal-400" />
           </div>
           <h2 className="text-foreground text-[22px] font-bold mb-2 mt-0">
             Welcome to {branding.display_name}
@@ -1158,39 +1057,14 @@ export function AdminDashboard() {
             <button
               onClick={() => setShowDemoConfirm(true)}
               disabled={demoLoading}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "12px 24px",
-                border: "none",
-                borderRadius: 8,
-                background: "#F59E0B",
-                color: "#FFFFFF",
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: demoLoading ? "wait" : "pointer",
-                opacity: demoLoading ? 0.7 : 1,
-              }}
+              className={`inline-flex items-center gap-1.5 px-6 py-3 border-none rounded-lg bg-amber-500 text-white text-sm font-semibold ${demoLoading ? "cursor-wait opacity-70" : "cursor-pointer"}`}
             >
               {demoLoading ? <RefreshCw size={16} style={{ animation: "spin 1s linear infinite" }} /> : <Stethoscope size={16} />}
               {demoLoading ? "Connecting..." : "Try with Demo Data"}
             </button>
             <Link
               href="/emr-config"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "12px 24px",
-                border: "1px solid #E5E7EB",
-                borderRadius: 8,
-                background: "hsl(var(--card))",
-                color: "hsl(var(--foreground))",
-                fontSize: 14,
-                fontWeight: 600,
-                textDecoration: "none",
-              }}
+              className="inline-flex items-center gap-1.5 px-6 py-3 border border-border rounded-lg bg-card text-foreground text-sm font-semibold no-underline"
             >
               <Heart size={16} />
               Connect Your EMR
@@ -1203,7 +1077,7 @@ export function AdminDashboard() {
 
       {/* Partial data warning */}
       {(statsErr || revErr) && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderRadius: 10, background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", fontSize: 13, marginBottom: 16 }}>
+        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-[10px] bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-[13px] mb-4">
           <AlertTriangle size={16} />
           <span>Some dashboard data couldn&apos;t be loaded. Displayed values may be incomplete.</span>
         </div>
@@ -1514,9 +1388,9 @@ export function AdminDashboard() {
             {/* Tier cards */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
               {[
-                { label: "High Risk", desc: "RAF >= 2.0", count: tiers.high, color: "#E11D48", bg: "#FFF1F2", border: "#FECDD3", filter: "high", tip: "Patients with RAF score 2.0 or above. These are the most complex patients and represent the highest revenue capture opportunity — prioritize for clinical review." },
-                { label: "Medium Risk", desc: "RAF 1.0 - 2.0", count: tiers.med, color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", filter: "medium", tip: "Patients with RAF score between 1.0 and 2.0. Above average complexity — review for missing chronic conditions that could be coded." },
-                { label: "Low Risk", desc: "RAF < 1.0", count: tiers.low, color: "#059669", bg: "#ECFDF5", border: "#A7F3D0", filter: "low", tip: "Patients with RAF score below 1.0. Lower complexity; verify these patients have been fully analyzed before assuming no gaps exist." },
+                { label: "High Risk", desc: "RAF >= 2.0", count: tiers.high, color: "#E11D48", bgClass: "bg-rose-50 dark:bg-rose-950/30", borderClass: "border-rose-200 dark:border-rose-800", filter: "high", tip: "Patients with RAF score 2.0 or above. These are the most complex patients and represent the highest revenue capture opportunity — prioritize for clinical review." },
+                { label: "Medium Risk", desc: "RAF 1.0 - 2.0", count: tiers.med, color: "#D97706", bgClass: "bg-amber-50 dark:bg-amber-950/30", borderClass: "border-amber-200 dark:border-amber-800", filter: "medium", tip: "Patients with RAF score between 1.0 and 2.0. Above average complexity — review for missing chronic conditions that could be coded." },
+                { label: "Low Risk", desc: "RAF < 1.0", count: tiers.low, color: "#059669", bgClass: "bg-emerald-50 dark:bg-emerald-950/30", borderClass: "border-emerald-200 dark:border-emerald-800", filter: "low", tip: "Patients with RAF score below 1.0. Lower complexity; verify these patients have been fully analyzed before assuming no gaps exist." },
               ].map((t) => (
                 <Tooltip key={t.label}>
                   <TooltipTrigger
@@ -1528,23 +1402,7 @@ export function AdminDashboard() {
                   style={{ textDecoration: "none", color: "inherit" }}
                 >
                 <div
-                  style={{
-                    background: t.bg,
-                    border: `1px solid ${t.border}`,
-                    borderRadius: 10,
-                    padding: 18,
-                    textAlign: "center",
-                    cursor: "pointer",
-                    transition: "box-shadow 0.2s, transform 0.2s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${t.color}18`;
-                    e.currentTarget.style.transform = "translateY(-1px)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = "none";
-                    e.currentTarget.style.transform = "translateY(0)";
-                  }}
+                  className={`border rounded-[10px] p-[18px] text-center cursor-pointer transition-all duration-200 hover:-translate-y-px ${t.bgClass} ${t.borderClass}`}
                 >
                   <div
                     style={{
@@ -1588,7 +1446,7 @@ export function AdminDashboard() {
               count={suspectsCount > 0 ? suspectsCount : undefined}
               action={
                 suspectsCount > 0 ? (
-                  <Link href="/suspects" style={{ fontSize: 12, fontWeight: 600, color: "#F59E0B", textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>
+                  <Link href="/suspects" className="text-xs font-semibold text-amber-500 no-underline flex items-center gap-1">
                     Review All <ChevronRight size={14} />
                   </Link>
                 ) : undefined
@@ -1603,17 +1461,17 @@ export function AdminDashboard() {
                 {/* Summary stats */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
                   <InfoMetricBox
-                    bg="#FFFBEB"
-                    valueColor="#D97706"
-                    labelColor="#92400E"
+                    bgClass="bg-amber-50 dark:bg-amber-950/30"
+                    valueClass="text-amber-600 dark:text-amber-400"
+                    labelClass="text-amber-800 dark:text-amber-300"
                     value={suspectsCount}
                     label="Open Suspects"
                     tooltip="Conditions identified by AI analysis from clinical notes, vitals, and labs that are not yet coded in billing. Each suspect has a confidence score based on clinical evidence strength."
                   />
                   <InfoMetricBox
-                    bg="#F0FDF4"
-                    valueColor="#059669"
-                    labelColor="#065F46"
+                    bgClass="bg-green-50 dark:bg-green-950/30"
+                    valueClass="text-emerald-600 dark:text-emerald-400"
+                    labelClass="text-emerald-800 dark:text-emerald-300"
                     value={fmt$(suspectsCount * 2800)}
                     label="Est. Revenue"
                     tooltip={`Estimated revenue if all ${suspectsCount} open suspects are confirmed and coded. Calculated as ${suspectsCount} suspects × $2,800 average per HCC. This differs from the Revenue Opportunity card which shows the total population-wide RAF gap including recapture gaps, over-coding, and all coding discrepancies.`}
@@ -1636,7 +1494,7 @@ export function AdminDashboard() {
                         onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                       >
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: "#F59E0B", background: "#FFFBEB", padding: "2px 6px", borderRadius: 4, flexShrink: 0 }}>
+                          <span className="text-[11px] font-bold text-amber-500 bg-amber-50 dark:bg-amber-950/30 px-1.5 py-0.5 rounded shrink-0">
                             HCC {(s.hcc_code as string) ?? "--"}
                           </span>
                           <span style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -1644,14 +1502,16 @@ export function AdminDashboard() {
                           </span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                          <span style={{
-                            fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 4,
-                            color: ((s.confidence_score as number) ?? 0) >= 0.9 ? "#DC2626" : ((s.confidence_score as number) ?? 0) >= 0.8 ? "#D97706" : "#0F766E",
-                            background: ((s.confidence_score as number) ?? 0) >= 0.9 ? "#FEF2F2" : ((s.confidence_score as number) ?? 0) >= 0.8 ? "#FFFBEB" : "#F0FDFA",
-                          }}>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                            ((s.confidence_score as number) ?? 0) >= 0.9
+                              ? "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40"
+                              : ((s.confidence_score as number) ?? 0) >= 0.8
+                                ? "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30"
+                                : "text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/30"
+                          }`}>
                             {Math.round(((s.confidence_score as number) ?? 0) * 100)}%
                           </span>
-                          <ChevronRight size={14} color="#CBD5E1" />
+                          <ChevronRight size={14} className="text-slate-300 dark:text-slate-600" />
                         </div>
                       </div>
                     </Link>
@@ -1687,7 +1547,7 @@ export function AdminDashboard() {
               count={topOpps.length > 0 ? topOpps.length : undefined}
               action={
                 topOpps.length > 0 ? (
-                  <Link href="/reports" style={{ fontSize: 12, fontWeight: 600, color: "#2563EB", textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>
+                  <Link href="/reports" className="text-xs font-semibold text-blue-600 dark:text-blue-400 no-underline flex items-center gap-1">
                     View All <ChevronRight size={14} />
                   </Link>
                 ) : undefined
@@ -1695,7 +1555,7 @@ export function AdminDashboard() {
             />
             {topOpps.length === 0 ? (
               <div className="text-muted-foreground text-sm py-8 text-center">
-                <Calculator size={32} color="#CBD5E1" style={{ marginBottom: 8 }} />
+                <Calculator size={32} className="text-slate-300 dark:text-slate-600 mb-2" />
                 <div>Run clinical analysis to identify revenue gaps.</div>
               </div>
             ) : (
@@ -1703,7 +1563,7 @@ export function AdminDashboard() {
               <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
               <div style={{ display: "flex", flexDirection: "column", gap: 0, minWidth: 360 }}>
                 {/* Table header */}
-                <div style={{ display: "flex", alignItems: "center", padding: "0 8px 10px", borderBottom: "1px solid #E5E7EB" }}>
+                <div style={{ display: "flex", alignItems: "center", padding: "0 8px 10px", borderBottom: "1px solid hsl(var(--border))" }}>
                   <span className="text-muted-foreground flex-1 text-[11px] font-semibold uppercase tracking-[0.05em]">Patient</span>
                   <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.05em] text-center" style={{ width: 70 }}>Billing RAF</span>
                   <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.05em] text-center" style={{ width: 70 }}>TMIAB RAF</span>
@@ -1736,19 +1596,11 @@ export function AdminDashboard() {
                       >
                         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                           <span
-                            style={{
-                              width: 24,
-                              height: 24,
-                              borderRadius: 8,
-                              background: i < 3 ? "#F0FDFA" : "hsl(var(--muted))",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 11,
-                              fontWeight: 700,
-                              color: i < 3 ? "#0F766E" : "#64748B",
-                              flexShrink: 0,
-                            }}
+                            className={`w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold shrink-0 ${
+                              i < 3
+                                ? "bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-400"
+                                : "bg-muted text-slate-500 dark:text-slate-400"
+                            }`}
                           >
                             {i + 1}
                           </span>
@@ -1772,28 +1624,18 @@ export function AdminDashboard() {
                           {(p.ai_raf as number) != null ? (p.ai_raf as number).toFixed(2) : "--"}
                         </span>
                         <span
-                          style={{
-                            width: 60,
-                            fontSize: 12,
-                            fontWeight: 700,
-                            color: "#EF4444",
-                            textAlign: "center",
-                          }}
+                          className="text-red-500 text-xs font-bold text-center"
+                          style={{ width: 60 }}
                         >
                           +{(absGap ?? 0).toFixed(2)}
                         </span>
                         <span
-                          style={{
-                            width: 80,
-                            fontSize: 13,
-                            fontWeight: 700,
-                            color: "#10B981",
-                            textAlign: "right",
-                          }}
+                          className="text-emerald-500 text-[13px] font-bold text-right"
+                          style={{ width: 80 }}
                         >
                           {fmt$(revOpp)}
                         </span>
-                        <ChevronRight size={14} color="#CBD5E1" style={{ marginLeft: 4 }} />
+                        <ChevronRight size={14} className="text-slate-300 dark:text-slate-600 ml-1" />
                       </div>
                     </Link>
                       </TooltipTrigger>
@@ -1886,18 +1728,14 @@ export function AdminDashboard() {
               >
                 <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10 }}>
                   <div
-                    style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 10,
-                      background: ["#F0FDFA", "hsl(var(--muted))", "#FFF7ED", "#F0FDF4"][idx % 4],
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: ["#0F766E", "#475569", "#D97706", "#059669"][idx % 4],
-                    }}
+                    className={`w-[34px] h-[34px] rounded-[10px] flex items-center justify-center text-[13px] font-bold ${
+                      [
+                        "bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-400",
+                        "bg-muted text-slate-600 dark:text-slate-400",
+                        "bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400",
+                        "bg-green-50 dark:bg-green-950/30 text-emerald-600 dark:text-emerald-400",
+                      ][idx % 4]
+                    }`}
                   >
                     {prov.name.replace("Dr. ", "").charAt(0)}
                   </div>
@@ -1941,7 +1779,7 @@ export function AdminDashboard() {
             ))}
           </div>
           {/* Provider comparison bar chart */}
-          <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #F1F5F9" }}>
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid hsl(var(--border))" }}>
             <div className="text-muted-foreground text-xs font-semibold mb-2.5">Patient Distribution</div>
             <MiniBarChart
               data={providers.map((p: { name: string; patients: number }, idx: number) => ({
@@ -1970,7 +1808,7 @@ export function AdminDashboard() {
               {
                 icon: Search,
                 color: "#F59E0B",
-                bg: "#FFFBEB",
+                bgClass: "bg-amber-50 dark:bg-amber-950/30",
                 title: "Suspects Pending Review",
                 count: workflowData?.open_suspects ?? suspectsCount,
                 href: "/suspects",
@@ -1978,7 +1816,7 @@ export function AdminDashboard() {
               {
                 icon: Zap,
                 color: "#EF4444",
-                bg: "#FEF2F2",
+                bgClass: "bg-red-50 dark:bg-red-950/40",
                 title: "High-Confidence Alerts",
                 count: workflowData?.high_confidence_suspects ?? 0,
                 href: "/suspects",
@@ -1986,7 +1824,7 @@ export function AdminDashboard() {
               {
                 icon: Calculator,
                 color: "#8B5CF6",
-                bg: "#F5F3FF",
+                bgClass: "bg-violet-50 dark:bg-violet-950/30",
                 title: "Patients Not Analyzed",
                 count: workflowData?.patients_unanalyzed ?? (totalPop - analyzed),
                 href: "/analysis",
@@ -1994,7 +1832,7 @@ export function AdminDashboard() {
               {
                 icon: Activity,
                 color: "#3B82F6",
-                bg: "#EFF6FF",
+                bgClass: "bg-blue-50 dark:bg-blue-950/30",
                 title: "Recent Analyses (7d)",
                 count: workflowData?.recent_analyses_7d ?? 0,
                 href: "/analysis",
@@ -2002,7 +1840,7 @@ export function AdminDashboard() {
               {
                 icon: UserCheck,
                 color: "#10B981",
-                bg: "#F0FDF4",
+                bgClass: "bg-green-50 dark:bg-green-950/30",
                 title: "Active Providers",
                 count: workflowData?.providers_active ?? providers.length,
                 href: "/providers",
@@ -2028,16 +1866,7 @@ export function AdminDashboard() {
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                   >
                     <div
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 10,
-                        background: item.bg,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
+                      className={`w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0 ${item.bgClass}`}
                     >
                       <Icon size={16} color={item.color} />
                     </div>
@@ -2045,18 +1874,12 @@ export function AdminDashboard() {
                       <div className="text-foreground text-[13px] font-semibold">{item.title}</div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                      <span style={{
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: item.color,
-                        background: item.bg,
-                        padding: "4px 10px",
-                        borderRadius: 8,
-                        fontVariantNumeric: "tabular-nums",
-                      }}>
+                      <span className={`text-[13px] font-bold px-2.5 py-1 rounded-lg tabular-nums ${item.bgClass}`}
+                        style={{ color: item.color }}
+                      >
                         {fmtN(item.count)}
                       </span>
-                      <ChevronRight size={14} color="#CBD5E1" />
+                      <ChevronRight size={14} className="text-slate-300 dark:text-slate-600" />
                     </div>
                   </div>
                 </Link>
@@ -2068,7 +1891,7 @@ export function AdminDashboard() {
           </div>
           {/* Avg Confidence Gauge */}
           {(workflowData?.avg_confidence != null && workflowData.avg_confidence > 0) && (
-            <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #F1F5F9", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid hsl(var(--border))", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <CircularGauge
                 value={Math.round((workflowData.avg_confidence as number) * 100)}
                 size={100}
@@ -2188,7 +2011,7 @@ export function AdminDashboard() {
             icon={<Target size={18} />}
             count={priorityPatients.length}
             action={
-              <Link href="/patients" style={{ fontSize: 12, fontWeight: 600, color: "#2563EB", textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>
+              <Link href="/patients" className="text-xs font-semibold text-blue-600 dark:text-blue-400 no-underline flex items-center gap-1">
                 View All Patients <ChevronRight size={14} />
               </Link>
             }
@@ -2215,7 +2038,7 @@ export function AdminDashboard() {
                   const aiRaf = (p.ai_raf as number) ?? ((p.billing_raf as number) ?? 0) + absGap;
                   const riskLevel = aiRaf >= 2.0 ? "High" : aiRaf >= 1.0 ? "Medium" : "Low";
                   const rColor = aiRaf >= 2.0 ? "#EF4444" : aiRaf >= 1.0 ? "#F59E0B" : "#10B981";
-                  const riskBg = aiRaf >= 2.0 ? "#FEF2F2" : aiRaf >= 1.0 ? "#FFFBEB" : "#F0FDF4";
+                  void rColor; // used by Sparkline below
                   return (
                     <tr
                       key={p.pid}
@@ -2227,7 +2050,7 @@ export function AdminDashboard() {
                       onClick={() => router.push(`/patients/${p.pid}`)}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(`/patients/${p.pid}`); } }}
                     >
-                      <td className="text-muted-foreground p-3 text-xs font-semibold border-b border-slate-100">{idx + 1}</td>
+                      <td className="text-muted-foreground p-3 text-xs font-semibold border-b border-border">{idx + 1}</td>
                       <td style={{ padding: "12px", borderBottom: "1px solid hsl(var(--border))" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span className="text-foreground text-[13px] font-semibold">{p.name as string}</span>
@@ -2250,26 +2073,23 @@ export function AdminDashboard() {
                       <td style={{ padding: "12px", fontSize: 13, fontWeight: 600, color: "hsl(var(--foreground))", textAlign: "center", borderBottom: "1px solid hsl(var(--border))", fontVariantNumeric: "tabular-nums" }}>
                         {(p.ai_raf as number) != null ? (p.ai_raf as number).toFixed(3) : "--"}
                       </td>
-                      <td style={{ padding: "12px", fontSize: 13, fontWeight: 700, color: "#EF4444", textAlign: "center", borderBottom: "1px solid hsl(var(--border))", fontVariantNumeric: "tabular-nums" }}>
+                      <td className="p-3 text-[13px] font-bold text-red-500 text-center border-b border-border tabular-nums">
                         +{(absGap ?? 0).toFixed(3)}
                       </td>
-                      <td style={{ padding: "12px", fontSize: 13, fontWeight: 700, color: "#10B981", textAlign: "center", borderBottom: "1px solid hsl(var(--border))" }}>
+                      <td className="p-3 text-[13px] font-bold text-emerald-500 text-center border-b border-border">
                         {fmt$(revOpp)}
                       </td>
                       <td style={{ padding: "12px", fontSize: 12, color: "hsl(var(--muted-foreground))", textAlign: "center", borderBottom: "1px solid hsl(var(--border))" }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: "#0F766E", background: "#F0FDFA", padding: "2px 8px", borderRadius: 4 }}>
+                        <span className="text-[11px] font-semibold text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/30 px-2 py-0.5 rounded">
                           {((p.hcc_count_ai ?? p.hcc_count_billing ?? 0) as number)}
                         </span>
                       </td>
                       <td style={{ padding: "12px", textAlign: "center", borderBottom: "1px solid hsl(var(--border))" }}>
-                        <span style={{
-                          fontSize: 11,
-                          fontWeight: 600,
-                          color: (p.analyzed as boolean) ? "#10B981" : "#F59E0B",
-                          background: (p.analyzed as boolean) ? "#F0FDF4" : "#FFFBEB",
-                          padding: "3px 10px",
-                          borderRadius: 6,
-                        }}>
+                        <span className={`text-[11px] font-semibold px-2.5 py-[3px] rounded-md ${
+                          (p.analyzed as boolean)
+                            ? "text-emerald-500 bg-green-50 dark:bg-green-950/30"
+                            : "text-amber-500 bg-amber-50 dark:bg-amber-950/30"
+                        }`}>
                           {(p.analyzed as boolean) ? "Analyzed" : "Pending"}
                         </span>
                       </td>
@@ -2339,22 +2159,20 @@ function ChartRequestsKpiBanner() {
   return (
     <Link
       href="/radv?tab=chart-requests"
-      style={{
-        display: "flex", alignItems: "center", gap: 10,
-        padding: "10px 16px", borderRadius: 10, marginBottom: 16,
-        backgroundColor: overdue && overdue > 0 ? "#FEF2F2" : "#F0FDFA",
-        border: `1px solid ${overdue && overdue > 0 ? "#FECACA" : "#99F6E4"}`,
-        textDecoration: "none", color: "inherit", fontSize: 13,
-      }}
+      className={`flex items-center gap-2.5 px-4 py-2.5 rounded-[10px] mb-4 no-underline text-inherit text-[13px] border ${
+        overdue && overdue > 0
+          ? "bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800"
+          : "bg-teal-50 dark:bg-teal-950/30 border-teal-200 dark:border-teal-800"
+      }`}
       aria-label="View RADV chart requests"
     >
-      <ClipboardList size={16} color={overdue && overdue > 0 ? "#DC2626" : "#0D9488"} />
+      <ClipboardList size={16} className={overdue && overdue > 0 ? "text-red-600 dark:text-red-400" : "text-teal-600 dark:text-teal-400"} />
       <span>
-        <strong style={{ color: overdue && overdue > 0 ? "#DC2626" : "#0F766E" }}>{open} chart request{open !== 1 ? "s" : ""} open</strong>
+        <strong className={overdue && overdue > 0 ? "text-red-600 dark:text-red-400" : "text-teal-700 dark:text-teal-400"}>{open} chart request{open !== 1 ? "s" : ""} open</strong>
         {overdue && overdue > 0
-          ? <span style={{ color: "#DC2626" }}> · {overdue} overdue</span>
+          ? <span className="text-red-600 dark:text-red-400"> · {overdue} overdue</span>
           : null}
-        <span style={{ color: "#64748B" }}> — RADV CMS compliance</span>
+        <span className="text-slate-500 dark:text-slate-400"> — RADV CMS compliance</span>
       </span>
     </Link>
   );

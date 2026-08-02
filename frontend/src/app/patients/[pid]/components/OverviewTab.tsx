@@ -62,17 +62,17 @@ function hccWeightBand(coeff: number): { border: string; bg: string; label: stri
 /** MEAT status pill — green/amber/red */
 function MeatPill({ status }: { status?: "complete" | "partial" | "missing" | null }) {
   const cfg =
-    status === "complete" ? { bg: C.emerald100, color: C.emerald600, label: "MEAT Complete" }
-    : status === "partial" ? { bg: C.amber100,   color: C.amber600,   label: "MEAT Partial"  }
-    :                         { bg: C.red100,     color: C.red600,     label: "MEAT Missing"  };
+    status === "complete" ? { cls: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-400", label: "MEAT Complete" }
+    : status === "partial" ? { cls: "bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400", label: "MEAT Partial"  }
+    :                         { cls: "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400", label: "MEAT Missing"  };
   return (
     <span
       aria-label={cfg.label}
+      className={cfg.cls}
       style={{
         display: "inline-flex", alignItems: "center",
         padding: "2px 8px", borderRadius: 999,
         fontSize: 10, fontWeight: 700,
-        background: cfg.bg, color: cfg.color,
         flexShrink: 0,
       }}
     >
@@ -148,11 +148,11 @@ function HCCPanel({ breakdown }: { breakdown: ExtendedRafBreakdown | undefined }
           return (
             <div
               key={`${code}-${idx}`}
+              className="border-t border-slate-100 dark:border-slate-700"
               style={{
                 display: "flex",
                 alignItems: "flex-start",
                 padding: "12px 20px",
-                borderTop: `1px solid ${C.slate100}`,
                 borderLeft: `4px solid ${band.border}`,
                 gap: 12,
               }}
@@ -180,10 +180,9 @@ function HCCPanel({ breakdown }: { breakdown: ExtendedRafBreakdown | undefined }
                     {icds.slice(0, 5).map((icd) => (
                       <span
                         key={icd}
-                        className="font-mono text-muted-foreground"
+                        className="font-mono text-muted-foreground bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
                         style={{
                           fontSize: 10, padding: "1px 6px", borderRadius: 3,
-                          background: C.slate100, border: `1px solid ${C.slate200}`,
                         }}
                       >
                         {icd}
@@ -214,12 +213,11 @@ function HCCPanel({ breakdown }: { breakdown: ExtendedRafBreakdown | undefined }
                     role="button"
                     tabIndex={0}
                     aria-label={`Why is HCC ${code} flagged?`}
+                    className="bg-sky-100 text-sky-600 border border-sky-200 dark:bg-sky-950 dark:text-sky-400 dark:border-sky-800"
                     style={{
                       display: "inline-flex", alignItems: "center", gap: 3,
                       padding: "2px 8px", borderRadius: 999,
                       fontSize: 10, fontWeight: 600,
-                      background: "#e0f2fe", color: "#0284c7",
-                      border: "1px solid #bae6fd",
                       cursor: "help",
                     }}
                   >
@@ -318,7 +316,7 @@ function LabSnapshotPanel({
         title="Lab Snapshot"
         count={entries.length || undefined}
         icon={
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.blue600} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-teal-700 dark:text-teal-400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v11M14 3v11M5 11h14M3 11v8a2 2 0 0 0 2 2h14a2 2 0 0 1-2-2v-8"/>
           </svg>
         }
@@ -327,8 +325,8 @@ function LabSnapshotPanel({
         <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 0" }}>
           {[90, 75, 85, 70].map((w, i) => (
             <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}>
-              <div className="shimmer" style={{ height: 12, width: `${w * 0.5}%`, borderRadius: 4, background: C.slate200 }} />
-              <div className="shimmer" style={{ height: 16, width: 60, borderRadius: 4, background: C.slate200 }} />
+              <div className="shimmer bg-slate-200 dark:bg-slate-700" style={{ height: 12, width: `${w * 0.5}%`, borderRadius: 4 }} />
+              <div className="shimmer bg-slate-200 dark:bg-slate-700" style={{ height: 16, width: 60, borderRadius: 4 }} />
             </div>
           ))}
         </div>
@@ -344,9 +342,10 @@ function LabSnapshotPanel({
               tip={`${e.label}: ${e.value} ${e.unit}. Normal range: ${e.normalRange ?? "not established"}. Source: ${e.source}.`}
             >
               <div
+                className="border-b border-slate-100 dark:border-slate-700"
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "8px 4px", borderBottom: `1px solid ${C.slate100}`,
+                  padding: "8px 4px",
                   cursor: "help",
                 }}
               >
@@ -396,13 +395,11 @@ function AIAnalysisBadge({
       <span
         role="status"
         aria-label={`AI analysis ran ${relativeTime}`}
+        className="text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800 bg-gradient-to-br from-sky-50 to-emerald-50 dark:from-sky-950 dark:to-emerald-950"
         style={{
           display: "inline-flex", alignItems: "center", gap: 6,
           padding: "4px 12px", borderRadius: 999,
           fontSize: 11, fontWeight: 700,
-          background: "linear-gradient(135deg, #e0f2fe, #ecfdf5)",
-          color: "#0284c7",
-          border: "1px solid #bae6fd",
           cursor: "help",
           flexShrink: 0,
         }}
@@ -712,10 +709,8 @@ export function OverviewTab({
 
       {/* AI Analysis Summary */}
       {aiAnalysis && aiAnalysis.totalDx > 0 && (
-        <div className="animate-fade-in" style={{
-          background: "linear-gradient(135deg, #EFF6FF, #F0FDF4)",
+        <div className="animate-fade-in bg-gradient-to-br from-blue-50 to-green-50 dark:from-slate-900 dark:to-slate-900 border border-teal-100 dark:border-teal-800" style={{
           borderRadius: 10,
-          border: `1px solid ${C.blue100}`,
           padding: "16px 20px",
           marginBottom: 16,
         }}>
@@ -738,9 +733,8 @@ export function OverviewTab({
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
             {/* Total AI Diagnoses */}
-            <div style={{
-              background: "hsl(var(--card))", borderRadius: 8, padding: "12px 16px",
-              border: `1px solid ${C.slate200}`,
+            <div className="bg-card border border-slate-200 dark:border-slate-700" style={{
+              borderRadius: 8, padding: "12px 16px",
             }}>
               <div className="text-muted-foreground" style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
                 AI-Extracted Diagnoses
@@ -754,14 +748,13 @@ export function OverviewTab({
             </div>
 
             {/* New codes not in billing */}
-            <div style={{
-              background: "hsl(var(--card))", borderRadius: 8, padding: "12px 16px",
-              border: `1px solid ${aiAnalysis.aiOnlyCount > 0 ? C.emerald100 : C.slate200}`,
+            <div className={`bg-card border ${aiAnalysis.aiOnlyCount > 0 ? "border-emerald-100 dark:border-emerald-800" : "border-slate-200 dark:border-slate-700"}`} style={{
+              borderRadius: 8, padding: "12px 16px",
             }}>
               <div className="text-muted-foreground" style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
                 New Codes (Not in Billing)
               </div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: aiAnalysis.aiOnlyCount > 0 ? C.emerald600 : C.slate400, fontFamily: "monospace" }}>
+              <div className={`font-mono ${aiAnalysis.aiOnlyCount > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500 dark:text-slate-400"}`} style={{ fontSize: 22, fontWeight: 800 }}>
                 {aiAnalysis.aiOnlyCount}
               </div>
               <div className="text-muted-foreground" style={{ fontSize: 11, marginTop: 2 }}>
@@ -770,9 +763,8 @@ export function OverviewTab({
             </div>
 
             {/* Code source breakdown */}
-            <div style={{
-              background: "hsl(var(--card))", borderRadius: 8, padding: "12px 16px",
-              border: `1px solid ${C.slate200}`,
+            <div className="bg-card border border-slate-200 dark:border-slate-700" style={{
+              borderRadius: 8, padding: "12px 16px",
             }}>
               <div className="text-muted-foreground" style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
                 Data Sources
@@ -886,7 +878,8 @@ export function OverviewTab({
                   height="24"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke={C.slate400}
+                  stroke="currentColor"
+                  className="text-slate-500 dark:text-slate-400"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -953,20 +946,13 @@ export function OverviewTab({
                     return (
                     <div
                       key={p.icd10_code || p.diagnosis_code || p.title || i}
+                      className={`border-b border-slate-100 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 ${i % 2 === 1 ? "bg-slate-100/60 dark:bg-slate-800/60" : ""}`}
                       style={{
                         display: "grid",
                         gridTemplateColumns: "1fr 140px 120px",
                         padding: "10px 20px",
-                        borderBottom: `1px solid ${C.slate100}`,
-                        background: i % 2 === 1 ? C.slate100 + "60" : "transparent",
                         transition: "background 0.15s",
                       }}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.background = C.slate100)
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.background = i % 2 === 1 ? C.slate100 + "60" : "transparent")
-                      }
                     >
                       <span
                         className="text-sm font-medium text-foreground"
@@ -1047,19 +1033,13 @@ export function OverviewTab({
                     <div
                       key={enc.encounter_id}
                       data-testid={`encounter-row-${enc.encounter_id}`}
+                      className="border-t border-slate-100 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
                       style={{
                         padding: "12px 20px",
-                        borderTop: `1px solid ${C.slate100}`,
                         transition: "background 0.1s",
                         cursor: "pointer",
                       }}
                       onClick={() => setActiveTab("encounters")}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.background = C.slate100)
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.background = "transparent")
-                      }
                     >
                       {/* Row header */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -1103,12 +1083,11 @@ export function OverviewTab({
                       {/* SOAP note preview \u2014 first 200 chars */}
                       {soapPreview && (
                         <div
-                          className="text-xs text-muted-foreground"
+                          className="text-xs text-muted-foreground bg-slate-100 dark:bg-slate-800 border-l-[3px] border-teal-700/25 dark:border-teal-400/25"
                           style={{
                             marginTop: 6, padding: "6px 10px", borderRadius: 6,
-                            background: C.slate100, fontFamily: "monospace",
+                            fontFamily: "monospace",
                             lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word",
-                            borderLeft: `3px solid ${C.blue600}40`,
                           }}
                           aria-label="SOAP note preview"
                         >
@@ -1134,7 +1113,8 @@ export function OverviewTab({
                 height="18"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke={C.amber600}
+                stroke="currentColor"
+                className="text-amber-600 dark:text-amber-400"
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -1179,11 +1159,11 @@ export function OverviewTab({
                     >
                     <div
                       data-testid={`recapture-gap-row-${gapCode}`}
+                      className="border-t border-slate-100 dark:border-slate-700"
                       style={{
                         display: "flex",
                         alignItems: "center",
                         padding: "12px 20px",
-                        borderTop: `1px solid ${C.slate100}`,
                         borderLeft: `3px solid ${C.amber500}`,
                       }}
                     >

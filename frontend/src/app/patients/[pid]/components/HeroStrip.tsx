@@ -80,10 +80,10 @@ function RafScoreBadge({
           gap: 2, padding: compact ? "6px 14px" : "10px 20px",
         }}
       >
-        <span style={{ fontSize: compact ? 24 : 32, fontWeight: 800, color: C.slate300, fontFamily: "monospace", lineHeight: 1 }}>
+        <span className="text-slate-300 dark:text-slate-600" style={{ fontSize: compact ? 24 : 32, fontWeight: 800, fontFamily: "monospace", lineHeight: 1 }}>
           —
         </span>
-        <span style={{ fontSize: 10, fontWeight: 600, color: C.slate400, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+        <span className="text-slate-500 dark:text-slate-400" style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
           RAF Score
         </span>
       </div>
@@ -92,7 +92,7 @@ function RafScoreBadge({
 
   const color = rafScoreColor(rafScore);
   const riskLabel = rafScore >= 3.0 ? "High Risk" : rafScore >= 1.5 ? "Moderate Risk" : "Low Risk";
-  const riskBg = rafScore >= 3.0 ? C.red100 : rafScore >= 1.5 ? C.amber100 : C.emerald100;
+  const riskBgClass = rafScore >= 3.0 ? "bg-red-100 dark:bg-red-900" : rafScore >= 1.5 ? "bg-amber-100 dark:bg-amber-900" : "bg-emerald-100 dark:bg-emerald-900";
 
   return (
     <WithTooltip tip="CMS-HCC risk adjustment factor for the current measurement year. Scores above 1.0 indicate above-average predicted cost vs. the Medicare baseline. Higher scores reflect greater medical complexity.">
@@ -118,17 +118,18 @@ function RafScoreBadge({
           {Number(rafScore).toFixed(3)}
         </span>
         <span
+          className={riskBgClass}
           style={{
             display: "inline-flex", alignItems: "center",
             padding: "2px 8px", borderRadius: 999,
             fontSize: 10, fontWeight: 700,
-            color, background: riskBg,
+            color,
             textTransform: "uppercase", letterSpacing: "0.04em",
           }}
         >
           {riskLabel}
         </span>
-        <span style={{ fontSize: 10, fontWeight: 500, color: C.slate400 }}>
+        <span className="text-slate-500 dark:text-slate-400" style={{ fontSize: 10, fontWeight: 500 }}>
           RAF Score
         </span>
       </div>
@@ -177,10 +178,11 @@ function MiniStatCard({
       <div style={{ display: "flex", alignItems: "center", gap: 5, color: borderColor }}>
         {icon}
         <span
+          className={count == null ? "text-slate-300 dark:text-slate-600" : ""}
           style={{
             fontSize: 20,
             fontWeight: 800,
-            color: count == null ? C.slate300 : borderColor,
+            color: count == null ? undefined : borderColor,
             fontFamily: "monospace",
             lineHeight: 1,
             letterSpacing: "-0.02em",
@@ -189,7 +191,7 @@ function MiniStatCard({
           {displayVal}
         </span>
       </div>
-      <span style={{ fontSize: 10, fontWeight: 600, color: C.slate500, lineHeight: 1.3, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+      <span className="text-slate-500 dark:text-slate-400" style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.3, textTransform: "uppercase", letterSpacing: "0.04em" }}>
         {label}
       </span>
     </div>
@@ -566,11 +568,10 @@ export function HeroStrip({
                 <WithTooltip tip="CMS-HCC V28 model output for current measurement year. This risk score drives Medicare Advantage premium payments — higher scores reflect greater predicted medical complexity.">
                   <span
                     data-testid="raf-score-pill"
+                    className="text-teal-700 dark:text-teal-400 bg-blue-100 dark:bg-blue-900"
                     style={{
                       fontWeight: 700,
                       fontSize: 12,
-                      color: C.blue600,
-                      background: "#dbeafe",
                       padding: "2px 8px",
                       borderRadius: 999,
                       whiteSpace: "nowrap",
@@ -614,7 +615,7 @@ export function HeroStrip({
               {/* Back button */}
               <Link
                 href="/patients"
-                className="hover-lift"
+                className="hover-lift hover:bg-slate-100 dark:hover:bg-slate-800"
                 aria-label="Back to patient list"
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
@@ -622,8 +623,6 @@ export function HeroStrip({
                   border: "1px solid", textDecoration: "none",
                   flexShrink: 0, transition: "background 0.15s, transform 0.2s",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = C.slate100)}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                   stroke="currentColor" strokeWidth="2"
@@ -663,8 +662,9 @@ export function HeroStrip({
                         ? "Privacy mode ON — name + MRN masked. Ctrl/Cmd+Shift+P"
                         : "Privacy mode OFF — Toggle with Ctrl/Cmd+Shift+P"
                     }
+                    className="border border-slate-200 dark:border-slate-700"
                     style={{
-                      background: "transparent", border: `1px solid ${C.slate200}`,
+                      background: "transparent",
                       borderRadius: 6, cursor: "pointer", width: 24, height: 24,
                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                       flexShrink: 0,
@@ -680,13 +680,13 @@ export function HeroStrip({
                   style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3, fontSize: 12, flexWrap: "wrap" }}
                 >
                   {age !== null && <span style={{ fontWeight: 500 }}>{age} yrs</span>}
-                  {age !== null && sex && <span style={{ color: C.slate300 }}>·</span>}
+                  {age !== null && sex && <span className="text-slate-300 dark:text-slate-600">·</span>}
                   {sex && <span style={{ fontWeight: 500 }}>{sex.charAt(0).toUpperCase() + sex.slice(1)}</span>}
-                  {(age !== null || sex) && dob && <span style={{ color: C.slate300 }}>·</span>}
+                  {(age !== null || sex) && dob && <span className="text-slate-300 dark:text-slate-600">·</span>}
                   {dob && <span>DOB {formatDate(dob)}</span>}
                   {insurancePlan && (
                     <>
-                      <span style={{ color: C.slate300 }}>·</span>
+                      <span className="text-slate-300 dark:text-slate-600">·</span>
                       <span
                         className="bg-muted text-muted-foreground"
                         style={{ padding: "0px 5px", borderRadius: 4, fontSize: 10, fontWeight: 600 }}
@@ -700,7 +700,7 @@ export function HeroStrip({
                 {/* MRN + provider — second sub-line */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2, flexWrap: "wrap" }}>
                   {mrn && (
-                    <span style={{ fontSize: 11, fontFamily: "monospace", color: C.slate400 }}>
+                    <span className="text-slate-500 dark:text-slate-400" style={{ fontSize: 11, fontFamily: "monospace" }}>
                       MRN: {displayMrn}
                     </span>
                   )}
@@ -722,7 +722,8 @@ export function HeroStrip({
                 ============================================================ */}
             <div
               aria-hidden="true"
-              style={{ width: 1, alignSelf: "stretch", background: C.slate200, margin: "8px 14px", flexShrink: 0 }}
+              className="bg-slate-200 dark:bg-slate-700"
+              style={{ width: 1, alignSelf: "stretch", margin: "8px 14px", flexShrink: 0 }}
             />
 
             {/* ============================================================
@@ -737,7 +738,8 @@ export function HeroStrip({
                 ============================================================ */}
             <div
               aria-hidden="true"
-              style={{ width: 1, alignSelf: "stretch", background: C.slate200, margin: "8px 14px", flexShrink: 0 }}
+              className="bg-slate-200 dark:bg-slate-700"
+              style={{ width: 1, alignSelf: "stretch", margin: "8px 14px", flexShrink: 0 }}
             />
 
             {/* ============================================================
@@ -784,7 +786,8 @@ export function HeroStrip({
                 ============================================================ */}
             <div
               aria-hidden="true"
-              style={{ width: 1, alignSelf: "stretch", background: C.slate200, margin: "8px 14px", flexShrink: 0 }}
+              className="bg-slate-200 dark:bg-slate-700"
+              style={{ width: 1, alignSelf: "stretch", margin: "8px 14px", flexShrink: 0 }}
             />
 
             {/* ============================================================
@@ -820,6 +823,7 @@ function MoreMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
+        className="text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -827,11 +831,9 @@ function MoreMenu({
           padding: compact ? "7px 10px" : "9px 12px",
           borderRadius: 10,
           background: "transparent",
-          border: `1px solid ${C.slate200}`,
           fontSize: 12,
           fontWeight: 600,
           cursor: "pointer",
-          color: C.slate600,
           transition: "background 0.15s",
           minHeight: compact ? 36 : 40,
           whiteSpace: "nowrap",
