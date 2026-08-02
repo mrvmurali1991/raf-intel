@@ -94,6 +94,7 @@ function GoalProgressBar({ pct, pace }: { pct: number; pace: number }) {
         aria-valuenow={pct}
         aria-valuemin={0}
         aria-valuemax={100}
+        aria-label={`Goal progress: ${pct}%`}
       />
     </div>
   );
@@ -152,7 +153,12 @@ function GoalCard({ goal }: { goal: RafGoal }) {
   const StatusIcon = isComplete || color === "teal" ? CheckCircle : AlertTriangle;
 
   return (
-    <div className="bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm hover:shadow-md transition-shadow">
+    <div
+      tabIndex={0}
+      role="article"
+      aria-label={`${METRIC_LABELS[goal.metric]} goal for ${goal.period}: ${goal.percent_complete}% complete, ${statusLabel}`}
+      className="bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm hover:shadow-md transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+    >
       {/* Header row: metric name + period badge */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">

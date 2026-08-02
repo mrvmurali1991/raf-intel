@@ -289,7 +289,16 @@ function SortTh({
   return (
     <th
       onClick={() => onSort(field)}
-      className={`px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap cursor-pointer select-none transition-colors hover:text-foreground ${active ? "bg-primary/8 text-primary" : ""}`}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSort(field);
+        }
+      }}
+      tabIndex={0}
+      role="columnheader"
+      aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+      className={`px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap cursor-pointer select-none transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${active ? "bg-primary/8 text-primary" : ""}`}
     >
       <div className="flex items-center gap-1.5">
         {label}
@@ -439,6 +448,7 @@ export default function ProvidersPage() {
             <button
               onClick={() => setShowFeatureSettings(true)}
               title="Page features (add/hide sections)"
+              aria-label="Page features (add/hide sections)"
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card text-muted-foreground text-[13px] font-medium hover:bg-muted/60 transition-colors min-h-[44px] sm:min-h-0"
             >
               <Settings size={15} aria-hidden />

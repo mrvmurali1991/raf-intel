@@ -66,14 +66,18 @@ def cc6_1_logical_access_controls(tenant_id: str = "*") -> dict[str, Any]:
 def cc6_7_data_transmission_encryption() -> dict[str, Any]:
     """CC6.7 — Transmission encryption — point-in-time TLS/HSTS attestation."""
     import os
+    from app.config import settings
+
     return {
         "control": "CC6.7",
         "description": "TLS / HSTS / certificate management",
         "as_of": datetime.utcnow().isoformat(),
         "tls_minimum": os.getenv("TLS_MIN_VERSION", "1.2"),
-        "hsts_max_age_days": 730,
+        "tls_enabled": settings.db_ssl_enabled,
+        "tls_status": "enforced" if settings.db_ssl_enabled else "disabled (internal network)",
+        "hsts_max_age_days": int(os.getenv("HSTS_MAX_AGE_DAYS", "730")),
         "hsts_include_subdomains": True,
-        "cert_provider": "AWS Certificate Manager",
+        "cert_provider": os.getenv("CERT_PROVIDER", "AWS Certificate Manager"),
     }
 
 
@@ -145,16 +149,20 @@ def cc8_1_change_management() -> dict[str, Any]:
 
 def a1_2_availability_backup() -> dict[str, Any]:
     """A1.2 — System availability and backup attestation."""
+    import os
+
     return {
         "control": "A1.2",
         "description": "Backup + DR posture",
         "as_of": datetime.utcnow().isoformat(),
-        "backup_cadence": "nightly full + 15m binlog",
-        "backup_retention_days": 30,
-        "rto_hours": 2,
-        "rpo_minutes": 15,
-        "dr_drill_cadence": "quarterly",
-        "audit_log_worm_retention_years": 7,
+        "backup_cadence": os.getenv("BACKUP_CADENCE", "nightly full + 15m binlog"),
+        "backup_retention_days": int(os.getenv("BACKUP_RETENTION_DAYS", "30")),
+        "rto_hours": int(os.getenv("DR_RTO_HOURS", "4")),
+        "rpo_hours": int(os.getenv("DR_RPO_HOURS", "1")),
+        "health_check_url": "/health/ready",
+        "last_health_check": "live -- query /health/ready for current status",
+        "dr_drill_cadence": os.getenv("DR_DRILL_CADENCE", "quarterly"),
+        "audit_log_worm_retention_years": int(os.getenv("AUDIT_LOG_RETENTION_YEARS", "7")),
     }
 
 

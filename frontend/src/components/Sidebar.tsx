@@ -330,6 +330,7 @@ function SidebarItem({ item, collapsed, isActive, showShortcutHints, userRole }:
       className={[
         "group flex items-center h-9 text-sm no-underline",
         "transition-all duration-150 ease-out relative",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
         // Collapsed: centered icon pill
         collapsed
           ? "justify-center mx-2 rounded-lg"
@@ -442,7 +443,7 @@ function SidebarCluster({
             onClick={onToggle}
             aria-expanded={!clusterCollapsed}
             aria-controls={`nav-cluster-${cluster.label}`}
-            className="flex items-center justify-between w-full bg-transparent border-none cursor-pointer p-0"
+            className="flex items-center justify-between w-full bg-transparent border-none cursor-pointer p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
           >
             <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               {cluster.label}
@@ -506,7 +507,7 @@ function SidebarSection({
           aria-expanded={!sectionCollapsed}
           aria-controls={`nav-section-${group.title}`}
           className={[
-            "flex items-center justify-between w-full bg-transparent border-none cursor-pointer",
+            "flex items-center justify-between w-full bg-transparent border-none cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:rounded-md",
             "px-4 pt-5 pb-1",
             groupIndex === 0 ? "pt-2" : "",
           ].join(" ")}

@@ -1209,6 +1209,11 @@ class OpenEMRFhirAdapter:
         return s
 
     def _normalize_condition(self, resource: dict) -> dict:
+        # TODO(fhir-conformance): Add US Core StructureDefinition validation
+        # on ingest. Currently we parse FHIR resources pragmatically without
+        # asserting US Core profile compliance. Consider adding fhir.resources
+        # or a validator step for Patient/Condition/Observation.
+
         # Extract ICD-10 code from coding
         icd_code = ""
         description = ""

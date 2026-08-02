@@ -808,7 +808,7 @@ export default function LoginPage() {
       )}
 
       {/* Right panel — aurora background */}
-      <div className="flex flex-1 flex-col items-center justify-center p-4 sm:p-8 aurora-bg relative overflow-hidden">
+      <main className="flex flex-1 flex-col items-center justify-center p-4 sm:p-8 aurora-bg relative overflow-hidden">
         {/* Animated floating gradient orbs */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <div className="login-orb login-orb-1 absolute w-[480px] h-[480px] rounded-full opacity-25 dark:opacity-[0.12] blur-[100px]"
@@ -875,12 +875,14 @@ export default function LoginPage() {
 
               {/* Form */}
               <form onSubmit={handleSubmit} className="space-y-6" noValidate>
-                {error && (
-                  <div role="alert" className="flex items-center gap-2.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 p-3.5 text-sm text-red-700 dark:text-red-300">
-                    <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-                    <span>{error}</span>
-                  </div>
-                )}
+                <div aria-live="polite" aria-atomic="true">
+                  {error && (
+                    <div role="alert" className="flex items-center gap-2.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 p-3.5 text-sm text-red-700 dark:text-red-300">
+                      <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+                </div>
 
                 <div className="space-y-2">
                   <label htmlFor="email" className="text-sm font-semibold text-slate-700 dark:text-slate-300">
@@ -997,7 +999,7 @@ export default function LoginPage() {
                   <div className="w-full border-t border-slate-200 dark:border-slate-700" />
                 </div>
                 <div className="relative flex justify-center text-xs">
-                  <span className="bg-white dark:bg-slate-900 px-3 text-slate-600 dark:text-slate-400">or</span>
+                  <span className="bg-card px-3 text-muted-foreground">or</span>
                 </div>
               </div>
               <button
@@ -1021,7 +1023,7 @@ export default function LoginPage() {
           )}
           </div>
         </div>
-      </div>
+      </main>
     </div>
     </TooltipProvider>
   );

@@ -419,7 +419,7 @@ export default function RecapturePage() {
       </div>
 
       {/* Main gap table */}
-      <div className="premium-card animate-slide-up stagger-2 p-6 mb-6">
+      <div className="premium-card animate-slide-up stagger-2 p-6 mb-6 bg-card">
         {/* Table toolbar */}
         <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
           <StatusTabs
@@ -608,7 +608,7 @@ export default function RecapturePage() {
                 >
                   <ChevronLeft size={14} />
                 </button>
-                <span className="tabular-nums px-2 font-semibold text-foreground">
+                <span className="tabular-nums px-2 font-semibold text-foreground" aria-label={`Page ${page} of ${totalPages}`} aria-current="page">
                   {page} / {totalPages}
                 </span>
                 <button
@@ -629,7 +629,7 @@ export default function RecapturePage() {
       <RecaptureFeatureSections year={year} />
 
       {/* Action Panel */}
-      <div className="premium-card animate-slide-up stagger-6 bg-gradient-to-br from-muted to-card p-6 flex items-center justify-between flex-wrap gap-4">
+      <section aria-label="Bulk actions" className="premium-card animate-slide-up stagger-6 bg-gradient-to-br from-muted to-card p-6 flex items-center justify-between flex-wrap gap-4">
         <div>
           <p className="m-0 text-sm font-semibold text-foreground">
             Schedule Wellness Visits
@@ -650,7 +650,7 @@ export default function RecapturePage() {
           <Download size={14} />
           Export to CSV
         </button>
-      </div>
+      </section>
     </div>
   );
 }

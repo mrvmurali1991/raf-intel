@@ -314,7 +314,10 @@ class Settings:
 
     # Auto-sync polling loop — runs every 30 s and syncs new OpenEMR patients
     # into raf_intelligence, then scores and analyzes them automatically.
-    # Default: enabled in development/demo, disabled in production.
+    # Auto-sync is disabled in production by default. Enable per-deployment
+    # via AUTO_SYNC_ENABLED=true. In multi-tenant setups, consider enabling
+    # at the tenant level via the emr_connections.auto_sync_enabled column
+    # rather than this global flag.
     auto_sync_enabled: bool = os.getenv(
         "AUTO_SYNC_ENABLED",
         "true" if _APP_ENV in ("development", "demo") else "false",

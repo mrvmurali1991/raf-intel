@@ -2622,6 +2622,11 @@ def get_referrals(pid: int) -> list[dict[str, Any]]:
 
 # ---------------------------------------------------------------------------
 # Write: prescriptions ("Start Treatment" RAF Central action)
+#
+# IMPORTANT: push_medical_problem, push_prescription, and push_procedure_order
+# write directly to OpenEMR's MySQL tables, bypassing OpenEMR's own audit trail
+# and validation hooks. For RADV-defensible write-back, consider migrating these
+# to OpenEMR's FHIR write API (Condition.write / MedicationRequest.write scopes).
 # ---------------------------------------------------------------------------
 
 
@@ -2780,6 +2785,8 @@ def push_procedure_order(
 
 import os as _os_doc  # avoid shadowing in this large module
 
+_OPENEMR_DOC_ROOT = _os_doc.getenv("OPENEMR_DOCUMENT_ROOT", "/var/www/localhost/htdocs/openemr")
+
 
 def read_document_bytes(url: str) -> bytes:
     """Resolve an OpenEMR `documents.url` to raw bytes.
@@ -2789,6 +2796,9 @@ def read_document_bytes(url: str) -> bytes:
       sites/default/documents/13/foo.pdf
       /var/www/openemr/sites/default/documents/13/foo.pdf
 
+    The document root is configurable via the OPENEMR_DOCUMENT_ROOT env var
+    (default: /var/www/localhost/htdocs/openemr).
+
     Returns b'' when the file cannot be read so callers can degrade
     gracefully (the vision extractor logs + skips).
     """
@@ -2797,11 +2807,11 @@ def read_document_bytes(url: str) -> bytes:
     path = url
     if path.startswith("file://"):
         path = path[len("file://"):]
-    # OpenEMR sites root — default deploy mounts /var/www/openemr in container
+    # OpenEMR sites root — configurable via OPENEMR_DOCUMENT_ROOT
     candidates = [
         path,
+        f"{_OPENEMR_DOC_ROOT}/{path}" if not path.startswith("/") else path,
         f"/var/www/openemr/{path}" if not path.startswith("/") else path,
-        f"/var/www/localhost/htdocs/openemr/{path}" if not path.startswith("/") else path,
     ]
     for p in candidates:
         try:
@@ -2811,4 +2821,8 @@ def read_document_bytes(url: str) -> bytes:
         except Exception:
             logger.debug("swallowed exception", exc_info=True)
             continue
+    logger.warning(
+        "read_document_bytes: no candidate path resolved for doc url=%s -- check OPENEMR_DOCUMENT_ROOT",
+        url,
+    )
     return b""
