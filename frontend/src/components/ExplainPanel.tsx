@@ -810,10 +810,10 @@ function RichEvidenceDetail({ evidenceRaw, evidenceType }: {
     if (Array.isArray(evidenceRaw)) {
       const first = evidenceRaw[0];
       return first && typeof first === "object" && !Array.isArray(first)
-        ? (first as Record<string, unknown>)
+        ? (first as unknown as Record<string, unknown>)
         : null;
     }
-    if (typeof evidenceRaw === "object") return evidenceRaw as Record<string, unknown>;
+    if (typeof evidenceRaw === "object") return evidenceRaw as unknown as Record<string, unknown>;
     return null;
   })();
 
