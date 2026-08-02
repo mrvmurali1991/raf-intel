@@ -1,0 +1,593 @@
+{
+  "benchmark": "RAF Intelligence Accuracy Benchmark",
+  "engine": "hccinfhir CMS-HCC Model V28",
+  "timestamp": "2026-08-02T13:43:14.612542",
+  "metrics": {
+    "hcc_detection": {
+      "true_positives": 26,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "true_negatives": 1144,
+      "sensitivity_recall": 1.0,
+      "precision_ppv": 1.0,
+      "specificity": 1.0,
+      "f1_score": 1.0,
+      "npv": 1.0
+    },
+    "raf_scoring": {
+      "cases_in_range": 10,
+      "total_cases": 10,
+      "raf_accuracy": 1.0
+    },
+    "overall": {
+      "cases_passed": 10,
+      "total_cases": 10,
+      "pass_rate": 1.0
+    }
+  },
+  "cases": [
+    {
+      "id": "GS-001",
+      "description": "75-year-old female, Type 2 DM with CKD Stage 3",
+      "status": "PASS",
+      "expected_hccs": [
+        "38"
+      ],
+      "actual_hccs": [
+        "38"
+      ],
+      "true_positives": [
+        "38"
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "expected_raf_range": [
+        0.5,
+        0.8
+      ],
+      "actual_raf": 0.631,
+      "raf_in_range": true,
+      "hcc_match": true,
+      "icd_codes": [
+        "E119",
+        "N183",
+        "I10",
+        "E785"
+      ],
+      "hcc_details": [
+        {
+          "hcc": "38",
+          "coefficient": 0.166,
+          "label": "Diabetes with Glycemic, Unspecified, or No Complications"
+        }
+      ],
+      "coefficients": {
+        "F75_79": 0.465,
+        "38": 0.166,
+        "D1": 0.0
+      }
+    },
+    {
+      "id": "GS-002",
+      "description": "68-year-old male, CHF with AFib",
+      "status": "PASS",
+      "expected_hccs": [
+        "226",
+        "238",
+        "38"
+      ],
+      "actual_hccs": [
+        "226",
+        "238",
+        "38"
+      ],
+      "true_positives": [
+        "226",
+        "238",
+        "38"
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "expected_raf_range": [
+        1.1,
+        1.6
+      ],
+      "actual_raf": 1.346,
+      "raf_in_range": true,
+      "hcc_match": true,
+      "icd_codes": [
+        "I509",
+        "I4891",
+        "I10",
+        "E119"
+      ],
+      "hcc_details": [
+        {
+          "hcc": "38",
+          "coefficient": 0.166,
+          "label": "Diabetes with Glycemic, Unspecified, or No Complications"
+        },
+        {
+          "hcc": "226",
+          "coefficient": 0.36,
+          "label": "Heart Failure, Except End-Stage and Acute"
+        },
+        {
+          "hcc": "238",
+          "coefficient": 0.299,
+          "label": "Specified Heart Arrhythmias"
+        }
+      ],
+      "coefficients": {
+        "M65_69": 0.332,
+        "38": 0.166,
+        "226": 0.36,
+        "238": 0.299,
+        "DIABETES_HF_V28": 0.112,
+        "HF_HCC238_V28": 0.077,
+        "D3": 0.0
+      }
+    },
+    {
+      "id": "GS-003",
+      "description": "82-year-old female, COPD with respiratory failure",
+      "status": "PASS",
+      "expected_hccs": [
+        "213",
+        "280",
+        "38"
+      ],
+      "actual_hccs": [
+        "213",
+        "280",
+        "38"
+      ],
+      "true_positives": [
+        "213",
+        "280",
+        "38"
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "expected_raf_range": [
+        1.3,
+        1.9
+      ],
+      "actual_raf": 1.633,
+      "raf_in_range": true,
+      "hcc_match": true,
+      "icd_codes": [
+        "J441",
+        "J9611",
+        "I10",
+        "E119",
+        "N183"
+      ],
+      "hcc_details": [
+        {
+          "hcc": "213",
+          "coefficient": 0.37,
+          "label": "Cardio-Respiratory Failure and Shock"
+        },
+        {
+          "hcc": "38",
+          "coefficient": 0.166,
+          "label": "Diabetes with Glycemic, Unspecified, or No Complications"
+        },
+        {
+          "hcc": "280",
+          "coefficient": 0.319,
+          "label": "Chronic Obstructive Pulmonary Disease, Interstitial Lung Disorders, and Other Chronic Lung Disorders"
+        }
+      ],
+      "coefficients": {
+        "F80_84": 0.524,
+        "213": 0.37,
+        "38": 0.166,
+        "280": 0.319,
+        "CHR_LUNG_CARD_RESP_FAIL_V28": 0.254,
+        "D3": 0.0
+      }
+    },
+    {
+      "id": "GS-004",
+      "description": "70-year-old male, dual-eligible, depression + vascular disease",
+      "status": "PASS",
+      "expected_hccs": [
+        "38"
+      ],
+      "actual_hccs": [
+        "38"
+      ],
+      "true_positives": [
+        "38"
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "expected_raf_range": [
+        0.6,
+        1.0
+      ],
+      "actual_raf": 0.812,
+      "raf_in_range": true,
+      "hcc_match": true,
+      "icd_codes": [
+        "F330",
+        "I739",
+        "E119",
+        "I10"
+      ],
+      "hcc_details": [
+        {
+          "hcc": "38",
+          "coefficient": 0.186,
+          "label": "Diabetes with Glycemic, Unspecified, or No Complications"
+        }
+      ],
+      "coefficients": {
+        "M70_74": 0.626,
+        "38": 0.186,
+        "D1": 0.0
+      }
+    },
+    {
+      "id": "GS-005",
+      "description": "65-year-old male, HIV with diabetes complications",
+      "status": "PASS",
+      "expected_hccs": [
+        "1",
+        "327",
+        "37"
+      ],
+      "actual_hccs": [
+        "1",
+        "327",
+        "37"
+      ],
+      "true_positives": [
+        "1",
+        "327",
+        "37"
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "expected_raf_range": [
+        1.0,
+        1.6
+      ],
+      "actual_raf": 1.313,
+      "raf_in_range": true,
+      "hcc_match": true,
+      "icd_codes": [
+        "B20",
+        "E1122",
+        "N184",
+        "I10"
+      ],
+      "hcc_details": [
+        {
+          "hcc": "1",
+          "coefficient": 0.301,
+          "label": "HIV/AIDS"
+        },
+        {
+          "hcc": "37",
+          "coefficient": 0.166,
+          "label": "Diabetes with Chronic Complications"
+        },
+        {
+          "hcc": "327",
+          "coefficient": 0.514,
+          "label": "Chronic Kidney Disease, Severe (Stage 4)"
+        }
+      ],
+      "coefficients": {
+        "M65_69": 0.332,
+        "1": 0.301,
+        "37": 0.166,
+        "327": 0.514,
+        "D3": 0.0
+      }
+    },
+    {
+      "id": "GS-006",
+      "description": "78-year-old female, metastatic cancer",
+      "status": "PASS",
+      "expected_hccs": [
+        "17",
+        "38"
+      ],
+      "actual_hccs": [
+        "17",
+        "38"
+      ],
+      "true_positives": [
+        "17",
+        "38"
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "expected_raf_range": [
+        4.0,
+        5.5
+      ],
+      "actual_raf": 4.84,
+      "raf_in_range": true,
+      "hcc_match": true,
+      "icd_codes": [
+        "C7931",
+        "C509",
+        "I10",
+        "E119"
+      ],
+      "hcc_details": [
+        {
+          "hcc": "17",
+          "coefficient": 4.209,
+          "label": "Cancer Metastatic to Lung, Liver, Brain, and Other Organs; Acute Myeloid Leukemia Except Promyelocytic"
+        },
+        {
+          "hcc": "38",
+          "coefficient": 0.166,
+          "label": "Diabetes with Glycemic, Unspecified, or No Complications"
+        }
+      ],
+      "coefficients": {
+        "F75_79": 0.465,
+        "17": 4.209,
+        "38": 0.166,
+        "D2": 0.0
+      }
+    },
+    {
+      "id": "GS-007",
+      "description": "72-year-old male, stroke with hemiplegia",
+      "status": "PASS",
+      "expected_hccs": [
+        "249",
+        "253",
+        "38"
+      ],
+      "actual_hccs": [
+        "249",
+        "253",
+        "38"
+      ],
+      "true_positives": [
+        "249",
+        "253",
+        "38"
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "expected_raf_range": [
+        0.9,
+        1.5
+      ],
+      "actual_raf": 1.188,
+      "raf_in_range": true,
+      "hcc_match": true,
+      "icd_codes": [
+        "I639",
+        "G8190",
+        "I10",
+        "E119",
+        "E785"
+      ],
+      "hcc_details": [
+        {
+          "hcc": "253",
+          "coefficient": 0.387,
+          "label": "Hemiplegia/Hemiparesis"
+        },
+        {
+          "hcc": "38",
+          "coefficient": 0.166,
+          "label": "Diabetes with Glycemic, Unspecified, or No Complications"
+        },
+        {
+          "hcc": "249",
+          "coefficient": 0.239,
+          "label": "Ischemic or Unspecified Stroke"
+        }
+      ],
+      "coefficients": {
+        "M70_74": 0.396,
+        "253": 0.387,
+        "38": 0.166,
+        "249": 0.239,
+        "D3": 0.0
+      }
+    },
+    {
+      "id": "GS-008",
+      "description": "66-year-old female, schizophrenia + morbid obesity",
+      "status": "PASS",
+      "expected_hccs": [
+        "151",
+        "38",
+        "48"
+      ],
+      "actual_hccs": [
+        "151",
+        "38",
+        "48"
+      ],
+      "true_positives": [
+        "151",
+        "38",
+        "48"
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "expected_raf_range": [
+        0.9,
+        1.5
+      ],
+      "actual_raf": 1.193,
+      "raf_in_range": true,
+      "hcc_match": true,
+      "icd_codes": [
+        "F209",
+        "E6601",
+        "E119",
+        "I10"
+      ],
+      "hcc_details": [
+        {
+          "hcc": "151",
+          "coefficient": 0.511,
+          "label": "Schizophrenia"
+        },
+        {
+          "hcc": "48",
+          "coefficient": 0.186,
+          "label": "Morbid Obesity"
+        },
+        {
+          "hcc": "38",
+          "coefficient": 0.166,
+          "label": "Diabetes with Glycemic, Unspecified, or No Complications"
+        }
+      ],
+      "coefficients": {
+        "F65_69": 0.33,
+        "151": 0.511,
+        "48": 0.186,
+        "38": 0.166,
+        "D3": 0.0
+      }
+    },
+    {
+      "id": "GS-009",
+      "description": "90-year-old male, dementia + CHF + CKD Stage 4",
+      "status": "PASS",
+      "expected_hccs": [
+        "127",
+        "226",
+        "327",
+        "38"
+      ],
+      "actual_hccs": [
+        "127",
+        "226",
+        "327",
+        "38"
+      ],
+      "true_positives": [
+        "127",
+        "226",
+        "327",
+        "38"
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "expected_raf_range": [
+        2.0,
+        3.0
+      ],
+      "actual_raf": 2.469,
+      "raf_in_range": true,
+      "hcc_match": true,
+      "icd_codes": [
+        "G309",
+        "I509",
+        "N184",
+        "I10",
+        "E119"
+      ],
+      "hcc_details": [
+        {
+          "hcc": "226",
+          "coefficient": 0.36,
+          "label": "Heart Failure, Except End-Stage and Acute"
+        },
+        {
+          "hcc": "38",
+          "coefficient": 0.166,
+          "label": "Diabetes with Glycemic, Unspecified, or No Complications"
+        },
+        {
+          "hcc": "327",
+          "coefficient": 0.514,
+          "label": "Chronic Kidney Disease, Severe (Stage 4)"
+        },
+        {
+          "hcc": "127",
+          "coefficient": 0.341,
+          "label": "Dementia, Mild or Unspecified"
+        }
+      ],
+      "coefficients": {
+        "M90_94": 0.8,
+        "226": 0.36,
+        "38": 0.166,
+        "327": 0.514,
+        "127": 0.341,
+        "DIABETES_HF_V28": 0.112,
+        "HF_KIDNEY_V28": 0.176,
+        "D4": 0.0
+      }
+    },
+    {
+      "id": "GS-010",
+      "description": "67-year-old female, rheumatoid arthritis + hepatitis C",
+      "status": "PASS",
+      "expected_hccs": [
+        "38",
+        "65",
+        "93"
+      ],
+      "actual_hccs": [
+        "38",
+        "65",
+        "93"
+      ],
+      "true_positives": [
+        "38",
+        "65",
+        "93"
+      ],
+      "false_positives": [],
+      "false_negatives": [],
+      "expected_raf_range": [
+        1.0,
+        1.6
+      ],
+      "actual_raf": 1.298,
+      "raf_in_range": true,
+      "hcc_match": true,
+      "icd_codes": [
+        "M059",
+        "B182",
+        "E119",
+        "I10"
+      ],
+      "hcc_details": [
+        {
+          "hcc": "93",
+          "coefficient": 0.617,
+          "label": "Rheumatoid Arthritis and Other Specified Inflammatory Rheumatic Disorders"
+        },
+        {
+          "hcc": "38",
+          "coefficient": 0.166,
+          "label": "Diabetes with Glycemic, Unspecified, or No Complications"
+        },
+        {
+          "hcc": "65",
+          "coefficient": 0.185,
+          "label": "Chronic Hepatitis"
+        }
+      ],
+      "coefficients": {
+        "F65_69": 0.33,
+        "93": 0.617,
+        "38": 0.166,
+        "65": 0.185,
+        "D3": 0.0
+      }
+    }
+  ],
+  "elapsed_seconds": 0.026
+}
