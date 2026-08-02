@@ -38,6 +38,7 @@ export function SuspectsTab({
   // reason. This mirrors the RAFCentral SuspectCardView guards.
   const [confirmAccept, setConfirmAccept] = useState<SuspectItem | null>(null);
   const [confirmDismiss, setConfirmDismiss] = useState<SuspectItem | null>(null);
+  const [expandedWhyIds, setExpandedWhyIds] = useState<Set<number>>(new Set());
 
   if (suspectsLoading) {
     return <SectionLoader label="Loading suspect conditions..." />;
@@ -125,7 +126,55 @@ export function SuspectsTab({
                   <span className="text-xs text-muted-foreground">
                     Confidence: {Math.round(confidence * 100)}%
                   </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedWhyIds(prev => {
+                        const next = new Set(prev);
+                        if (next.has(s.id)) next.delete(s.id);
+                        else next.add(s.id);
+                        return next;
+                      });
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950 border border-sky-200 dark:border-sky-800 hover:bg-sky-100 dark:hover:bg-sky-900 transition-colors"
+                    style={{ cursor: "pointer" }}
+                    aria-label="Why was this condition flagged?"
+                    aria-expanded={expandedWhyIds.has(s.id)}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                    Why?
+                  </button>
                 </div>
+                {expandedWhyIds.has(s.id) && (
+                  <div className="mt-2 p-3 rounded-lg bg-sky-50 dark:bg-sky-950 border border-sky-200 dark:border-sky-800" style={{ fontSize: 12, lineHeight: 1.6 }}>
+                    <div className="font-bold text-sky-700 dark:text-sky-300 mb-1" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Why This Condition Was Flagged
+                    </div>
+                    <ul className="m-0 pl-4 text-sky-900 dark:text-sky-200" style={{ listStyleType: "disc" }}>
+                      {s.source && <li>Source: <strong>{s.source}</strong></li>}
+                      {(s.evidence_detail || s.evidence || s.rationale) && (
+                        <li>Evidence: {typeof s.evidence_detail === "string" ? s.evidence_detail : s.evidence || s.rationale || "Clinical data suggests this condition"}</li>
+                      )}
+                      {(s.confidence_score ?? s.confidence ?? 0) > 0 && (
+                        <li>AI confidence: <strong>{Math.round((s.confidence_score ?? s.confidence ?? 0) * 100)}%</strong></li>
+                      )}
+                      {s.suspect_hcc != null && (
+                        <li>Maps to HCC {s.suspect_hcc}{s.hcc_coefficient ? ` (RAF +${Number(s.hcc_coefficient).toFixed(3)}, est. ${formatCurrency(Math.round(Number(s.hcc_coefficient) * 10000))}/yr)` : ""}</li>
+                      )}
+                      {s.meat_evidence && (
+                        <li>MEAT status: {
+                          (["monitor", "evaluate", "assess", "treat"] as const).filter(k => {
+                            const ev = s.meat_evidence as Record<string, unknown>;
+                            return ev && (ev[k] || ev[k.charAt(0).toUpperCase()] || ev[k.charAt(0)]);
+                          }).length
+                        }/4 documented</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
                 {(s.evidence_detail || s.evidence || s.rationale) && (
                   <div style={{ marginTop: 8 }}>
                     {/* Render evidence_detail with excerpt key first */}

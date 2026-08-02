@@ -173,6 +173,16 @@ function capacityColor(pct: number): string {
 
 const ELEVATED_ROLES = new Set(["admin", "super_admin", "manager", "supervisor"]);
 
+const CONDITION_FILTERS = [
+  { label: "Diabetes", codes: ["37", "38", "36"] },
+  { label: "CHF", codes: ["224", "225", "226"] },
+  { label: "CKD", codes: ["326", "327", "328", "329"] },
+  { label: "COPD", codes: ["280", "281"] },
+  { label: "Depression", codes: ["155"] },
+  { label: "Obesity", codes: ["48"] },
+  { label: "Vascular", codes: ["107", "108", "109", "110", "111", "112"] },
+] as const;
+
 // ---------------------------------------------------------------------------
 // WT — thin wrapper: TooltipProvider + Tooltip + Trigger + Content
 // ---------------------------------------------------------------------------
@@ -459,6 +469,7 @@ export default function WorklistPage() {
   const [heatmapOpen, setHeatmapOpen] = useState(true);
   const [filterProviderId, setFilterProviderId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
+  const [activeConditionFilters, setActiveConditionFilters] = useState<Set<string>>(new Set());
 
   // Bulk-select state
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -498,7 +509,19 @@ export default function WorklistPage() {
     });
 
   const visibleItems = useMemo(() => {
-    const all = data?.items ?? [];
+    let all = data?.items ?? [];
+    if (activeConditionFilters.size > 0) {
+      const activeCodes = new Set<string>();
+      CONDITION_FILTERS.forEach(f => {
+        if (activeConditionFilters.has(f.label)) {
+          f.codes.forEach(c => activeCodes.add(c));
+        }
+      });
+      all = all.filter((item) =>
+        item.open_recapture_gaps?.some((g) => activeCodes.has(g.hcc_code)) ||
+        item.suspect_conditions?.some((sc) => activeCodes.has(sc.hcc_code))
+      );
+    }
     if (!search.trim()) return all;
     const s = search.toLowerCase();
     return all.filter((item) =>
@@ -511,7 +534,7 @@ export default function WorklistPage() {
         sc.hcc_code.toLowerCase().includes(s)
       )
     );
-  }, [data, search]);
+  }, [data, search, activeConditionFilters]);
 
   // Keyboard shortcuts: Cmd/Ctrl+A selects all visible, Esc clears
   useEffect(() => {
@@ -737,6 +760,51 @@ export default function WorklistPage() {
             aria-label="Search worklist"
             className="w-full max-w-sm px-3 py-2 text-sm border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
+        </div>
+
+        {/* Condition category filter chips */}
+        <div className="flex flex-wrap gap-1.5 mb-4" role="group" aria-label="Filter by condition category">
+          {CONDITION_FILTERS.map((f) => {
+            const isActive = activeConditionFilters.has(f.label);
+            return (
+              <button
+                key={f.label}
+                type="button"
+                onClick={() => setActiveConditionFilters(prev => {
+                  const next = new Set(prev);
+                  if (next.has(f.label)) next.delete(f.label);
+                  else next.add(f.label);
+                  return next;
+                })}
+                aria-pressed={isActive}
+                className={[
+                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold cursor-pointer transition-all border",
+                  isActive
+                    ? "bg-teal-600 text-white border-teal-600 shadow-sm"
+                    : "bg-card border-border text-muted-foreground hover:text-foreground hover:bg-muted",
+                ].join(" ")}
+              >
+                {f.label}
+                <span className={[
+                  "px-1.5 py-px rounded-full text-[10px]",
+                  isActive ? "bg-teal-500 text-white" : "bg-muted text-muted-foreground",
+                ].join(" ")}>
+                  {f.codes.length}
+                </span>
+              </button>
+            );
+          })}
+          {activeConditionFilters.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setActiveConditionFilters(new Set())}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[12px] font-medium cursor-pointer text-muted-foreground hover:text-foreground bg-transparent border-none"
+              aria-label="Clear all condition filters"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              Clear
+            </button>
+          )}
         </div>
 
         {/* Provider Workload Heatmap — elevated roles only */}

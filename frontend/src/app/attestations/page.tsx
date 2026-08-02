@@ -49,6 +49,7 @@ import api from "@/lib/api";
 interface AttestationRow {
   id: number;
   patient_id: number;
+  patient_name?: string;
   hcc_code: string;
   hcc_description: string;
   icd10_code: string;
@@ -259,6 +260,192 @@ function KpiStrip({ stats, loading }: KpiStripProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Review Modal
+// ---------------------------------------------------------------------------
+
+function ReviewModal({
+  row,
+  onClose,
+  onAttest,
+  onReject,
+  onDefer,
+  actionPending,
+}: {
+  row: AttestationRow;
+  onClose: () => void;
+  onAttest: (id: number, justification: string) => void;
+  onReject: (id: number, reason: string) => void;
+  onDefer: (id: number) => void;
+  actionPending: "attesting" | "rejecting" | "deferring" | null;
+}) {
+  const [justification, setJustification] = React.useState("");
+  const [rejectReason, setRejectReason] = React.useState("");
+  const [confirmed, setConfirmed] = React.useState(false);
+
+  React.useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+
+  const badge = STATUS_BADGE[row.status] ?? STATUS_BADGE.pending;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Review attestation"
+      tabIndex={-1}
+      className="fixed inset-0 z-[9990] flex items-center justify-center p-4 bg-black/60"
+      onClick={onClose}
+    >
+      <div
+        className="bg-card rounded-xl shadow-2xl w-full max-w-[560px] max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-border">
+          <div>
+            <h3 className="m-0 text-base font-bold text-foreground">Attestation Review</h3>
+            <p className="m-0 mt-0.5 text-[12px] text-muted-foreground">
+              {row.patient_name || `Patient ${row.patient_id}`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex items-center bg-transparent border-none cursor-pointer text-muted-foreground hover:text-foreground"
+          >
+            <XCircle size={20} />
+          </button>
+        </div>
+
+        {/* Condition details */}
+        <div className="px-6 py-4 space-y-3">
+          <div className="p-3 rounded-lg bg-muted/50 border border-border space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-[13px] font-bold text-foreground">HCC {row.hcc_code}</span>
+              <span className={["inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold", badge.className].join(" ")}>
+                {badge.label}
+              </span>
+            </div>
+            {row.hcc_description && (
+              <div className="text-[13px] text-foreground">{row.hcc_description}</div>
+            )}
+            {row.icd10_code && (
+              <div className="text-[12px] font-mono text-muted-foreground">
+                {row.icd10_code}{row.icd10_description ? ` — ${row.icd10_description}` : ""}
+              </div>
+            )}
+            <div className="text-[11px] text-muted-foreground">
+              Submitted: {new Date(row.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+            </div>
+          </div>
+
+          {/* Legal attestation text */}
+          <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+            <p className="m-0 text-[12px] leading-relaxed text-amber-900 dark:text-amber-200">
+              <strong>Attestation Statement:</strong> I attest that I have reviewed the clinical documentation
+              and confirm this condition is accurately reflected in the patient&apos;s medical record.
+              This attestation is made in accordance with CMS risk adjustment data validation (RADV) standards.
+            </p>
+          </div>
+
+          {/* Confirmation checkbox */}
+          <label className="flex items-start gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={(e) => setConfirmed(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-border accent-emerald-600"
+            />
+            <span className="text-[12px] text-foreground leading-snug">
+              I confirm I have personally reviewed the clinical documentation for this condition.
+            </span>
+          </label>
+
+          {/* Justification (for attest) */}
+          {row.status === "pending" && (
+            <div>
+              <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                Clinical Justification (optional)
+              </label>
+              <textarea
+                rows={2}
+                value={justification}
+                onChange={(e) => setJustification(e.target.value)}
+                placeholder="Add clinical notes supporting this attestation..."
+                className="w-full px-3 py-2 text-[13px] border border-border rounded-lg bg-card text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          )}
+
+          {/* Reject reason (for reject) */}
+          {row.status === "pending" && (
+            <div>
+              <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                Rejection Reason (required for rejection)
+              </label>
+              <textarea
+                rows={2}
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Reason this condition is inaccurate..."
+                className="w-full px-3 py-2 text-[13px] border border-border rounded-lg bg-card text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Action buttons */}
+        {row.status === "pending" && (
+          <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border">
+            <button
+              type="button"
+              onClick={() => onDefer(row.id)}
+              disabled={actionPending !== null}
+              className="px-4 py-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 text-[13px] font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:bg-amber-100 dark:hover:bg-amber-900 transition-colors"
+            >
+              {actionPending === "deferring" ? "Deferring..." : "Defer"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { if (rejectReason.trim()) onReject(row.id, rejectReason); }}
+              disabled={actionPending !== null || !rejectReason.trim()}
+              className="px-4 py-2 rounded-lg border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 text-[13px] font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:bg-red-100 dark:hover:bg-red-900 transition-colors"
+            >
+              {actionPending === "rejecting" ? "Rejecting..." : "Reject"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { if (confirmed) onAttest(row.id, justification); }}
+              disabled={actionPending !== null || !confirmed}
+              className="px-4 py-2 rounded-lg border-none bg-emerald-600 text-white text-[13px] font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors"
+            >
+              {actionPending === "attesting" ? "Attesting..." : "Attest"}
+            </button>
+          </div>
+        )}
+
+        {/* Already-decided rows: just show close */}
+        {row.status !== "pending" && (
+          <div className="flex items-center justify-end px-6 py-4 border-t border-border">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg border border-border bg-card text-foreground text-[13px] font-semibold cursor-pointer hover:bg-muted transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -266,6 +453,8 @@ export default function AttestationsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [offset, setOffset] = useState(0);
   const [search, setSearch] = useState("");
+  const [reviewRow, setReviewRow] = useState<AttestationRow | null>(null);
+  const [attestAction, setAttestAction] = useState<"attesting" | "rejecting" | "deferring" | null>(null);
 
   const {
     data: stats,
@@ -298,6 +487,41 @@ export default function AttestationsPage() {
     refetchList();
   }
 
+  async function handleAttest(id: number, justification: string) {
+    setAttestAction("attesting");
+    try {
+      await api.put(`/api/attestations/${id}/attest`, {
+        attestation_type: "confirm_active",
+        clinical_justification: justification,
+      });
+      setReviewRow(null);
+      refetchStats();
+      refetchList();
+    } catch { /* server error — toast could go here */ } finally { setAttestAction(null); }
+  }
+
+  async function handleReject(id: number, reason: string) {
+    setAttestAction("rejecting");
+    try {
+      await api.put(`/api/attestations/${id}/reject`, {
+        reject_reason: reason,
+      });
+      setReviewRow(null);
+      refetchStats();
+      refetchList();
+    } catch { /* server error */ } finally { setAttestAction(null); }
+  }
+
+  async function handleDefer(id: number) {
+    setAttestAction("deferring");
+    try {
+      await api.put(`/api/attestations/${id}/defer`, {});
+      setReviewRow(null);
+      refetchStats();
+      refetchList();
+    } catch { /* server error */ } finally { setAttestAction(null); }
+  }
+
   const rows = listData?.attestations ?? [];
   const totalCount = listData?.count ?? 0;
 
@@ -307,6 +531,7 @@ export default function AttestationsPage() {
           r.hcc_code.toLowerCase().includes(search.toLowerCase()) ||
           r.hcc_description.toLowerCase().includes(search.toLowerCase()) ||
           r.icd10_code.toLowerCase().includes(search.toLowerCase()) ||
+          (r.patient_name && r.patient_name.toLowerCase().includes(search.toLowerCase())) ||
           String(r.patient_id).includes(search) ||
           r.provider_npi.includes(search)
       )
@@ -389,7 +614,7 @@ export default function AttestationsPage() {
           />
           <input
             type="search"
-            placeholder="Search HCC, ICD-10, patient ID, NPI…"
+            placeholder="Search patient, HCC, ICD-10, NPI…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search attestations"
@@ -469,7 +694,7 @@ export default function AttestationsPage() {
                     {/* Patient */}
                     <TableCell className="px-3.5 py-2.5 align-middle">
                       <span className="text-[13px] font-semibold text-foreground">
-                        Patient {row.patient_id}
+                        {row.patient_name || `Patient ${row.patient_id}`}
                       </span>
                     </TableCell>
 
@@ -526,6 +751,7 @@ export default function AttestationsPage() {
                     {/* Action */}
                     <TableCell className="px-3.5 py-2.5 align-middle">
                       <button
+                        onClick={() => setReviewRow(row)}
                         aria-label={`Review attestation for patient ${row.patient_id}`}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-[12px] font-medium text-foreground cursor-pointer hover:bg-muted transition-colors whitespace-nowrap"
                       >
@@ -568,6 +794,17 @@ export default function AttestationsPage() {
             </div>
           )}
         </div>
+      )}
+
+      {reviewRow && (
+        <ReviewModal
+          row={reviewRow}
+          onClose={() => setReviewRow(null)}
+          onAttest={handleAttest}
+          onReject={handleReject}
+          onDefer={handleDefer}
+          actionPending={attestAction}
+        />
       )}
     </main>
   );

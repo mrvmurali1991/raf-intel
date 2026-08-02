@@ -632,6 +632,15 @@ export function Card({
 // ---------------------------------------------------------------------------
 type MeatEvidence = MEATEvidence | Record<string, string | boolean | null | undefined>;
 export function MeatDots({ evidence }: { evidence?: MeatEvidence | null }) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+
+  const COACHING: Record<string, string> = {
+    monitor: "Patient's [condition] monitored with [labs/vitals/imaging]. Results reviewed and [within normal limits / showing improvement / trending abnormally].",
+    evaluate: "Physical exam reveals [findings] consistent with [condition]. [Lab/imaging] ordered to further evaluate.",
+    assess: "Patient's [condition] assessed as [stable / worsened / improved]. Current management [adequate / requires adjustment].",
+    treat: "Continue [medication/therapy]. [Dose adjustment / referral to specialist / new therapy initiated]. Follow-up in [timeframe].",
+  };
+
   const letters = [
     { key: "monitor" as const, alt: ["M", "m"], label: "M", full: "Monitor",  color: C.blue600,
       tip: "Monitored — patient's condition is being tracked (vitals, labs, symptoms)" },
@@ -645,65 +654,96 @@ export function MeatDots({ evidence }: { evidence?: MeatEvidence | null }) {
   const e = evidence as Record<string, string | boolean | null | undefined> | undefined | null;
   const rawExcerpt: string | undefined =
     e ? (e.raw_note_excerpt as string | undefined) || (e.rawNoteExcerpt as string | undefined) || (e.excerpt as string | undefined) : undefined;
+
+  const isFilled = (key: string, alt: string[]) => {
+    const rawVal = e && (e[key] || alt.map((a) => e[a]).find(Boolean));
+    return !!rawVal;
+  };
+
   return (
     <TooltipProvider delay={200}>
-      <div style={{ display: "inline-flex", gap: 4 }}>
-        {letters.map(({ key, alt, label, full, color, tip }) => {
-          const rawVal = e && (e[key] || alt.map((a) => e[a]).find(Boolean));
-          const filled = !!rawVal;
-          const phrase = typeof rawVal === "string" ? rawVal : undefined;
-          const dotStyle: React.CSSProperties = {
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 26,
-            height: 26,
-            borderRadius: 6,
-            fontSize: 11,
-            fontWeight: 800,
-            backgroundColor: filled ? `${color}20` : "transparent",
-            color: filled ? color : undefined,
-            border: filled ? `2px solid ${color}` : undefined,
-            transition: "all 0.2s",
-            boxShadow: filled ? `0 2px 6px ${color}25` : "none",
-            cursor: "help",
-            fontFamily: "inherit",
-            background: filled ? `${color}20` : "transparent",
-          };
-          const dotClassName = filled
-            ? ""
-            : "text-gray-400 dark:text-gray-500 border-2 border-gray-200 dark:border-gray-600";
-          const tipContent = (
-            <span>
-              <strong>{full}</strong>{" — "}
-              {filled ? (phrase || "present") : "not documented"}
-              {". "}
-              {tip}
-              {rawExcerpt && (
-                <><br /><em className="opacity-70">Note excerpt: &ldquo;{rawExcerpt}&rdquo;</em></>
-              )}
-            </span>
-          );
-          return (
-            <Tooltip key={key}>
-              <TooltipTrigger
-                render={
-                  <button
-                    type="button"
-                    className={dotClassName}
-                    style={dotStyle}
-                    aria-label={`${full}: ${filled ? (phrase || "present") : "not documented"} — CMS MEAT evidence standard`}
-                  >
-                    {label}
-                  </button>
-                }
-              />
-              <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
-                {tipContent}
-              </TooltipContent>
-            </Tooltip>
-          );
-        })}
+      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+        <div style={{ display: "inline-flex", gap: 4 }}>
+          {letters.map(({ key, alt, label, full, color, tip }) => {
+            const rawVal = e && (e[key] || alt.map((a) => e[a]).find(Boolean));
+            const filled = !!rawVal;
+            const phrase = typeof rawVal === "string" ? rawVal : undefined;
+            const dotStyle: React.CSSProperties = {
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 26,
+              height: 26,
+              borderRadius: 6,
+              fontSize: 11,
+              fontWeight: 800,
+              backgroundColor: filled ? `${color}20` : "transparent",
+              color: filled ? color : undefined,
+              border: filled ? `2px solid ${color}` : undefined,
+              transition: "all 0.2s",
+              boxShadow: filled ? `0 2px 6px ${color}25` : "none",
+              cursor: filled ? "help" : "pointer",
+              fontFamily: "inherit",
+              background: filled ? `${color}20` : "transparent",
+            };
+            const dotClassName = filled
+              ? ""
+              : "text-gray-400 dark:text-gray-500 border-2 border-gray-200 dark:border-gray-600";
+            const tipContent = (
+              <span>
+                <strong>{full}</strong>{" — "}
+                {filled ? (phrase || "present") : "not documented — click for template"}
+                {". "}
+                {tip}
+                {rawExcerpt && (
+                  <><br /><em className="opacity-70">Note excerpt: &ldquo;{rawExcerpt}&rdquo;</em></>
+                )}
+              </span>
+            );
+            return (
+              <Tooltip key={key}>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      className={dotClassName}
+                      style={dotStyle}
+                      aria-label={`${full}: ${filled ? (phrase || "present") : "not documented — click for template"} — CMS MEAT evidence standard`}
+                      onClick={!filled ? () => setExpandedKey(prev => prev === key ? null : key) : undefined}
+                    >
+                      {label}
+                    </button>
+                  }
+                />
+                <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+                  {tipContent}
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </div>
+        {expandedKey && !isFilled(expandedKey, letters.find(l => l.key === expandedKey)?.alt ?? []) && (
+          <div
+            className="mt-2 p-3 rounded-lg bg-sky-50 dark:bg-sky-950 border border-sky-200 dark:border-sky-800 text-[12px] leading-relaxed text-sky-900 dark:text-sky-200"
+            style={{ maxWidth: 420 }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <span className="font-bold text-sky-700 dark:text-sky-300" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                {letters.find(l => l.key === expandedKey)?.full} — Suggested Template
+              </span>
+              <button
+                type="button"
+                onClick={() => setExpandedKey(null)}
+                className="text-sky-400 hover:text-sky-600 dark:hover:text-sky-300"
+                style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, display: "flex" }}
+                aria-label="Close template"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <p className="m-0" style={{ fontStyle: "italic" }}>{COACHING[expandedKey]}</p>
+          </div>
+        )}
       </div>
     </TooltipProvider>
   );

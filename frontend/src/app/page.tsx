@@ -1,7 +1,7 @@
 import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { AdminDashboard } from "@/components/dashboards/AdminDashboard";
 import { CoderDashboard } from "@/components/dashboards/CoderDashboard";
-import { ProviderDashboard } from "@/components/dashboards/ProviderDashboard";
 import { AIHealthBanner } from "@/components/AIHealthBanner";
 
 const API_BASE =
@@ -50,17 +50,17 @@ async function getRole(): Promise<string | null> {
 
 /** Resolve which dashboard to show based on the authenticated user's role. */
 function resolveDashboard(role: string | null): React.ComponentType {
-  if (role === "provider" || role === "clinician") return ProviderDashboard;
   if (role === "coder") return CoderDashboard;
-  // admin, manager, auditor, AND unknown/null (SSR-cookie race) all land here.
-  // AdminDashboard is the full Population Health Intelligence view — the safe
-  // default when role detection fails (middleware redirects unauthenticated users
-  // before this code runs, so a null role here means SSR couldn't read cookies).
   return AdminDashboard;
 }
 
 export default async function DashboardOrchestrator() {
   const role = await getRole();
+
+  if (role === "provider" || role === "clinician") {
+    redirect("/md/today");
+  }
+
   const Dashboard = resolveDashboard(role);
 
   return (
