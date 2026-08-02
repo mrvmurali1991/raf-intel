@@ -53,9 +53,9 @@ _PACE_BLEND_WEIGHTS: dict[int, tuple[float, float]] = {
 
 # V28 normalization factors
 _NORM_FACTORS_V28: dict[int, float] = {
-    2024: 1.045,
-    2025: 1.045,
-    2026: 1.067,
+    2024: 1.015,  # CY2024 Final Rate Announcement p.6
+    2025: 1.045,  # CY2025 Final Rate Announcement
+    2026: 1.067,  # CY2026 Final Rate Announcement
     2027: 1.067,  # placeholder — update from CMS 2027 Rate Announcement when published
 }
 
@@ -65,18 +65,18 @@ _NORM_FACTORS = _NORM_FACTORS_V28
 # V24 normalization factors — remained constant across the transition years
 # per CMS 2026 Rate Announcement
 _NORM_FACTORS_V24: dict[int, float] = {
-    2024: 1.153,
-    2025: 1.153,
-    2026: 1.153,
-    2027: 1.187,  # placeholder — V24 no longer blended but kept for reference
+    2024: 1.146,  # CY2024 Final Rate Announcement p.6
+    2025: 1.153,  # CY2025 Final Rate Announcement
+    2026: 1.153,  # CY2026 (V24 weight=0, kept for reference)
+    2027: 1.187,  # placeholder
 }
 
 # V22 (legacy 2017 model) normalization factors — used for the PACE legacy side
 # per CMS 2026 Rate Announcement
 _NORM_FACTORS_V22: dict[int, float] = {
-    2024: 1.187,
-    2025: 1.187,
-    2026: 1.187,
+    2024: 1.159,  # CY2024 Final Rate Announcement p.6
+    2025: 1.157,  # CY2025 Final Rate Announcement
+    2026: 1.187,  # CY2026 Final Rate Announcement (PACE legacy)
 }
 
 # ---------------------------------------------------------------------------
