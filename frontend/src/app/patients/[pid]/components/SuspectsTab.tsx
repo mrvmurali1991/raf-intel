@@ -167,7 +167,7 @@ export function SuspectsTab({
                       {s.meat_evidence && (
                         <li>MEAT status: {
                           (["monitor", "evaluate", "assess", "treat"] as const).filter(k => {
-                            const ev = s.meat_evidence as Record<string, unknown>;
+                            const ev = s.meat_evidence as unknown as Record<string, unknown>;
                             return ev && (ev[k] || ev[k.charAt(0).toUpperCase()] || ev[k.charAt(0)]);
                           }).length
                         }/4 documented</li>
